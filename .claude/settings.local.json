@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker-compose -f docker-compose.local.yml ps)",
+      "Bash(docker compose:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npm link:*)",
+      "Bash(good7ob:*)",
+      "Bash(curl -s http://localhost:9080/api/v1/ping)",
+      "Bash(curl -v http://localhost:9080/api/v1/ping)",
+      "Bash(chmod +x /Users/yangjian/Documents/work/good7ob/cli/node/test-cli.sh)"
+    ]
+  },
+  "disabledMcpjsonServers": [
+    "good7ob-local",
+    "good7ob-dev",
+    "mysql-local",
+    "mysql-dev",
+    "postgres-local",
+    "postgres-dev"
+  ]
+}
