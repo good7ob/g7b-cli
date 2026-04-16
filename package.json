@@ -1,0 +1,45 @@
+{
+  "name": "@good7ob/cli",
+  "version": "0.1.0",
+  "description": "CLI tool for good7ob infrastructure management",
+  "main": "dist/index.js",
+  "bin": {
+    "good7ob": "dist/index.js"
+  },
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "cli",
+    "infrastructure",
+    "good7ob"
+  ],
+  "author": "good7ob team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.26.1",
+    "chalk": "^4.1.2",
+    "commander": "^9.4.1",
+    "form-data": "^4.0.5",
+    "table": "^6.8.1",
+    "ts-node": "^10.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.34",
+    "@typescript-eslint/eslint-plugin": "^5.25.0",
+    "@typescript-eslint/parser": "^5.25.0",
+    "eslint": "^8.15.0",
+    "prettier": "^2.6.2",
+    "typescript": "^4.6.4",
+    "vitest": "^0.15.0"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}

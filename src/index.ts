@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+
+/**
+ * good7ob CLI - Main Entry Point
+ * Official command-line interface for the good7ob platform
+ */
+
+import { Command } from 'commander';
+import { registerInfraCommands } from './commands/infra';
+
+const program = new Command();
+
+program
+  .name('good7ob')
+  .description('good7ob - Project management and cloud resource management CLI')
+  .version('0.1.0');
+
+// Register command groups
+registerInfraCommands(program);
+
+// Parse command line arguments
+program.parse(process.argv);
+
+// Show help if no arguments provided
+if (!process.argv.slice(2).length) {
+  program.outputHelp();
+}

@@ -45,7 +45,82 @@ good7ob task get <task-id>
 good7ob task create --project <project-id> --title "Task title" --description "Task description"
 ```
 
-### 4. Batch Import
+### 4. AI Work Record Management
+
+```bash
+# Create an AI work record
+good7ob work-record create \
+  --summary "Implemented Datadog logging configuration" \
+  --agent "claude-4.5" \
+  --output-path "/path/to/logback-*.xml" \
+  --task-type "feature" \
+  --status "success" \
+  --token-usage 15000 \
+  --duration-ms 3600000 \
+  --project 5 \
+  --tags "logging,datadog"
+
+# List work records
+good7ob work-record list --project 5 --agent claude --status success
+
+# Get work record details
+good7ob work-record get <record-id>
+
+# Update a work record
+good7ob work-record update <record-id> --status "completed" --result "completed"
+
+# Delete a work record
+good7ob work-record delete <record-id>
+
+# Batch delete work records
+good7ob work-record batch-delete <id1> <id2> <id3>
+
+# Get statistics
+good7ob work-record stats --project 5 --range week
+
+# Export work records (JSON or CSV)
+good7ob work-record export --project 5 --format csv --output records.csv
+```
+
+#### Work Record Fields
+
+**Required:**
+- `--summary`: Task summary (1-500 characters)
+- `--agent`: AI agent name (e.g., claude, codex, gemini)
+- `--output-path`: Output/document path (1-1000 characters)
+
+**Optional:**
+- `--task-type`: Type of task (feature, bugfix, refactor, docs, analysis)
+- `--status`: Status (pending, in_progress, success, failed)
+- `--result`: Result (completed, partial, failed)
+- `--description`: Detailed description
+- `--error-message`: Error message if task failed
+- `--token-usage`: Number of tokens consumed
+- `--duration-ms`: Execution duration in milliseconds
+- `--model-version`: AI model version used
+- `--project`: Associated project ID
+- `--task`: Associated task ID
+- `--user`: User ID
+- `--tags`: Tags (comma-separated)
+- `--remark`: Additional remarks
+- `--completed-at`: ISO 8601 timestamp (default: current time)
+
+#### Filtering Options (List Command)
+
+```bash
+# Filter by multiple criteria
+good7ob work-record list \
+  --project 5 \
+  --agent "claude" \
+  --task-type "feature" \
+  --status "success" \
+  --keyword "logging"
+
+# Pagination
+good7ob work-record list --page 2 --size 50
+```
+
+### 5. Batch Import
 
 #### Import Projects
 
@@ -95,6 +170,46 @@ Then import:
 good7ob import resource --file resources.json
 ```
 
+#### Import AI Work Records
+
+Create a JSON file `work-records.json`:
+
+```json
+[
+  {
+    "summary": "Implemented feature X",
+    "aiAgent": "claude",
+    "taskType": "feature",
+    "outputPath": "/docs/implementation.md",
+    "status": "success",
+    "result": "completed",
+    "tokenUsage": 15000,
+    "durationMs": 3600000,
+    "projectId": 5,
+    "completedAt": "2026-04-12T18:30:00Z"
+  },
+  {
+    "summary": "Fixed bug in logging",
+    "aiAgent": "claude",
+    "taskType": "bugfix",
+    "outputPath": "/commits/abc123",
+    "status": "success",
+    "result": "completed",
+    "tokenUsage": 8000,
+    "durationMs": 1800000,
+    "projectId": 5,
+    "tags": "logging,hotfix",
+    "completedAt": "2026-04-12T17:00:00Z"
+  }
+]
+```
+
+Then import:
+
+```bash
+good7ob import work-record --file work-records.json
+```
+
 ## Configuration
 
 Configuration is stored in `~/.good7ob/config.json`.
@@ -119,6 +234,16 @@ All commands output JSON by default, making it easy to parse and integrate with 
 good7ob project list | jq '.data[0].projectName'
 ```
 
+## Command Aliases
+
+For convenience, the CLI supports shorter aliases:
+
+```bash
+# work-record → wr
+good7ob wr list --project 5
+good7ob wr create --summary "..." --agent "claude" --output-path "..."
+```
+
 ## For AI Agents
 
 This CLI is designed to work seamlessly with AI agents. Use the `--file` option for file paths and pipe output to `jq` for structured data processing.
@@ -129,6 +254,38 @@ PROJECT_ID=$(good7ob project create --name "test" | jq '.id')
 
 # List tasks for that project
 good7ob task list --project $PROJECT_ID
+
+# Create a work record after completing a task
+RECORD=$(good7ob work-record create \
+  --summary "Implemented feature XYZ" \
+  --agent "claude" \
+  --output-path "/path/to/implementation" \
+  --project $PROJECT_ID \
+  --token-usage 10000 \
+  --status "success" | jq '.id')
+
+echo "Created work record: $RECORD"
+```
+
+### Batch Recording for AI Workflows
+
+```bash
+# Script: record_ai_work.sh
+#!/bin/bash
+
+PROJECT_ID=$1
+SUMMARY=$2
+AGENT=$3
+OUTPUT_PATH=$4
+
+good7ob work-record create \
+  --summary "$SUMMARY" \
+  --agent "$AGENT" \
+  --output-path "$OUTPUT_PATH" \
+  --project $PROJECT_ID \
+  --task-type "feature" \
+  --status "success" \
+  --completed-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
 ## Troubleshooting

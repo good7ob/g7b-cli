@@ -37,3 +37,35 @@ export interface Config {
   apiKey?: string;
   endpoint?: string;
 }
+
+export interface WorkRecord {
+  id?: number;
+  summary: string;
+  description?: string;
+  aiAgent: string;
+  taskType?: string;
+  status?: string;
+  result?: string;
+  outputPath: string;
+  durationMs?: number;
+  tokenUsage?: number;
+  modelVersion?: string;
+  projectId?: number;
+  taskId?: number;
+  userId?: number;
+  errorMessage?: string;
+  tags?: string;
+  remark?: string;
+  completedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkRecordStats {
+  totalRecords: number;
+  successCount: number;
+  failedCount: number;
+  successRate: number;
+  totalTokenUsage: number;
+  avgDuration: number;
+}
