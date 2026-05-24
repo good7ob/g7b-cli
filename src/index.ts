@@ -7,6 +7,8 @@
 
 import { Command } from 'commander';
 import { registerInfraCommands } from './commands/infra';
+import { registerPmCommands } from './commands/pm';
+import { registerOrgCommands } from './commands/org';
 
 const program = new Command();
 
@@ -17,6 +19,8 @@ program
 
 // Register command groups
 registerInfraCommands(program);
+registerPmCommands(program);
+registerOrgCommands(program);
 
 // Parse command line arguments
 program.parse(process.argv);
