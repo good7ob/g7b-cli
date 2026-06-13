@@ -20,7 +20,9 @@ export interface Task {
   projectId?: number;
   status?: string;
   assignee?: number;
+  ownerId?: number;
   priority?: string;
+  deadline?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -51,6 +51,10 @@ export function registerTaskCommand(program: Command): void {
     .requiredOption('-p, --project <projectId>', 'Project ID')
     .option('-t, --title <title>', 'Task title', '')
     .option('-d, --description <description>', 'Task description', '')
+    .option('--priority <priority>', 'Priority: high | medium | low', 'medium')
+    .option('--status <status>', 'Status: not_started | in_progress | completed | blocked | cancelled', 'not_started')
+    .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
+    .option('--owner-id <ownerId>', 'Owner user ID')
     .description('Create a new task')
     .action(async (options: any) => {
       try {
@@ -63,9 +67,46 @@ export function registerTaskCommand(program: Command): void {
           projectId: parseInt(options.project, 10),
           title: options.title,
           description: options.description,
+          priority: options.priority,
+          status: options.status,
+          ...(options.deadline && { deadline: options.deadline }),
+          ...(options.ownerId && { ownerId: parseInt(options.ownerId, 10) }),
         };
 
         const data = await client.post<Task>('/progress/tasks', payload);
+        console.log(JSON.stringify(data, null, 2));
+      } catch (err: any) {
+        console.error(JSON.stringify({ error: err.message }));
+        process.exit(1);
+      }
+    });
+
+  taskCmd
+    .command('update <id>')
+    .option('-t, --title <title>', 'Task title')
+    .option('-d, --description <description>', 'Task description')
+    .option('--priority <priority>', 'Priority: high | medium | low')
+    .option('--status <status>', 'Status: not_started | in_progress | completed | blocked | cancelled')
+    .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
+    .option('--owner-id <ownerId>', 'Owner user ID')
+    .description('Update a task')
+    .action(async (id: string, options: any) => {
+      try {
+        const client = new ApiClient();
+        const payload: Partial<Task> = {};
+
+        if (options.title) payload.title = options.title;
+        if (options.description) payload.description = options.description;
+        if (options.priority) payload.priority = options.priority;
+        if (options.status) payload.status = options.status;
+        if (options.deadline) payload.deadline = options.deadline;
+        if (options.ownerId) payload.ownerId = parseInt(options.ownerId, 10);
+
+        if (Object.keys(payload).length === 0) {
+          throw new Error('No fields to update. Use --title, --status, --priority, etc.');
+        }
+
+        const data = await client.put<Task>(`/progress/tasks/${id}`, payload);
         console.log(JSON.stringify(data, null, 2));
       } catch (err: any) {
         console.error(JSON.stringify({ error: err.message }));
