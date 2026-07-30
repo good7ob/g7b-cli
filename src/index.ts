@@ -9,9 +9,8 @@ import { Command } from 'commander';
 import { registerInfraCommands } from './commands/infra';
 import { registerPmCommands } from './commands/pm';
 import { registerOrgCommands } from './commands/org';
-import { registerLogCommands } from './commands/log';
-import { registerPrdCommands } from './commands/prd';
 import { registerQcCommands } from './commands/qc';
+import { registerConfigCommands } from './commands/config';
 
 const program = new Command();
 
@@ -24,9 +23,8 @@ program
 registerInfraCommands(program);
 registerPmCommands(program);
 registerOrgCommands(program);
-registerLogCommands(program);
-registerPrdCommands(program);
 registerQcCommands(program);
+registerConfigCommands(program);
 
 // Parse command line arguments
 program.parse(process.argv);
