@@ -1,5 +1,7 @@
 # AI Work Record CLI Guide
 
+> **Legacy note:** this document describes the historical `work-record` command set from the legacy `node/` implementation. The actively maintained CLI now lives at the repository root and its current command surface is `config`, `infra`, `pm`, `org`, and `qc`. If this guide conflicts with `good7ob --help`, treat this file as archival only.
+
 The `work-record` command group provides a comprehensive interface for recording, managing, and analyzing AI agent work in the good7ob platform.
 
 ## Quick Start

@@ -312,6 +312,8 @@ good7ob wr export --project 5 --format csv --output test.csv
 
 ## Deployment
 
+> **Legacy note:** the deployment notes below were written for the historical `node/` implementation and may not match the current root CLI packaging/publishing flow. Verify against the root `package.json`, `README.md`, and `使用指南.md` before following these steps.
+
 To deploy the updated CLI:
 
 1. Update package version in `package.json` to 0.2.0
