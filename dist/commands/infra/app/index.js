@@ -22,6 +22,41 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAppCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+/** Page size used when walking the full application list. */
+const FETCH_ALL_PAGE_SIZE = 200;
+/** Safety stop so a bad total can never spin this forever. */
+const FETCH_ALL_MAX_PAGES = 500;
+/**
+ * Fetch every application matching the filters, following pagination to the end.
+ *
+ * fix: #1 https://github.com/remo-studio/solution-juren/issues/1
+ * Callers used to post an empty body and take whatever the first default-sized page
+ * returned — 20 records — while believing they had the full inventory.
+ */
+async function fetchAllApplications(filters = {}) {
+    const collected = [];
+    let pageNo = 1;
+    let total = 0;
+    while (pageNo <= FETCH_ALL_MAX_PAGES) {
+        const page = await ApiClient_1.default.post('/api/infra/applications/list', {
+            ...filters,
+            pageNo,
+            pageSize: FETCH_ALL_PAGE_SIZE,
+        });
+        const records = page?.records || [];
+        total = typeof page?.total === 'number' ? page.total : total;
+        collected.push(...records);
+        if (records.length < FETCH_ALL_PAGE_SIZE || collected.length >= total) {
+            break;
+        }
+        pageNo++;
+    }
+    if (total > collected.length) {
+        // Never let a cap pass silently — the caller asked for everything.
+        console.warn(`⚠ 仅获取到 ${collected.length}/${total} 个应用（已达 ${FETCH_ALL_MAX_PAGES} 页上限），结果不完整`);
+    }
+    return collected;
+}
 function registerAppCommands(infraCommand) {
     const appCommand = infraCommand
         .command('app')
@@ -339,20 +374,18 @@ function registerAppCommands(infraCommand) {
             const format = options.format || 'csv';
             const filePath = options.file || `apps.${format}`;
             // Build query parameters
-            const params = {
-                pageNo: 1,
-                pageSize: 10000, // Get all records
-            };
+            const filters = {};
             if (options.environment)
-                params.environment = options.environment;
+                filters.environment = options.environment;
             if (options.ownerId)
-                params.ownerId = options.ownerId;
+                filters.ownerId = options.ownerId;
             if (options.tags)
-                params.tags = options.tags;
+                filters.tags = options.tags;
             console.log(`正在导出应用清单到 ${filePath}...`);
-            // Get applications from API
-            const result = await ApiClient_1.default.post('/api/infra/applications/list', {});
-            const applications = result.records || [];
+            // fix: #1 https://github.com/remo-studio/solution-juren/issues/1
+            // the filters and the "get all records" page size were built and then dropped —
+            // an empty body was posted, so the export silently stopped at the default 20 rows
+            const applications = await fetchAllApplications(filters);
             if (applications.length === 0) {
                 console.warn('没有找到应用');
                 return;
@@ -597,8 +630,10 @@ function registerAppCommands(infraCommand) {
             const staleDays = parseInt(options.staleDays) || 30;
             const issues = [];
             try {
-                const apps = await ApiClient_1.default.post('/api/infra/applications/list', {});
-                const allApps = apps.records || [];
+                // fix: #1 https://github.com/remo-studio/solution-juren/issues/1
+                // an empty body only returned the first default-sized page, so the health check
+                // silently audited 20 applications and reported the result as a full inventory scan
+                const allApps = await fetchAllApplications();
                 // Check unassociated
                 if (options.checkUnassociated) {
                     console.log(`检查未关联的应用...`);
