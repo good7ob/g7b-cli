@@ -216,7 +216,9 @@ function registerAppCommands(infraCommand) {
                 params.sort = options.sort;
             if (options.order)
                 params.order = options.order;
-            const result = await ApiClient_1.default.post('/api/infra/applications/list', {});
+            // fix: #1 https://github.com/remo-studio/solution-juren/issues/1
+            // the filters were built and then dropped — an empty body was posted instead
+            const result = await ApiClient_1.default.post('/api/infra/applications/list', params);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
             }
