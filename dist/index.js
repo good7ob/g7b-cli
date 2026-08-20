@@ -11,17 +11,23 @@ const pm_1 = require("./commands/pm");
 const org_1 = require("./commands/org");
 const qc_1 = require("./commands/qc");
 const config_1 = require("./commands/config");
+const prd_1 = require("./commands/prd");
+const req_1 = require("./commands/req");
+const log_1 = require("./commands/log");
 const program = new commander_1.Command();
 program
     .name('good7ob')
     .description('good7ob - Project management and cloud resource management CLI')
-    .version('0.1.0');
+    .version('0.2.0');
 // Register command groups
 (0, infra_1.registerInfraCommands)(program);
 (0, pm_1.registerPmCommands)(program);
 (0, org_1.registerOrgCommands)(program);
 (0, qc_1.registerQcCommands)(program);
 (0, config_1.registerConfigCommands)(program);
+(0, prd_1.registerPrdCommands)(program);
+(0, req_1.registerReqCommands)(program);
+(0, log_1.registerLogCommands)(program);
 // Parse command line arguments
 program.parse(process.argv);
 // Show help if no arguments provided

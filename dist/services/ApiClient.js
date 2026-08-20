@@ -44,7 +44,7 @@ class ApiClient {
             timeout: 30000,
             headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'good7ob-cli/0.1.0',
+                'User-Agent': 'good7ob-cli/0.2.0',
             },
         });
         // Add request interceptor for authentication
@@ -77,7 +77,7 @@ class ApiClient {
     async get(url, params) {
         try {
             const response = await this.instance.get(url, { params });
-            return response.data.data;
+            return this.unwrap(response.data);
         }
         catch (error) {
             throw this.handleError(error);
@@ -89,7 +89,7 @@ class ApiClient {
     async post(url, data) {
         try {
             const response = await this.instance.post(url, data);
-            return response.data.data;
+            return this.unwrap(response.data);
         }
         catch (error) {
             throw this.handleError(error);
@@ -101,7 +101,7 @@ class ApiClient {
     async put(url, data) {
         try {
             const response = await this.instance.put(url, data);
-            return response.data.data;
+            return this.unwrap(response.data);
         }
         catch (error) {
             throw this.handleError(error);
@@ -113,7 +113,7 @@ class ApiClient {
     async patch(url, data) {
         try {
             const response = await this.instance.patch(url, data);
-            return response.data.data;
+            return this.unwrap(response.data);
         }
         catch (error) {
             throw this.handleError(error);
@@ -125,7 +125,7 @@ class ApiClient {
     async delete(url, data) {
         try {
             const response = await this.instance.delete(url, data ? { data } : undefined);
-            return response.data.data;
+            return this.unwrap(response.data);
         }
         catch (error) {
             throw this.handleError(error);
@@ -189,7 +189,34 @@ class ApiClient {
     /**
      * Handle API errors
      */
+    /**
+     * Unwrap the response envelope.
+     *
+     * The backend answers business failures with HTTP 200 and a non-200 `code`
+     * in the body, so axios never rejects. Returning `response.data.data` blindly
+     * hands the caller `undefined` and loses the server's message entirely — the
+     * command then dies on a property access with an error that says nothing
+     * about what actually went wrong. Throw here instead, and carry `code` plus
+     * the full payload so callers that need it (the active-cap rejection ships
+     * the current active list) can still reach it.
+     */
+    unwrap(body) {
+        const code = body?.code;
+        if (code != null && code !== 200) {
+            const err = new Error(body?.msg || body?.message || `请求失败 (code=${code})`);
+            err.code = code;
+            err.payload = body;
+            throw err;
+        }
+        return body?.data;
+    }
     handleError(error) {
+        if (error?.payload) {
+            return error;
+        }
+        if (error.response?.data?.msg) {
+            return new Error(error.response.data.msg);
+        }
         if (error.response?.data?.message) {
             return new Error(error.response.data.message);
         }
