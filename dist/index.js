@@ -18,7 +18,7 @@ const program = new commander_1.Command();
 program
     .name('good7ob')
     .description('good7ob - Project management and cloud resource management CLI')
-    .version('0.1.0');
+    .version('0.2.0');
 // Register command groups
 (0, infra_1.registerInfraCommands)(program);
 (0, pm_1.registerPmCommands)(program);

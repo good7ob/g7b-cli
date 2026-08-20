@@ -44,7 +44,7 @@ class ApiClient {
             timeout: 30000,
             headers: {
                 'Content-Type': 'application/json',
-                'User-Agent': 'good7ob-cli/0.1.0',
+                'User-Agent': 'good7ob-cli/0.2.0',
             },
         });
         // Add request interceptor for authentication
