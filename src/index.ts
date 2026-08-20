@@ -11,6 +11,9 @@ import { registerPmCommands } from './commands/pm';
 import { registerOrgCommands } from './commands/org';
 import { registerQcCommands } from './commands/qc';
 import { registerConfigCommands } from './commands/config';
+import { registerPrdCommands } from './commands/prd';
+import { registerReqCommands } from './commands/req';
+import { registerLogCommands } from './commands/log';
 
 const program = new Command();
 
@@ -25,6 +28,9 @@ registerPmCommands(program);
 registerOrgCommands(program);
 registerQcCommands(program);
 registerConfigCommands(program);
+registerPrdCommands(program);
+registerReqCommands(program);
+registerLogCommands(program);
 
 // Parse command line arguments
 program.parse(process.argv);

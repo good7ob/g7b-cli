@@ -46,6 +46,18 @@ export declare class ApiClient {
     /**
      * Handle API errors
      */
+    /**
+     * Unwrap the response envelope.
+     *
+     * The backend answers business failures with HTTP 200 and a non-200 `code`
+     * in the body, so axios never rejects. Returning `response.data.data` blindly
+     * hands the caller `undefined` and loses the server's message entirely — the
+     * command then dies on a property access with an error that says nothing
+     * about what actually went wrong. Throw here instead, and carry `code` plus
+     * the full payload so callers that need it (the active-cap rejection ships
+     * the current active list) can still reach it.
+     */
+    private unwrap;
     private handleError;
 }
 declare const _default: ApiClient;

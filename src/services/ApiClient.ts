@@ -69,7 +69,7 @@ export class ApiClient {
   async get<T = any>(url: string, params?: Record<string, any>): Promise<any> {
     try {
       const response = await this.instance.get<ApiResponse<T>>(url, { params });
-      return response.data.data;
+      return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -81,7 +81,7 @@ export class ApiClient {
   async post<T = any>(url: string, data?: any): Promise<any> {
     try {
       const response = await this.instance.post<ApiResponse<T>>(url, data);
-      return response.data.data;
+      return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -93,7 +93,7 @@ export class ApiClient {
   async put<T = any>(url: string, data?: any): Promise<any> {
     try {
       const response = await this.instance.put<ApiResponse<T>>(url, data);
-      return response.data.data;
+      return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -105,7 +105,7 @@ export class ApiClient {
   async patch<T = any>(url: string, data?: any): Promise<any> {
     try {
       const response = await this.instance.patch<ApiResponse<T>>(url, data);
-      return response.data.data;
+      return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -117,7 +117,7 @@ export class ApiClient {
   async delete<T = any>(url: string, data?: any): Promise<any> {
     try {
       const response = await this.instance.delete<ApiResponse<T>>(url, data ? { data } : undefined);
-      return response.data.data;
+      return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);
     }
@@ -188,7 +188,35 @@ export class ApiClient {
   /**
    * Handle API errors
    */
+  /**
+   * Unwrap the response envelope.
+   *
+   * The backend answers business failures with HTTP 200 and a non-200 `code`
+   * in the body, so axios never rejects. Returning `response.data.data` blindly
+   * hands the caller `undefined` and loses the server's message entirely — the
+   * command then dies on a property access with an error that says nothing
+   * about what actually went wrong. Throw here instead, and carry `code` plus
+   * the full payload so callers that need it (the active-cap rejection ships
+   * the current active list) can still reach it.
+   */
+  private unwrap<T>(body: ApiResponse<T> | any): any {
+    const code = body?.code;
+    if (code != null && code !== 200) {
+      const err: any = new Error(body?.msg || body?.message || `请求失败 (code=${code})`);
+      err.code = code;
+      err.payload = body;
+      throw err;
+    }
+    return body?.data;
+  }
+
   private handleError(error: any): Error {
+    if (error?.payload) {
+      return error;
+    }
+    if (error.response?.data?.msg) {
+      return new Error(error.response.data.msg);
+    }
     if (error.response?.data?.message) {
       return new Error(error.response.data.message);
     }
