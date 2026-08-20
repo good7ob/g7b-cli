@@ -206,6 +206,10 @@ export function registerLogCommands(program: Command) {
     .option('--duration <ms>', 'Execution duration in milliseconds')
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--remark <text>', 'Remarks')
+    .option('--task-type <type>', 'Task type (feature|bugfix|refactor|docs|analysis|other)')
+    .option('--project-id <id>', 'Link the record to a project')
+    .option('--task-id <id>', 'Link the record to a task')
+    .option('--json', 'Output result as JSON')
     .action(async (id, options) => {
       try {
         const body: any = {};
@@ -218,9 +222,21 @@ export function registerLogCommands(program: Command) {
         if (options.duration) body.durationMs = parseInt(options.duration);
         if (options.tags) body.tags = options.tags;
         if (options.remark) body.remark = options.remark;
+        if (options.taskType) body.taskType = options.taskType;
+        if (options.projectId) body.projectId = parseInt(options.projectId);
+        if (options.taskId) body.taskId = parseInt(options.taskId);
 
-        await apiClient.put(`/forge/ai-work-record/${id}`, body);
-        console.log(`✓ 工作日志已更新: ${id}`);
+        if (Object.keys(body).length === 0) {
+          console.error('✗ 未指定任何要更新的字段');
+          process.exit(1);
+        }
+
+        const updated = await apiClient.put(`/forge/ai-work-record/${id}`, body);
+        if (options.json) {
+          console.log(JSON.stringify(updated, null, 2));
+          return;
+        }
+        console.log(`✓ 工作日志已更新: ${id} (${Object.keys(body).join(', ')})`);
       } catch (error) {
         console.error('✗ 更新工作日志失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
