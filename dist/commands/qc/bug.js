@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerBugCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
+const extractRecords_1 = require("../../utils/extractRecords");
 const SEV_ICON = {
     blocker: '🔴', critical: '🟠', major: '🟡', minor: '🔵', trivial: '⚪',
 };
@@ -43,7 +44,8 @@ function registerBugCommands(qcCommand) {
             if (options.keyword)
                 body.keyword = options.keyword;
             const result = await ApiClient_1.default.post('/qc/bugs/list', body);
-            const bugs = result?.list || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const bugs = (0, extractRecords_1.extractRecords)(result);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;

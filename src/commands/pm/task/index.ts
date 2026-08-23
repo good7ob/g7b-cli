@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { planMove } from './movePlan';
 
 export function registerTaskCommands(pmCommand: Command) {
   const taskCommand = pmCommand
@@ -160,6 +161,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID')
+    .option('--project-id <id>', 'Move the task to another project (no pre-flight checks — prefer `pm task move`)')
     .action(async (id, options) => {
       try {
         const body: any = {};
@@ -170,11 +172,151 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.deadline) body.deadline = options.deadline;
         if (options.ownerId) body.ownerId = parseInt(options.ownerId);
         if (options.parentTaskId) body.parentTaskId = parseInt(options.parentTaskId);
+        if (options.projectId) body.projectId = parseInt(options.projectId);
 
         await apiClient.put(`/progress/tasks/${id}`, body);
         console.log(`✓ 任务已更新: ${id}`);
       } catch (error) {
         console.error('✗ 更新任务失败:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+    });
+
+  taskCommand
+    .command('move <ids...>')
+    .description('Move one or more tasks to another project (comma- or space-separated IDs)')
+    .requiredOption('--to-project <id>', 'Target project ID')
+    .option('--with-subtasks', 'Move each task’s sub-tasks along with it')
+    .option('--force', 'Proceed despite validation errors')
+    .option('--dry-run', 'Show the plan without writing anything')
+    .option('--json', 'Output the plan and result as JSON')
+    .action(async (ids: string[], options) => {
+      try {
+        const taskIds = Array.from(
+          new Set(
+            ids
+              .flatMap((v) => String(v).split(','))
+              .map((v) => v.trim())
+              .filter(Boolean)
+              .map((v) => parseInt(v, 10))
+          )
+        );
+        if (taskIds.some((v) => Number.isNaN(v))) {
+          throw new Error('任务 ID 必须是数字');
+        }
+
+        const targetId = parseInt(options.toProject, 10);
+        const target = await apiClient.get(`/progress/projects/${targetId}`);
+        if (!target?.id) {
+          throw new Error(`目标项目 ${targetId} 不存在`);
+        }
+
+        const fetched = new Map<number, any>();
+        const fetchTask = async (id: number) => {
+          if (!fetched.has(id)) fetched.set(id, await apiClient.get(`/progress/tasks/${id}`));
+          return fetched.get(id);
+        };
+
+        let tasks = await Promise.all(taskIds.map(fetchTask));
+        const missing = taskIds.filter((id, i) => !tasks[i]?.id);
+        if (missing.length) {
+          throw new Error(`任务不存在: ${missing.join(', ')}`);
+        }
+
+        // GET /progress/tasks/{id} does not populate subTasks, so children have
+        // to be looked up through the project task list.
+        const attachSubTasks = async (task: any) => {
+          const result = await apiClient.get(`/progress/projects/${task.projectId}/tasks`, {
+            parentTaskId: task.id,
+          });
+          const children = Array.isArray(result) ? result : result?.records || [];
+          children.forEach((c: any) => fetched.set(c.id, c));
+          return { ...task, subTasks: children.map((c: any) => ({ id: c.id })) };
+        };
+
+        tasks = await Promise.all(tasks.map(attachSubTasks));
+
+        if (options.withSubtasks) {
+          // Descend until no new descendant shows up, so deep trees move whole.
+          const collected = new Map<number, any>(tasks.map((t: any) => [t.id, t]));
+          let frontier = tasks;
+          while (frontier.length) {
+            const next: any[] = [];
+            for (const parent of frontier) {
+              for (const ref of parent.subTasks || []) {
+                if (collected.has(ref.id)) continue;
+                const child = await attachSubTasks(await fetchTask(ref.id));
+                collected.set(child.id, child);
+                next.push(child);
+              }
+            }
+            frontier = next;
+          }
+          tasks = Array.from(collected.values());
+        }
+
+        // Resolve the project of any parent that is not part of this batch, so
+        // planMove can tell "parent already lives in the target" from "parent
+        // would be left behind".
+        const movingIds = new Set(tasks.map((t: any) => t.id));
+        const parentProjectIds: Record<number, number> = {};
+        for (const parentId of new Set(
+          tasks.map((t: any) => t.parentTaskId).filter((p: any) => p && !movingIds.has(p))
+        )) {
+          const parent = await fetchTask(parentId as number);
+          if (parent?.projectId != null) parentProjectIds[parentId as number] = parent.projectId;
+        }
+
+        const plan = planMove(tasks, target, {
+          force: options.force,
+          parentProjectIds,
+        });
+
+        if (options.json) {
+          console.log(JSON.stringify({ target: { id: target.id, name: target.name }, ...plan }, null, 2));
+        } else {
+          console.log(`\n移动计划 → 项目 ${target.id} ${target.name || ''}`);
+          console.log('─'.repeat(70));
+          plan.moves.forEach((m) => console.log(`  移动  ${m.taskId}  ${m.name}  (原项目 ${m.fromProjectId})`));
+          plan.issues.forEach((i) =>
+            console.log(`  ${i.level === 'error' ? '✗ 错误' : '! 警告'}  ${i.message}`)
+          );
+          if (!plan.moves.length && !plan.issues.length) console.log('  没有需要移动的任务');
+          console.log('─'.repeat(70));
+        }
+
+        if (plan.blocked) {
+          console.error('✗ 存在阻断性问题，未做任何写入。修正后重试，或加 --force 强制执行。');
+          process.exit(1);
+        }
+
+        if (options.dryRun) {
+          if (!options.json) console.log('（--dry-run，未写入）');
+          return;
+        }
+
+        for (const m of plan.moves) {
+          await apiClient.put(`/progress/tasks/${m.taskId}`, { projectId: target.id });
+        }
+
+        // The backend returns the pre-save entity on some paths, so verify by
+        // reading each task back instead of trusting the write response.
+        const verified: any[] = [];
+        for (const m of plan.moves) {
+          const after = await apiClient.get(`/progress/tasks/${m.taskId}`);
+          verified.push({ taskId: m.taskId, projectId: after?.projectId, ok: after?.projectId === target.id });
+        }
+
+        if (options.json) {
+          console.log(JSON.stringify({ verified }, null, 2));
+        } else {
+          verified.forEach((v) =>
+            console.log(v.ok ? `✓ 任务 ${v.taskId} 已移动到项目 ${target.id}` : `✗ 任务 ${v.taskId} 移动未生效（当前项目 ${v.projectId}）`)
+          );
+        }
+        if (verified.some((v) => !v.ok)) process.exit(1);
+      } catch (error) {
+        console.error('✗ 移动任务失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });

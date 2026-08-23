@@ -1,1 +1,1 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../../../src/commands/org/invitations/index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAGpC,wBAAgB,0BAA0B,CAAC,UAAU,EAAE,OAAO,QAyK7D"}
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../../../src/commands/org/invitations/index.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAIpC,wBAAgB,0BAA0B,CAAC,UAAU,EAAE,OAAO,QA2K7D"}

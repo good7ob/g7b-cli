@@ -509,6 +509,7 @@ API 端点前缀：`/progress/tasks`
 | `pm task get <id>` | 查看任务详情（含执行者类型、阻塞原因等） |
 | `pm task create` | 创建任务（project-id 和 name 必填） |
 | `pm task update <id>` | 更新任务 |
+| `pm task move <ids...>` | 把一个或多个任务移到另一个项目（带前置校验） |
 | `pm task delete <id>` | 删除任务（需 `-f` 确认） |
 | `pm task batch-update` | 批量更新多个任务的状态/优先级/负责人 |
 
@@ -534,6 +535,35 @@ API 端点前缀：`/progress/tasks`
 | `--deadline` | 截止日期（YYYY-MM-DD） |
 | `--owner-id` | 负责人用户 ID |
 | `--parent-task-id` | 父任务 ID（创建子任务） |
+
+**`pm task move` 选项：**
+
+任务 ID 支持空格或逗号分隔：`pm task move 871 872 --to-project 4` 或 `pm task move 871,872 --to-project 4`。
+
+| 选项 | 说明 |
+|------|------|
+| `--to-project` | 目标项目 ID（必填） |
+| `--with-subtasks` | 连同子任务一起移动，会递归到整棵子树 |
+| `--force` | 无视校验错误强制执行 |
+| `--dry-run` | 只打印移动计划，不写入 |
+| `--json` | 以 JSON 输出计划与结果 |
+
+**移动前的校验规则：**
+
+| 代码 | 级别 | 触发条件 |
+|------|------|---------|
+| `ALREADY_IN_TARGET` | 警告 | 任务已在目标项目，跳过 |
+| `DEADLINE_AFTER_PROJECT_END` | 错误 | 任务截止日期晚于目标项目结束日期 |
+| `PARENT_LEFT_BEHIND` | 错误 | 父任务不在本次移动范围内，移动后形成跨项目悬挂引用 |
+| `SUBTASKS_LEFT_BEHIND` | 警告 | 子任务会留在原项目，提示可加 `--with-subtasks` |
+
+出现错误级问题时**不做任何写入**并以 exit 1 退出；加 `--force` 可降级为警告后继续。
+移动完成后会逐个读回校验 `projectId` 是否真的落到目标项目。
+
+> 后端 `PUT /progress/tasks/{id}` 本身接受 `projectId` 变更但不做上述任何校验
+> （`TaskService.saveOrUpdateTask` 的截止日期守卫只在请求体带 deadline 时才触发，
+> 仅传 projectId 的移动请求会绕过它），因此这些检查放在 CLI 侧。
+> `pm task update --project-id` 是不带校验的直通写法，供脚本使用，日常请用 `pm task move`。
 
 **`pm task batch-update` 选项：**
 

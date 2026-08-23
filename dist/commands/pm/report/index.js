@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerReportCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const extractRecords_1 = require("../../../utils/extractRecords");
 function registerReportCommands(pmCommand) {
     const reportCommand = pmCommand
         .command('report')
@@ -20,7 +21,8 @@ function registerReportCommands(pmCommand) {
                 console.log(JSON.stringify(reports, null, 2));
                 return;
             }
-            const list = Array.isArray(reports) ? reports : reports?.records || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const list = (0, extractRecords_1.extractRecords)(reports);
             if (!list.length) {
                 console.log('No reports found.');
                 return;

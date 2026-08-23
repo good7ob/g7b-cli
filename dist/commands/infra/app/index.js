@@ -22,6 +22,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAppCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const extractRecords_1 = require("../../../utils/extractRecords");
 /** Page size used when walking the full application list. */
 const FETCH_ALL_PAGE_SIZE = 200;
 /** Safety stop so a bad total can never spin this forever. */
@@ -43,7 +44,8 @@ async function fetchAllApplications(filters = {}) {
             pageNo,
             pageSize: FETCH_ALL_PAGE_SIZE,
         });
-        const records = page?.records || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = (0, extractRecords_1.extractRecords)(page);
         total = typeof page?.total === 'number' ? page.total : total;
         collected.push(...records);
         if (records.length < FETCH_ALL_PAGE_SIZE || collected.length >= total) {

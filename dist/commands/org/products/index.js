@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerProductCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const extractRecords_1 = require("../../../utils/extractRecords");
 function registerProductCommands(orgCommand) {
     // list products
     orgCommand
@@ -24,7 +25,8 @@ function registerProductCommands(orgCommand) {
             if (options.status)
                 params.status = options.status;
             const result = await ApiClient_1.default.get(`/api/v1/orgs/${orgId}/products`, params);
-            const records = Array.isArray(result) ? result : result?.records || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const records = (0, extractRecords_1.extractRecords)(result);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;

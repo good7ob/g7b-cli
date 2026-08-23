@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerResourceCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const extractRecords_1 = require("../../../utils/extractRecords");
 function registerResourceCommands(infraCommand) {
     const resourceCommand = infraCommand
         .command('resource')
@@ -266,7 +267,8 @@ function registerResourceCommands(infraCommand) {
                 params.environment = options.environment;
             console.log(`正在导出资源清单到 ${filePath}...`);
             const result = (await ApiClient_1.default.get('/api/infra/resources', params));
-            const resources = result?.records || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const resources = (0, extractRecords_1.extractRecords)(result);
             if (resources.length === 0) {
                 console.warn('没有找到资源');
                 return;

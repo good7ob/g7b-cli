@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerInvitationCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const extractRecords_1 = require("../../../utils/extractRecords");
 function registerInvitationCommands(orgCommand) {
     // list invitations for an org
     orgCommand
@@ -23,7 +24,8 @@ function registerInvitationCommands(orgCommand) {
             if (options.status)
                 params.status = options.status;
             const result = await ApiClient_1.default.get(`/api/v1/orgs/${orgId}/invitations`, params);
-            const records = Array.isArray(result) ? result : result?.records || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const records = (0, extractRecords_1.extractRecords)(result);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;
@@ -92,7 +94,8 @@ function registerInvitationCommands(orgCommand) {
                 pageSize: parseInt(options.limit) || 20,
             };
             const result = await ApiClient_1.default.get('/api/v1/orgs/invitations/mine', params);
-            const records = Array.isArray(result) ? result : result?.records || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const records = (0, extractRecords_1.extractRecords)(result);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;

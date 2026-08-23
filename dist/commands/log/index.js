@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerLogCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
+const extractRecords_1 = require("../../utils/extractRecords");
 function registerLogCommands(program) {
     const logCommand = program
         .command('log')
@@ -120,7 +121,8 @@ function registerLogCommands(program) {
             if (options.endDate)
                 body.endDate = options.endDate;
             const result = await ApiClient_1.default.post('/forge/ai-work-record/list', body);
-            const records = result?.records || result?.list || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const records = (0, extractRecords_1.extractRecords)(result);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;
