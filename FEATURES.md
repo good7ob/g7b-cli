@@ -15,6 +15,7 @@
 - [infra bill — 账单管理](#infra-bill--账单管理)
 - [pm project — 项目管理](#pm-project--项目管理)
 - [pm task — 任务管理](#pm-task--任务管理)
+- [pm plan — 执行计划管理](#pm-plan--执行计划管理)
 - [pm workflow — 工作流管理](#pm-workflow--工作流管理)
 - [pm report — 进度报告](#pm-report--进度报告)
 - [pm tag — 标签管理](#pm-tag--标签管理)
@@ -573,6 +574,77 @@ API 端点前缀：`/progress/tasks`
 | `--status` | 批量设置状态 |
 | `--priority` | 批量设置优先级 |
 | `--owner-id` | 批量设置负责人 |
+
+---
+
+## pm plan — 执行计划管理
+
+API 端点前缀：`/progress/execution-plans`
+
+把项目中的若干任务编成一条有序执行链，设定开始时间与预计耗时，由后端按序推进；
+支持两种暂停、运行中编辑未开始的节点、失败沿任务依赖自动传播。设计详见
+`docs/需求检讨/04-执行计划设计.md`，需求见 `docs/prd/progress/execution-plan/prd-0075-*.md`。
+
+| 命令 | 说明 |
+|------|------|
+| `pm plan create` | 创建计划（draft），可选带初始 task 链 |
+| `pm plan list <project-id>` | 列出项目下的执行计划 |
+| `pm plan get <id>` | 查看计划详情（含链、派生的预计开始时刻、警告） |
+| `pm plan edit <id>` | 编辑计划属性（乐观锁） |
+| `pm plan delete <id>` | 删除计划（仅 draft 或已终结状态） |
+| `pm plan add-task <id>` | 向链中追加/插入一个任务 |
+| `pm plan remove-item <id>` | 移除一个未开始的节点 |
+| `pm plan reorder <id>` | 重排未开始的节点顺序 |
+| `pm plan skip-item <id>` | 跳过一个未开始的节点 |
+| `pm plan schedule <id>` | draft → scheduled |
+| `pm plan start <id>` | 立即启动（draft / scheduled → running） |
+| `pm plan pause <id>` | 优雅暂停：等当前节点跑完再停 |
+| `pm plan halt <id>` | 强制暂停：立即终止当前节点，需显式确认 |
+| `pm plan resume <id>` | 恢复（累计暂停时长） |
+| `pm plan cancel <id>` | 取消计划 |
+| `pm plan events <id>` | 事件时间线（只追加，不可篡改） |
+
+**`pm plan create` 选项：**
+
+| 选项 | 说明 |
+|------|------|
+| `--project-id` | 项目 ID（必填） |
+| `--name` | 计划名称（必填） |
+| `--description` | 计划描述 |
+| `--start` | 计划开始时间，`"YYYY-MM-DD HH:mm"`（不填 = 等待手动启动） |
+| `--tasks` | 初始 task 链，按顺序逗号分隔的任务 ID |
+| `--execution-mode` | `sequential`（默认）\| `parallel_where_possible` |
+
+预计耗时默认由链上各任务的估算工时自动推导（`estimatedDurationSource=derived`），
+不需要手填；改用 `pm plan edit --estimated-minutes` 手动覆盖后不再跟随任务估算变化。
+
+**乐观锁与 `--version`：**
+
+`edit` / `add-task` / `reorder` / `skip-item` 都要求提交时携带计划当前的 `version`，
+不提供 `--version` 时 CLI 会先 `GET` 一次自动获取，日常使用不需要手动追踪版本号。
+两个客户端并发编辑时，后提交的一方仍会收到后端的"计划已被他人修改，请刷新后重试"。
+
+**两种暂停的区别：**
+
+| | `pause`（优雅） | `halt`（强制） |
+|---|---|---|
+| 行为 | 不再启动新节点，当前节点跑完再停 | 当前节点立即终止 |
+| 需要确认 | 否 | 是（`--yes`），CLI 在发请求前先本地拦截一次 |
+| 被中止的节点 | 正常完成 | 标记 `aborted`（≠`failed`），对应任务回退，可另行重排 |
+| 何时用 | 默认选择，避免留下半成品 | 紧急止损（如发现方向错误、线上事故） |
+
+```bash
+# 不带 --yes 会被 CLI 拒绝并提示，不会发出请求
+good7ob pm plan halt 12 --reason "线上事故，立即止损" --yes
+```
+
+**失败传播（无全局开关）：**
+
+某个节点失败后，是否阻塞后续节点由该链上任务之间的依赖关系决定，而不是一个全局配置：
+依赖失败节点（`finish_to_start`）的后续任务会被标记 `blocked`（`get`/`events` 里可见
+`blockedByItemId` 指向哪个节点），不依赖的任务照常执行。全部终结后计划状态为
+`completed`，用 `failedItemCount` / `blockedItemCount` 两个计数表达，不会出现
+"部分完成"这种额外状态。
 
 ---
 

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerProjectCommands } from './project';
 import { registerTaskCommands } from './task';
+import { registerPlanCommands } from './plan';
 import { registerWorkflowCommands } from './workflow';
 import { registerReportCommands } from './report';
 import { registerTagCommands } from './tag';
@@ -12,6 +13,7 @@ export function registerPmCommands(program: Command) {
 
   registerProjectCommands(pmCommand);
   registerTaskCommands(pmCommand);
+  registerPlanCommands(pmCommand);
   registerWorkflowCommands(pmCommand);
   registerReportCommands(pmCommand);
   registerTagCommands(pmCommand);
