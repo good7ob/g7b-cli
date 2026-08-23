@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerProjectCommands(pmCommand: Command) {
   const projectCommand = pmCommand
@@ -31,7 +32,8 @@ export function registerProjectCommands(pmCommand: Command) {
         if (options.includeArchived) params.includeArchived = true;
 
         const result = await apiClient.get('/progress/projects', params);
-        const records = result?.records || result || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));

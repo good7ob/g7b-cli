@@ -18,6 +18,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 
 /** Page size used when walking the full application list. */
 const FETCH_ALL_PAGE_SIZE = 200;
@@ -44,7 +45,8 @@ async function fetchAllApplications(filters: Record<string, unknown> = {}): Prom
       pageSize: FETCH_ALL_PAGE_SIZE,
     });
 
-    const records = page?.records || [];
+    // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+    const records = extractRecords(page);
     total = typeof page?.total === 'number' ? page.total : total;
     collected.push(...records);
 

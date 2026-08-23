@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
+import { extractRecords } from '../../utils/extractRecords';
 
 const SEV_ICON: Record<string, string> = {
   blocker: '🔴', critical: '🟠', major: '🟡', minor: '🔵', trivial: '⚪',
@@ -40,7 +41,8 @@ export function registerBugCommands(qcCommand: Command) {
         if (options.keyword)  body.keyword     = options.keyword;
 
         const result = await apiClient.post('/qc/bugs/list', body);
-        const bugs: any[] = result?.list || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const bugs: any[] = extractRecords(result);
 
         if (options.json) { console.log(JSON.stringify(result, null, 2)); return; }
         if (!bugs.length) { console.log('未找到 Bug。'); return; }

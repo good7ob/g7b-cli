@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
+import { extractRecords } from '../../utils/extractRecords';
 
 export function registerPrdCommands(program: Command) {
   const prdCommand = program
@@ -25,7 +26,8 @@ export function registerPrdCommands(program: Command) {
         if (options.status) params.status = options.status;
 
         const result = await apiClient.get('/forge/prd/sessions', params);
-        const records = result?.records || result?.list || result || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));

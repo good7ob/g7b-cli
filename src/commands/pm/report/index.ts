@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerReportCommands(pmCommand: Command) {
   const reportCommand = pmCommand
@@ -17,7 +18,8 @@ export function registerReportCommands(pmCommand: Command) {
           console.log(JSON.stringify(reports, null, 2));
           return;
         }
-        const list = Array.isArray(reports) ? reports : reports?.records || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const list = extractRecords(reports);
         if (!list.length) {
           console.log('No reports found.');
           return;

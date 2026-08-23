@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
+import { extractRecords } from '../../utils/extractRecords';
 
 export function registerLogCommands(program: Command) {
   const logCommand = program
@@ -98,7 +99,8 @@ export function registerLogCommands(program: Command) {
         if (options.endDate) body.endDate = options.endDate;
 
         const result = await apiClient.post('/forge/ai-work-record/list', body);
-        const records = result?.records || result?.list || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));

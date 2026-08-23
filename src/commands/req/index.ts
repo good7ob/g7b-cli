@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
+import { extractRecords } from '../../utils/extractRecords';
 
 /**
  * Requirement backlog commands (MOD-04-SUB-10, prd-0068).
@@ -84,7 +85,8 @@ async function resolveId(input: string, productOption?: string): Promise<number>
     const page = await apiClient.get('/forge/requirements', {
       productId, status, pageNum: 1, pageSize: 200,
     });
-    const hit = (page?.records || page?.list || []).find((r: any) => r.seqNo === seqNo);
+    // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+    const hit = extractRecords(page).find((r: any) => r.seqNo === seqNo);
     if (hit) return hit.id;
   }
   throw new Error(`产品 ${productId} 下找不到 REQ-${String(seqNo).padStart(3, '0')}`);
@@ -159,7 +161,8 @@ export function registerReqCommands(program: Command) {
         if (options.source) params.source = options.source;
 
         const result = await apiClient.get('/forge/requirements', params);
-        const records = result?.records || result?.list || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));

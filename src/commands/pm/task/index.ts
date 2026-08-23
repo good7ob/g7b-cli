@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 import { planMove } from './movePlan';
 
 export function registerTaskCommands(pmCommand: Command) {
@@ -27,7 +28,8 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.parentTaskId) params.parentTaskId = options.parentTaskId;
 
         const result = await apiClient.get(`/progress/projects/${projectId}/tasks`, params);
-        const records = Array.isArray(result) ? result : result?.records || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -229,7 +231,8 @@ export function registerTaskCommands(pmCommand: Command) {
           const result = await apiClient.get(`/progress/projects/${task.projectId}/tasks`, {
             parentTaskId: task.id,
           });
-          const children = Array.isArray(result) ? result : result?.records || [];
+          // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+          const children = extractRecords(result);
           children.forEach((c: any) => fetched.set(c.id, c));
           return { ...task, subTasks: children.map((c: any) => ({ id: c.id })) };
         };

@@ -10,6 +10,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerResourceCommands(infraCommand: Command) {
   const resourceCommand = infraCommand
@@ -271,7 +272,8 @@ export function registerResourceCommands(infraCommand: Command) {
         console.log(`正在导出资源清单到 ${filePath}...`);
 
         const result = (await apiClient.get('/api/infra/resources', params)) as any;
-        const resources = result?.records || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const resources = extractRecords(result);
 
         if (resources.length === 0) {
           console.warn('没有找到资源');

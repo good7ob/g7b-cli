@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerTaskCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const extractRecords_1 = require("../../../utils/extractRecords");
 const movePlan_1 = require("./movePlan");
 function registerTaskCommands(pmCommand) {
     const taskCommand = pmCommand
@@ -33,7 +34,8 @@ function registerTaskCommands(pmCommand) {
             if (options.parentTaskId)
                 params.parentTaskId = options.parentTaskId;
             const result = await ApiClient_1.default.get(`/progress/projects/${projectId}/tasks`, params);
-            const records = Array.isArray(result) ? result : result?.records || [];
+            // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+            const records = (0, extractRecords_1.extractRecords)(result);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;
@@ -230,7 +232,8 @@ function registerTaskCommands(pmCommand) {
                 const result = await ApiClient_1.default.get(`/progress/projects/${task.projectId}/tasks`, {
                     parentTaskId: task.id,
                 });
-                const children = Array.isArray(result) ? result : result?.records || [];
+                // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+                const children = (0, extractRecords_1.extractRecords)(result);
                 children.forEach((c) => fetched.set(c.id, c));
                 return { ...task, subTasks: children.map((c) => ({ id: c.id })) };
             };

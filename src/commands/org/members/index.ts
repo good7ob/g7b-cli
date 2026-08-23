@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerMemberCommands(orgCommand: Command) {
   // members list
@@ -28,7 +29,8 @@ export function registerMemberCommands(orgCommand: Command) {
         if (options.search) params.keyword = options.search;
 
         const result = await apiClient.get(`/api/v1/orgs/${orgId}/members`, params);
-        const records = result?.records || result?.members || result || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));

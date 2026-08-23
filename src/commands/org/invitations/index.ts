@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerInvitationCommands(orgCommand: Command) {
   // list invitations for an org
@@ -19,7 +20,8 @@ export function registerInvitationCommands(orgCommand: Command) {
         if (options.status) params.status = options.status;
 
         const result = await apiClient.get(`/api/v1/orgs/${orgId}/invitations`, params);
-        const records = Array.isArray(result) ? result : result?.records || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -93,7 +95,8 @@ export function registerInvitationCommands(orgCommand: Command) {
           pageSize: parseInt(options.limit) || 20,
         };
         const result = await apiClient.get('/api/v1/orgs/invitations/mine', params);
-        const records = Array.isArray(result) ? result : result?.records || [];
+        // fix: #4 https://github.com/good7ob/g7b-cli/issues/4
+        const records = extractRecords(result);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
