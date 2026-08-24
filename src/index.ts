@@ -9,6 +9,7 @@ import { Command } from 'commander';
 import { registerInfraCommands } from './commands/infra';
 import { registerPmCommands } from './commands/pm';
 import { registerOrgCommands } from './commands/org';
+import { registerContentCommands } from './commands/content';
 import { registerQcCommands } from './commands/qc';
 import { registerConfigCommands } from './commands/config';
 import { registerPrdCommands } from './commands/prd';
@@ -26,6 +27,7 @@ program
 registerInfraCommands(program);
 registerPmCommands(program);
 registerOrgCommands(program);
+registerContentCommands(program);
 registerQcCommands(program);
 registerConfigCommands(program);
 registerPrdCommands(program);

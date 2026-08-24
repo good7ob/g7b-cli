@@ -9,6 +9,7 @@ const commander_1 = require("commander");
 const infra_1 = require("./commands/infra");
 const pm_1 = require("./commands/pm");
 const org_1 = require("./commands/org");
+const content_1 = require("./commands/content");
 const qc_1 = require("./commands/qc");
 const config_1 = require("./commands/config");
 const prd_1 = require("./commands/prd");
@@ -23,6 +24,7 @@ program
 (0, infra_1.registerInfraCommands)(program);
 (0, pm_1.registerPmCommands)(program);
 (0, org_1.registerOrgCommands)(program);
+(0, content_1.registerContentCommands)(program);
 (0, qc_1.registerQcCommands)(program);
 (0, config_1.registerConfigCommands)(program);
 (0, prd_1.registerPrdCommands)(program);
