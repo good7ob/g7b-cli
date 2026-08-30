@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerLogCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const extractRecords_1 = require("../../utils/extractRecords");
+const report_1 = require("./report");
 function registerLogCommands(program) {
     const logCommand = program
         .command('log')
@@ -354,6 +355,7 @@ function registerLogCommands(program) {
             process.exit(1);
         }
     });
+    (0, report_1.registerAgentReportCommands)(logCommand);
     return logCommand;
 }
 exports.registerLogCommands = registerLogCommands;

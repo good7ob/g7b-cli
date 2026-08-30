@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
+import { registerAgentReportCommands } from './report';
 
 export function registerLogCommands(program: Command) {
   const logCommand = program
@@ -328,6 +329,8 @@ export function registerLogCommands(program: Command) {
         process.exit(1);
       }
     });
+
+  registerAgentReportCommands(logCommand);
 
   return logCommand;
 }
