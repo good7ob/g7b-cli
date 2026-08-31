@@ -15,6 +15,7 @@ const config_1 = require("./commands/config");
 const prd_1 = require("./commands/prd");
 const req_1 = require("./commands/req");
 const log_1 = require("./commands/log");
+const case_1 = require("./commands/case");
 const program = new commander_1.Command();
 program
     .name('good7ob')
@@ -30,6 +31,7 @@ program
 (0, prd_1.registerPrdCommands)(program);
 (0, req_1.registerReqCommands)(program);
 (0, log_1.registerLogCommands)(program);
+(0, case_1.registerCaseCommands)(program);
 // Parse command line arguments
 program.parse(process.argv);
 // Show help if no arguments provided
