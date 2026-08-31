@@ -7,10 +7,10 @@ import { extractRecords } from '../../utils/extractRecords';
 /**
  * SES 案件导入命令（g7b #1008）。
  *
- * 复用 front-admin AddCaseDialog.vue 已经在用的同一对后端接口
- * （POST /admin/api/cases/ai 做 AI 识别+查重，POST /admin/api/cases/create
- * 批量录入），不新建解析逻辑，也不新建后端接口——CLI 只是把"粘贴微信内容
- * →AI识别→确认→录入"这条已经在网页上跑通的路径搬到终端。
+ * 走 /forge/cases/ai + /forge/cases/submit（普通登录态即可，不需要 admin 权限）——
+ * 跟 front-admin AddCaseDialog.vue 用的 /admin/api/cases/ai + /admin/api/cases/create
+ * 是同一套 AI 识别/查重逻辑，只是提交方是普通用户而不是 admin，所以落地后进入待审核
+ * 队列（auditStatus=REVIEW），要 admin 审核通过才会对外可见，而不是直接发布。
  */
 
 interface CaseDTO {
@@ -89,17 +89,17 @@ function printCase(index: number, c: CaseDTO): void {
 export function registerCaseCommands(program: Command) {
   const caseCommand = program
     .command('case')
-    .description('SES 案件管理 — AI 识别粘贴内容并批量录入 (g7b #1008)');
+    .description('SES 案件管理 — AI 识别粘贴内容并批量提交待审核 (g7b #1008)');
 
   caseCommand
     .command('import [text...]')
     .description(
-      '粘贴/管道输入 SES 案件信息（可一段内含多条），AI 解析后确认批量写入。' +
+      '粘贴/管道输入 SES 案件信息（可一段内含多条），AI 解析后确认批量提交待审核。' +
         '不给 text 且不给 --file 时从 stdin 读取。'
     )
     .option('-f, --file <path>', '从文件读取原始内容，而不是命令行参数/stdin')
-    .option('--dry-run', '只做 AI 识别并展示结果，不写入')
-    .option('-y, --yes', '跳过确认提示，识别后直接写入')
+    .option('--dry-run', '只做 AI 识别并展示结果，不提交')
+    .option('-y, --yes', '跳过确认提示，识别后直接提交')
     .option('--json', '以 JSON 输出识别/写入结果')
     .action(async (textParts: string[], options) => {
       try {
@@ -111,7 +111,7 @@ export function registerCaseCommands(program: Command) {
           );
         }
 
-        const parsed = await apiClient.post<CaseDTO[]>('/admin/api/cases/ai', content);
+        const parsed = await apiClient.post<CaseDTO[]>('/forge/cases/ai', content);
         const cases = extractRecords<CaseDTO>(parsed);
 
         if (!cases.length) {
@@ -128,17 +128,17 @@ export function registerCaseCommands(program: Command) {
         cases.forEach((c, i) => printCase(i, c));
 
         if (options.dryRun) {
-          console.log(`\n(--dry-run，未写入)`);
+          console.log(`\n(--dry-run，未提交)`);
           return;
         }
 
         console.log('');
-        if (!options.yes && !(await confirm(`确认导入以上 ${cases.length} 条案件？`))) {
-          console.log('已取消，未写入。');
+        if (!options.yes && !(await confirm(`确认提交以上 ${cases.length} 条案件待审核？`))) {
+          console.log('已取消，未提交。');
           return;
         }
 
-        const result = await apiClient.post('/admin/api/cases/create', cases);
+        const result = await apiClient.post('/forge/cases/submit', cases);
 
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
@@ -146,17 +146,17 @@ export function registerCaseCommands(program: Command) {
         }
 
         const savedCount = result?.savedCount ?? cases.length;
-        console.log(`✓ 已录入 ${savedCount} 条案件`);
+        console.log(`✓ 已提交 ${savedCount} 条案件，等待 admin 审核通过后对外可见`);
         if (result?.skippedCount) {
           console.log(`  跳过 ${result.skippedCount} 条重复案件: ${(result.skippedCaseNames || []).join('、')}`);
         }
       } catch (error) {
         // 提交的全部是重复案件时后端返回 1006——不是异常情况，给出针对性提示。
         if ((error as any)?.code === 1006) {
-          console.error('✗ 这些案件都已存在，未写入任何内容');
+          console.error('✗ 这些案件都已存在，未提交任何内容');
           process.exit(1);
         }
-        fail('导入案件失败', error);
+        fail('提交案件失败', error);
       }
     });
 }
