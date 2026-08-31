@@ -88,14 +88,14 @@ function printCase(index, c) {
 function registerCaseCommands(program) {
     const caseCommand = program
         .command('case')
-        .description('SES 案件管理 — AI 识别粘贴内容并批量录入 (g7b #1008)');
+        .description('SES 案件管理 — AI 识别粘贴内容并批量提交待审核 (g7b #1008)');
     caseCommand
         .command('import [text...]')
-        .description('粘贴/管道输入 SES 案件信息（可一段内含多条），AI 解析后确认批量写入。' +
+        .description('粘贴/管道输入 SES 案件信息（可一段内含多条），AI 解析后确认批量提交待审核。' +
         '不给 text 且不给 --file 时从 stdin 读取。')
         .option('-f, --file <path>', '从文件读取原始内容，而不是命令行参数/stdin')
-        .option('--dry-run', '只做 AI 识别并展示结果，不写入')
-        .option('-y, --yes', '跳过确认提示，识别后直接写入')
+        .option('--dry-run', '只做 AI 识别并展示结果，不提交')
+        .option('-y, --yes', '跳过确认提示，识别后直接提交')
         .option('--json', '以 JSON 输出识别/写入结果')
         .action(async (textParts, options) => {
         try {
@@ -103,7 +103,7 @@ function registerCaseCommands(program) {
             if (!content.trim()) {
                 fail('没有可识别的内容', new Error('传入案件文本，或使用 --file <path>，或通过管道输入'));
             }
-            const parsed = await ApiClient_1.default.post('/admin/api/cases/ai', content);
+            const parsed = await ApiClient_1.default.post('/forge/cases/ai', content);
             const cases = (0, extractRecords_1.extractRecords)(parsed);
             if (!cases.length) {
                 console.error('✗ AI 未能从内容中识别出案件信息，请检查粘贴内容或手动在网页端录入');
@@ -116,21 +116,21 @@ function registerCaseCommands(program) {
             console.log(`识别到 ${cases.length} 条案件：`);
             cases.forEach((c, i) => printCase(i, c));
             if (options.dryRun) {
-                console.log(`\n(--dry-run，未写入)`);
+                console.log(`\n(--dry-run，未提交)`);
                 return;
             }
             console.log('');
-            if (!options.yes && !(await confirm(`确认导入以上 ${cases.length} 条案件？`))) {
-                console.log('已取消，未写入。');
+            if (!options.yes && !(await confirm(`确认提交以上 ${cases.length} 条案件待审核？`))) {
+                console.log('已取消，未提交。');
                 return;
             }
-            const result = await ApiClient_1.default.post('/admin/api/cases/create', cases);
+            const result = await ApiClient_1.default.post('/forge/cases/submit', cases);
             if (options.json) {
                 console.log(JSON.stringify(result, null, 2));
                 return;
             }
             const savedCount = result?.savedCount ?? cases.length;
-            console.log(`✓ 已录入 ${savedCount} 条案件`);
+            console.log(`✓ 已提交 ${savedCount} 条案件，等待 admin 审核通过后对外可见`);
             if (result?.skippedCount) {
                 console.log(`  跳过 ${result.skippedCount} 条重复案件: ${(result.skippedCaseNames || []).join('、')}`);
             }
@@ -138,10 +138,10 @@ function registerCaseCommands(program) {
         catch (error) {
             // 提交的全部是重复案件时后端返回 1006——不是异常情况，给出针对性提示。
             if (error?.code === 1006) {
-                console.error('✗ 这些案件都已存在，未写入任何内容');
+                console.error('✗ 这些案件都已存在，未提交任何内容');
                 process.exit(1);
             }
-            fail('导入案件失败', error);
+            fail('提交案件失败', error);
         }
     });
 }
