@@ -175,6 +175,8 @@ good7ob qc tc create --product-id 12 --title "Login succeeds" \
   --step "Submit valid credentials::Dashboard is shown" --priority P1 --rp 101,102
 good7ob qc tc import e2e/features --product-id 12 --dry-run   # script path = path relative to --root (default .)
 good7ob qc tc import e2e/features --product-id 12             # re-import updates cases with the same path + scenario
+good7ob qc tc create-batch cases.json --product-id 12 --dry-run   # [{suite:"A/B", title, steps, ...}]
+good7ob qc tc create-batch cases.json --product-id 12             # missing suites are created; --skip N resumes
 good7ob qc tc coverage 12          # uncovered RPs; --all for every RP
 good7ob qc tc suites 12
 ```

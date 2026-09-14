@@ -7,7 +7,47 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { collectFeatureFiles, MAX_FILES_PER_REQUEST, parseStep, planBatches } from '../testcaseFiles';
+import {
+  collectFeatureFiles,
+  ensureSuitePath,
+  MAX_FILES_PER_REQUEST,
+  parseStep,
+  planBatches,
+  readBatchFile,
+  SuiteRef,
+} from '../testcaseFiles';
+
+describe('create-batch helpers', () => {
+  it('ensureSuitePath creates missing levels once and reuses them', async () => {
+    const suites: SuiteRef[] = [{ id: 1, parentId: null, name: '组织管理' }];
+    let nextId = 10;
+    const calls: string[] = [];
+    const create = async (name: string, parentId: number | null) => {
+      calls.push(`${parentId}/${name}`);
+      return { id: nextId++, parentId, name };
+    };
+
+    expect(await ensureSuitePath('组织管理/成员管理', suites, create)).toBe(10);
+    expect(await ensureSuitePath(' 组织管理 / 成员管理 ', suites, create)).toBe(10);
+    expect(await ensureSuitePath('组织管理/邀请', suites, create)).toBe(11);
+    expect(calls).toEqual(['1/成员管理', '1/邀请']);
+    await expect(ensureSuitePath(' / ', suites, create)).rejects.toThrow('目录路径为空');
+  });
+
+  it('readBatchFile accepts an array or { cases } and rejects cases without title or steps', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'g7b-tc-batch-'));
+    const write = (name: string, body: unknown) => {
+      fs.writeFileSync(path.join(dir, name), JSON.stringify(body));
+      return path.join(dir, name);
+    };
+    const ok = { title: 't', steps: [{ action: 'a', expected: 'b' }] };
+
+    expect(readBatchFile(write('a.json', [ok]))).toHaveLength(1);
+    expect(readBatchFile(write('b.json', { cases: [ok, ok] }))).toHaveLength(2);
+    expect(() => readBatchFile(write('c.json', []))).toThrow('非空');
+    expect(() => readBatchFile(write('d.json', [ok, { title: 'x' }]))).toThrow('第 2 条缺少 steps');
+  });
+});
 
 describe('parseStep', () => {
   it('splits action and expected on the first "::"', () => {
