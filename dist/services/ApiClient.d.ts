@@ -32,6 +32,11 @@ export declare class ApiClient {
      */
     uploadFile<T>(url: string, filePath: string, fieldName?: string, additionalFields?: Record<string, string>): Promise<T>;
     /**
+     * Upload several files under one multipart field (Spring `List<MultipartFile>`).
+     * Unlike uploadFile the envelope goes through unwrap, so business errors surface.
+     */
+    uploadFiles(url: string, filePaths: string[], fieldName: string, fields?: Record<string, string>): Promise<any>;
+    /**
      * Set API Key
      */
     setApiKey(apiKey: string): void;
