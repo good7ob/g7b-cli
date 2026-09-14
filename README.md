@@ -165,7 +165,18 @@ good7ob org get 1001
 
 ```bash
 good7ob qc bug --help
+good7ob qc testcase --help   # alias: qc tc
 good7ob qc report --help
+
+# Test case library (prd-0082)
+good7ob qc tc list 12 --status Active --mode Automated
+good7ob qc tc get 345
+good7ob qc tc create --product-id 12 --title "Login succeeds" \
+  --step "Submit valid credentials::Dashboard is shown" --priority P1 --rp 101,102
+good7ob qc tc import e2e/features --product-id 12 --dry-run   # script path = path relative to --root (default .)
+good7ob qc tc import e2e/features --product-id 12             # re-import updates cases with the same path + scenario
+good7ob qc tc coverage 12          # uncovered RPs; --all for every RP
+good7ob qc tc suites 12
 ```
 
 ## Build and test

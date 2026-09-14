@@ -158,6 +158,28 @@ class ApiClient {
         }
     }
     /**
+     * Upload several files under one multipart field (Spring `List<MultipartFile>`).
+     * Unlike uploadFile the envelope goes through unwrap, so business errors surface.
+     */
+    async uploadFiles(url, filePaths, fieldName, fields) {
+        try {
+            const FormDataLibrary = require('form-data');
+            const formData = new FormDataLibrary();
+            Object.entries(fields ?? {}).forEach(([key, value]) => formData.append(key, value));
+            filePaths.forEach((p) => formData.append(fieldName, fs.readFileSync(p), path.basename(p)));
+            const response = await this.instance.post(url, formData, {
+                headers: formData.getHeaders(),
+                // follow-redirects caps bodies at 10MB by default; a 50-file batch can exceed that
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+            });
+            return this.unwrap(response.data);
+        }
+        catch (error) {
+            throw this.handleError(error);
+        }
+    }
+    /**
      * Set API Key
      */
     setApiKey(apiKey) {
