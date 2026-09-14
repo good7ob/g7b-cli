@@ -74,6 +74,57 @@ export function planBatches(files: string[], root: string, basePathOverride?: st
   return batches;
 }
 
+export interface SuiteRef {
+  id: number;
+  parentId: number | null;
+  name: string;
+}
+
+export interface BatchCase {
+  /** Suite path like "组织管理/成员管理"; missing levels are created. */
+  suite?: string;
+  title: string;
+  steps: TestStepInput[];
+  [field: string]: unknown;
+}
+
+/** Read a create-batch file: a JSON array (or { "cases": [...] }) of cases with title + steps. */
+export function readBatchFile(file: string): BatchCase[] {
+  const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+  const cases = Array.isArray(parsed) ? parsed : parsed?.cases;
+  if (!Array.isArray(cases) || cases.length === 0) {
+    throw new Error('文件须为非空 JSON 数组，或 { "cases": [...] }');
+  }
+  cases.forEach((c: any, i: number) => {
+    if (!c || typeof c.title !== 'string' || !c.title.trim()) throw new Error(`第 ${i + 1} 条缺少 title`);
+    if (!Array.isArray(c.steps) || c.steps.length === 0) throw new Error(`第 ${i + 1} 条缺少 steps: ${c.title}`);
+  });
+  return cases;
+}
+
+/**
+ * Resolve "一级/二级" to a suite id, creating missing levels through `create`.
+ * `suites` is the caller's cache of the product's suites and gains every created suite,
+ * so later cases in the same batch reuse them instead of creating duplicates.
+ */
+export async function ensureSuitePath(
+  suitePath: string,
+  suites: SuiteRef[],
+  create: (name: string, parentId: number | null) => Promise<SuiteRef>,
+): Promise<number> {
+  let parentId: number | null = null;
+  for (const name of suitePath.split('/').map((s) => s.trim()).filter(Boolean)) {
+    let found: SuiteRef | undefined = suites.find((s) => (s.parentId ?? null) === parentId && s.name === name);
+    if (!found) {
+      found = await create(name, parentId);
+      suites.push(found);
+    }
+    parentId = found.id;
+  }
+  if (parentId === null) throw new Error(`目录路径为空: "${suitePath}"`);
+  return parentId;
+}
+
 function normalizeBasePath(dir: string): string {
   const posix = dir.replace(/\\/g, '/').replace(/^\.(\/|$)/, '').replace(/^\/+/, '');
   return posix === '' || posix.endsWith('/') ? posix : `${posix}/`;
