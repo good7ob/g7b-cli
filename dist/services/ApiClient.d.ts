@@ -2,6 +2,7 @@
  * API Client Service
  * Handles HTTP communication with the good7ob backend API
  */
+/// <reference types="node" />
 export declare class ApiClient {
     private instance;
     private baseURL;
@@ -15,6 +16,11 @@ export declare class ApiClient {
      * Make POST request
      */
     post<T = any>(url: string, data?: any): Promise<any>;
+    /**
+     * POST and return the raw response stream (for text/event-stream endpoints).
+     * No timeout: the server closes the stream when the answer is complete.
+     */
+    postStream(url: string, data?: any): Promise<NodeJS.ReadableStream>;
     /**
      * Make PUT request
      */
