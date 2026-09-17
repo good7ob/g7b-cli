@@ -126,6 +126,16 @@ good7ob qc --help
 
 Quality-control commands for bug tracking and QA reporting.
 
+### `kb`
+
+```bash
+good7ob kb ls --name 项目管理层            # list documents (--source, --status, --format json)
+good7ob kb search 项目进度 风险预警 -l 5    # semantic search, prints matching chunks
+good7ob kb chat 进度计算公式是什么？        # streamed AI answer + citations (--json)
+```
+
+Knowledge base (Dify-backed) — list documents, search, and ask questions.
+
 ## Quick examples
 
 ### Project management

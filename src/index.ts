@@ -16,6 +16,7 @@ import { registerPrdCommands } from './commands/prd';
 import { registerReqCommands } from './commands/req';
 import { registerLogCommands } from './commands/log';
 import { registerCaseCommands } from './commands/case';
+import { registerKbCommands } from './commands/kb';
 
 const program = new Command();
 
@@ -35,6 +36,7 @@ registerPrdCommands(program);
 registerReqCommands(program);
 registerLogCommands(program);
 registerCaseCommands(program);
+registerKbCommands(program);
 
 // Parse command line arguments
 program.parse(process.argv);

@@ -96,6 +96,23 @@ class ApiClient {
         }
     }
     /**
+     * POST and return the raw response stream (for text/event-stream endpoints).
+     * No timeout: the server closes the stream when the answer is complete.
+     */
+    async postStream(url, data) {
+        try {
+            const response = await this.instance.post(url, data, {
+                responseType: 'stream',
+                timeout: 0,
+                headers: { Accept: 'text/event-stream' },
+            });
+            return response.data;
+        }
+        catch (error) {
+            throw this.handleError(error);
+        }
+    }
+    /**
      * Make PUT request
      */
     async put(url, data) {
@@ -223,6 +240,11 @@ class ApiClient {
      * the current active list) can still reach it.
      */
     unwrap(body) {
+        // Some controllers (e.g. /forge/kb/*) return a bare ResponseEntity body
+        // with no envelope; hand those back as-is instead of reading `.data`.
+        if (Array.isArray(body) || (body && typeof body === 'object' && !('code' in body) && !('data' in body))) {
+            return body;
+        }
         const code = body?.code;
         if (code != null && code !== 200) {
             const err = new Error(body?.msg || body?.message || `请求失败 (code=${code})`);
