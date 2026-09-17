@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAgentReportCommands = void 0;
+const fs_1 = require("fs");
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
 const extractRecords_1 = require("../../../utils/extractRecords");
 const API_PREFIX = '/forge/agent-work-reports';
@@ -14,7 +15,7 @@ const API_PREFIX = '/forge/agent-work-reports';
 function registerAgentReportCommands(logCommand) {
     const reportCommand = logCommand
         .command('report')
-        .description('AI agent work daily/weekly reports — generate, list, view, publish');
+        .description('AI agent work daily/weekly reports — generate, list, view, edit, publish');
     reportCommand
         .command('generate')
         .description('Generate or regenerate a daily/weekly report (idempotent upsert)')
@@ -145,6 +146,35 @@ function registerAgentReportCommands(logCommand) {
         }
         catch (error) {
             console.error('✗ 获取报告详情失败:', error instanceof Error ? error.message : String(error));
+            process.exit(1);
+        }
+    });
+    reportCommand
+        .command('update <id>')
+        .description('Edit a draft report title and/or Markdown content (g7b #1056)')
+        .option('--title <title>', 'New title')
+        .option('--content-file <path>', 'Markdown file to use as the report content')
+        .option('--json', 'Output result as JSON')
+        .action(async (id, options) => {
+        try {
+            if (!options.title && !options.contentFile) {
+                console.error('✗ 至少指定 --title 或 --content-file');
+                process.exit(1);
+            }
+            const body = {};
+            if (options.title)
+                body.title = options.title;
+            if (options.contentFile)
+                body.content = (0, fs_1.readFileSync)(options.contentFile, 'utf8');
+            const report = await ApiClient_1.default.put(`${API_PREFIX}/${id}`, body);
+            if (options.json) {
+                console.log(JSON.stringify(report, null, 2));
+                return;
+            }
+            console.log(`✓ 报告已更新: [${report?.id || id}] ${report?.title || ''}`);
+        }
+        catch (error) {
+            console.error('✗ 更新报告失败:', error instanceof Error ? error.message : String(error));
             process.exit(1);
         }
     });
