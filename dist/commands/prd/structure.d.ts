@@ -106,6 +106,8 @@ export interface SyncResult {
 export declare function syncStructure(client: StructureClient, productId: number, features: DesiredFeature[], opts: {
     dryRun: boolean;
     concurrency: number;
+    tenantId?: number;
+    retryDelaysMs?: number[];
 }): Promise<SyncResult>;
 export {};
 //# sourceMappingURL=structure.d.ts.map

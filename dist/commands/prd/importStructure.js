@@ -42,6 +42,7 @@ function registerImportStructureCommand(prdCommand) {
         .description('把 docs/prd 需求结构幂等导入产品的 Feature / Function Point / Rule Point（重复执行只补缺失、只改变化的状态，不删除）')
         .requiredOption('--prd-dir <path>', 'docs/prd 目录（含 prd-0000 需求索引）')
         .option('--product <id>', '目标产品 ID（--parse-only 时可省略）')
+        .option('--tenant <id>', '租户 ID，与组织 ID 同源；新建 Feature 必填（后端 tenant_id 非空）')
         .option('--verified <json>', '代码核实结果 JSON：{ fpStatus: {funId: DONE|PARTIAL|TODO}, rpImplStatus: {rpId: TODO|UNVERIFIED} }')
         .option('--dry-run', '读取现有数据并打印计划，不写入')
         .option('--parse-only', '只解析本地文件并打印统计，不调用 API')
@@ -66,7 +67,8 @@ function registerImportStructureCommand(prdCommand) {
             }
             const productId = positiveInt(o.product, '--product');
             const concurrency = positiveInt(o.concurrency, '--concurrency');
-            const result = await (0, structure_1.syncStructure)(ApiClient_1.default, productId, features, { dryRun: !!o.dryRun, concurrency });
+            const tenantId = o.tenant === undefined ? undefined : positiveInt(o.tenant, '--tenant');
+            const result = await (0, structure_1.syncStructure)(ApiClient_1.default, productId, features, { dryRun: !!o.dryRun, concurrency, tenantId });
             if (o.json) {
                 console.log(JSON.stringify({ parsed, warnings, dryRun: !!o.dryRun, ...result }, null, 2));
                 return;
