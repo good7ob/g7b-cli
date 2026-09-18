@@ -238,12 +238,23 @@ async function syncStructure(client, productId, features, opts) {
         if (op !== 'unchanged')
             result.actions.push({ layer, op, id, ...change });
     };
+    // 一次完整导入是上千次写请求，后端按用户维度限流，撞上 429 就退避重试；
+    // 其它错误仍然立刻中止（幂等，重跑即可续上）。
+    const RETRY_DELAYS_MS = opts.retryDelaysMs ?? [2000, 4000, 8000, 16000, 30000];
+    const isRateLimited = (m) => /Too many requests|429|请求过于频繁/i.test(m);
     const at = async (id, call) => {
-        try {
-            return await call();
-        }
-        catch (e) {
-            throw new Error(`${id}: ${e instanceof Error ? e.message : String(e)}`);
+        for (let attempt = 0;; attempt++) {
+            try {
+                return await call();
+            }
+            catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                if (isRateLimited(msg) && attempt < RETRY_DELAYS_MS.length) {
+                    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+                    continue;
+                }
+                throw new Error(`${id}: ${msg}`);
+            }
         }
     };
     const syncRp = async (fpRow, existing, rp) => {

@@ -254,6 +254,19 @@ describe('syncStructure', () => {
     expect(db.rps.length).toBe(3);
   });
 
+  it('retries when the backend rate-limits, and still imports everything', async () => {
+    const { client, db } = fakeBackend();
+    let hits = 0;
+    const throttling = { ...client, post: async (url: string, body: any) => {
+      if (url === '/forge/rule-points' && ++hits === 2) throw new Error('Too many requests. Please slow down and retry later.');
+      return client.post(url, body);
+    } };
+
+    await syncStructure(throttling, 7, desired(), { dryRun: false, concurrency: 1, tenantId: 58, retryDelaysMs: [1, 1] });
+
+    expect(db.rps.length).toBe(3);
+  });
+
   it('stops on the first hard error and names the node', async () => {
     const { client } = fakeBackend();
     const failing = { ...client, post: async (url: string, body: any) => {
