@@ -223,7 +223,8 @@ async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promis
  * dryRun reads existing data and records the plan without writing.
  */
 export async function syncStructure(
-  client: StructureClient, productId: number, features: DesiredFeature[], opts: { dryRun: boolean; concurrency: number },
+  client: StructureClient, productId: number, features: DesiredFeature[],
+  opts: { dryRun: boolean; concurrency: number; tenantId?: number },
 ): Promise<SyncResult> {
   const zero = () => ({ create: 0, update: 0, unchanged: 0 });
   const result: SyncResult = { counts: { feature: zero(), fp: zero(), rp: zero() }, actions: [] };
@@ -285,7 +286,12 @@ export async function syncStructure(
         fps = byLeadingId(await at(feature.key, () => client.get('/forge/function-points', { featureId: row.id })), 'name');
       } else {
         record('feature', 'create', feature.key);
-        if (!opts.dryRun) row = await at(feature.key, () => client.post('/forge/features', { productId, name: feature.name }));
+        // 后端 forge_feature.tenant_id 非空，缺了会 500；tenantId 与组织 ID 同源（前端同约定）。
+        if (!opts.dryRun) {
+          if (!opts.tenantId) throw new Error('缺少 --tenant（租户/组织 ID）：新建 Feature 必须提供');
+          row = await at(feature.key, () => client.post('/forge/features',
+            { productId, tenantId: opts.tenantId, name: feature.name }));
+        }
       }
       for (const fp of feature.fps) await syncFp(row, fps, fp);
     });

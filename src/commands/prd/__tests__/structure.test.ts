@@ -180,6 +180,9 @@ function fakeBackend() {
     async post(url: string, body: any) {
       writes.push(`POST ${url}`);
       const row = { id: ++seq, ...body };
+      // Mirrors the real backend: forge_feature.tenant_id is NOT NULL, so a create
+      // without tenantId blows up with a 系统异常 instead of a validation message.
+      if (url === '/forge/features' && !body.tenantId) throw new Error('系统异常，请联系管理员');
       if (url === '/forge/features') db.features.push(row);
       else if (url === '/forge/function-points') db.fps.push({ ...row, status: 'Draft' });
       // Old backend: implStatus is not persisted on create, so the importer must follow up with a PUT.
@@ -213,10 +216,18 @@ describe('syncStructure', () => {
     });
   });
 
+  it('refuses to create Features without a tenantId instead of failing mid-import', async () => {
+    const { client, writes } = fakeBackend();
+    await expect(syncStructure(client, 7, desired(), { dryRun: false, concurrency: 1 }))
+      .rejects.toThrow('--tenant');
+    expect(writes).toEqual([]);
+  });
+
   it('creates everything, then a re-run is a no-op, then only changed statuses update', async () => {
     const { client, db, writes } = fakeBackend();
-    await syncStructure(client, 7, desired(), { dryRun: false, concurrency: 2 });
+    await syncStructure(client, 7, desired(), { dryRun: false, concurrency: 2, tenantId: 58 });
     expect(db.features.map((f) => f.name).sort()).toEqual(['MOD-01-SUB-01 账户认证', 'MOD-02-SUB-03 支付']);
+    expect(db.features.every((f) => f.tenantId === 58)).toBe(true);
     expect(db.fps.find((f) => f.name.startsWith('fun-user-auth-0001'))).toMatchObject({ status: 'Completed', fpType: 'Integration' });
     expect(db.fps.find((f) => f.name.startsWith('fun-pay-0002')).status).toBe('Draft');
     expect(db.rps.map((r) => [r.statement.split(' ')[0], r.implStatus ?? 'TODO']).sort()).toEqual([
@@ -249,7 +260,7 @@ describe('syncStructure', () => {
       if (url === '/forge/function-points' && body.name.startsWith('fun-pay-0001')) throw new Error('FP 类型不合法');
       return client.post(url, body);
     } };
-    await expect(syncStructure(failing, 7, desired(), { dryRun: false, concurrency: 1 }))
+    await expect(syncStructure(failing, 7, desired(), { dryRun: false, concurrency: 1, tenantId: 58 }))
       .rejects.toThrow('fun-pay-0001: FP 类型不合法');
   });
 });
