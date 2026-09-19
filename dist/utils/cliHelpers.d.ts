@@ -20,6 +20,8 @@ export declare function fmtDateTime(value: unknown): string;
 export declare function emit(json: boolean | undefined, data: unknown, text: () => string): void;
 /** Null -> "—"; otherwise the number rounded to `digits` with trailing zeros dropped. */
 export declare function fmtNum(value: number | null | undefined, suffix?: string, digits?: number): string;
+/** Commander collector for repeatable options: `--x a --x b` -> ['a', 'b']. */
+export declare const collect: (value: string, prev?: string[]) => string[];
 /** A bad flag/argument, rejected before any HTTP call. */
 export declare class InputError extends Error {
 }

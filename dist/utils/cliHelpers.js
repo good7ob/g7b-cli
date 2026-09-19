@@ -5,7 +5,7 @@
  * backend business codes to readable errors.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.renderTable = exports.fail = exports.describeError = exports.AUTH_CODES = exports.requireText = exports.checkMaxLength = exports.requireOneOf = exports.parseIntInRange = exports.normalizeTypeCode = exports.resolveProductId = exports.parseDate = exports.parseIdList = exports.parseId = exports.InputError = exports.fmtNum = exports.emit = exports.fmtDateTime = exports.fmtDate = exports.dash = exports.DASH = void 0;
+exports.renderTable = exports.fail = exports.describeError = exports.AUTH_CODES = exports.requireText = exports.checkMaxLength = exports.requireOneOf = exports.parseIntInRange = exports.normalizeTypeCode = exports.resolveProductId = exports.parseDate = exports.parseIdList = exports.parseId = exports.InputError = exports.collect = exports.fmtNum = exports.emit = exports.fmtDateTime = exports.fmtDate = exports.dash = exports.DASH = void 0;
 const table_1 = require("table");
 /** Shown for any value the backend could not compute. Never render null as 0. */
 exports.DASH = '—';
@@ -41,6 +41,9 @@ function fmtNum(value, suffix = '', digits = 2) {
     return `${Number(Number(value).toFixed(digits))}${suffix}`;
 }
 exports.fmtNum = fmtNum;
+/** Commander collector for repeatable options: `--x a --x b` -> ['a', 'b']. */
+const collect = (value, prev = []) => [...prev, value];
+exports.collect = collect;
 // ── Input validation (throws InputError with a message meant for the terminal) ──
 /** A bad flag/argument, rejected before any HTTP call. */
 class InputError extends Error {

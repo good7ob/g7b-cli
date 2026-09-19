@@ -45,6 +45,9 @@ export function fmtNum(value: number | null | undefined, suffix = '', digits = 2
   return `${Number(Number(value).toFixed(digits))}${suffix}`;
 }
 
+/** Commander collector for repeatable options: `--x a --x b` -> ['a', 'b']. */
+export const collect = (value: string, prev: string[] = []): string[] => [...prev, value];
+
 // ── Input validation (throws InputError with a message meant for the terminal) ──
 
 /** A bad flag/argument, rejected before any HTTP call. */
