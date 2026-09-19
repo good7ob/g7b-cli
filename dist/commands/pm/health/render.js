@@ -2,14 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.renderBaseline = exports.renderModules = exports.renderHealth = void 0;
 const cliHelpers_1 = require("../../../utils/cliHelpers");
-/** Label/value block; `table` measures CJK width so the values line up. */
-const block = (rows) => (0, cliHelpers_1.renderTable)(rows);
+const kpi_1 = require("./kpi");
 function renderHealth(h) {
     const done = h.completedTasks == null || h.totalTasks == null ? cliHelpers_1.DASH : `${h.completedTasks} / ${h.totalTasks}`;
     return [
         `产品健康  #${(0, cliHelpers_1.dash)(h.productId)}  ${(0, cliHelpers_1.dash)(h.productName)}    (as of ${(0, cliHelpers_1.fmtDate)(h.asOf)})`,
         '─'.repeat(60),
-        block([
+        (0, kpi_1.block)([
             ['风险等级', (0, cliHelpers_1.dash)(h.riskLevel)],
             ['模块数', (0, cliHelpers_1.dash)(h.moduleCount)],
             ['任务完成', done],
@@ -19,28 +18,7 @@ function renderHealth(h) {
             ['进度偏差', (0, cliHelpers_1.fmtNum)(h.scheduleVariance, '%', 1)],
         ]),
         '',
-        '范围与基线',
-        block([
-            ['当前范围', (0, cliHelpers_1.fmtNum)(h.currentScopeWeight)],
-            ['基线范围', (0, cliHelpers_1.fmtNum)(h.baselineScopeWeight)],
-            ['范围变化', (0, cliHelpers_1.fmtNum)(h.scopeChange)],
-            ['范围增长', (0, cliHelpers_1.fmtNum)(h.scopeGrowthPct, '%', 1)],
-            ['基线时间', (0, cliHelpers_1.fmtDate)(h.baselineSetAt)],
-        ]),
-        '',
-        '加权进度与阻塞',
-        block([
-            ['加权进度', (0, cliHelpers_1.fmtNum)(h.weightedProgress, '%')],
-            ['阻塞权重', (0, cliHelpers_1.fmtNum)(h.blockedWeight)],
-            ['阻塞占比', (0, cliHelpers_1.fmtNum)(h.blockedWeightRatio, '%', 1)],
-        ]),
-        '',
-        'AI 贡献',
-        block([
-            ['AI 完成权重', (0, cliHelpers_1.fmtNum)(h.aiCompletedWeight)],
-            ['人工完成权重', (0, cliHelpers_1.fmtNum)(h.humanCompletedWeight)],
-            ['AI 占比', (0, cliHelpers_1.fmtNum)(h.aiContributionPct, '%', 1)],
-        ]),
+        ...(0, kpi_1.renderScopeSections)(h, `pm health baseline ${(0, cliHelpers_1.dash)(h.productId)}`),
     ].join('\n');
 }
 exports.renderHealth = renderHealth;
@@ -53,13 +31,15 @@ function renderModules(modules) {
         (0, cliHelpers_1.fmtNum)(m.progressVariance, '%', 1), (0, cliHelpers_1.dash)(m.delayDays), (0, cliHelpers_1.fmtNum)(m.weightedProgress, '%'), (0, cliHelpers_1.fmtDate)(m.expectedEndDate),
         (0, cliHelpers_1.dash)(m.riskLevel), pair(m.completedTasks, m.totalTasks), (0, cliHelpers_1.dash)(m.blockedTasks),
     ]));
-    return `${(0, cliHelpers_1.renderTable)(rows, { 0: { truncate: 28 } })}\n共 ${modules.length} 个模块（按延期天数降序）`;
+    const basis = modules.find((m) => m.weightBasis)?.weightBasis;
+    const footer = `共 ${modules.length} 个模块（按延期天数降序）${basis ? `；加权进度口径 ${(0, kpi_1.basisLabel)(basis)}` : ''}`;
+    return `${(0, cliHelpers_1.renderTable)(rows, { 0: { truncate: 28 } })}\n${footer}`;
 }
 exports.renderModules = renderModules;
 function renderBaseline(b) {
     return [
         `✓ 已将当前范围设为新基线 #${(0, cliHelpers_1.dash)(b.baselineId)}`,
-        block([
+        (0, kpi_1.block)([
             ['产品', (0, cliHelpers_1.dash)(b.productId)],
             ['基线范围', (0, cliHelpers_1.fmtNum)(b.baselineScopeWeight)],
             ['任务数', (0, cliHelpers_1.dash)(b.baselineTaskCount)],

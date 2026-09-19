@@ -75,10 +75,10 @@ good7ob
 │   ├── workflow             # 工作流模板与阶段管理
 │   ├── report               # AI 进度报告
 │   ├── tag                  # 标签管理
-│   └── health               # 产品健康度、模块进度、范围基线
+│   └── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建
 ├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复
 ├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略）、总览、我的任务/产品/组织
-├── release                  # 发布管理：计划、关联任务、开始、申请审批
+├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 └── trace                    # 追溯关系：对象之间的有向关联
 ```
@@ -737,10 +737,45 @@ API 端点前缀：`/progress/tags`
 
 ## pm health — 产品健康度
 
-API 端点前缀：`/progress/products/{productId}/health`（需登录 + 产品所属组织成员）
+API 端点前缀：`/progress/products/{productId}`（需登录 + 产品所属组织成员）。对应后端 C1（`api-0090`）。
 
 | 命令 | 说明 |
 |------|------|
+| `pm health <productId>` | 产品健康度 KPI：进度、工作量口径、范围基线与增长、加权进度、阻塞占比、AI 贡献、速度与预计完成日期 |
+| `pm health modules <productId>` | 各模块进度（按延期天数降序，含加权进度；表尾注明加权进度口径） |
+| `pm health baseline <productId> [--note <text>]` | 把**当前**范围快照为新基线（备注 ≤500 字符） |
+| `pm health config get <productId>` | 读进度配置：工作量口径 + 各任务状态的默认 / 生效 / 覆盖完成度（从未配置则显示默认值） |
+| `pm health config set <productId> --basis <B> [--status-completion s=n,...]` | **整体替换**配置（仅组织 owner/admin）。`--basis`：`ESTIMATED_HOURS` \| `STORY_POINT` \| `WEIGHT`（不区分大小写）；`--status-completion` 形如 `in_progress=30,blocked=50`（0–100；状态取 not_started / pending_agent / pending_info / awaiting_plan_approval / in_progress / paused / awaiting_completion_approval / blocked，`completed` / `cancelled` 不可覆盖）。**省略 `--status-completion` 会清空已有覆盖** |
+| `pm health scope-changes <productId>` | 范围变更历史（新的在前；`auto` 由每日快照自动写入，`manual` 为手动记录）；`--release <id>` `-p/--page` `--page-size`（≤100，默认 20） |
+| `pm health scope-change add <productId> --delta <±n> --reason <text>` | 手动记录一笔范围变更（任一成员）；`--delta` 非零有符号数，`--reason` ≤500 字符，`--release <id>` 归到某个 Release |
+| `pm health scope-change annotate <id> --reason <text>` | 为任一条范围变更（含自动写入的）补充 / 修改原因（≤500 字符） |
+| `pm health burnup <productId>` | 每日 范围 / 已完成 / 剩余：表格 + 文本走势图（`▁▂▃▄▅▆▇█`，范围 vs 已完成；超过 60 点时走势图抽样，表格保留全部）+ 完成度条；`--from` `--to`（`yyyy-MM-dd`，跨度 ≤366 天，默认最近 30 天）`--release <id>` |
+| `pm health snapshots rebuild <productId> [--days N]` | 从任务历史补齐缺失的每日快照（仅 owner/admin；`--days` 1–90，默认 30；已有快照不覆盖；已删除任务无法还原） |
+
+所有命令支持 `--json`（可放在子命令前或后）。后端算不出来的字段（无基线、无计划日期、数据不足等）显示为 `—`，绝不显示为 0；`velocityDataStatus=INSUFFICIENT_DATA` 时「预计完成」显示 `数据不足`，不给日期。
+KPI 输出新增「工作量口径」「速度与预测」两段，并在以下情况给出 `⚠` 提示：有任务缺少所选口径的取值而回退到下一级（`basisFallbackTaskCount>0`，单位混合）；基线口径与当前口径不同（`baselineBasisMismatch`，此时基线范围 / 范围变化 / 范围增长 / 基线进度 的单位是基线口径，重设基线即可迁移）。
+
+业务错误码：
+- 旧端点（`health` / `modules` / `baseline`）：`40480` 产品不存在、`40380` 非组织成员、`40080` 备注过长。
+- 新端点（其余命令）：`1000` 缺必填、`1001` 参数不合法（服务端消息会一并显示）、`1002` 产品 / Release / 记录不存在、`1008` 缺 Release id、`2000` 非成员（写配置 / 重建快照需 owner/admin）。
+- 以上均为 HTTP 200 + 非 200 `code`；`999` = 未登录。
+
+所有必填项、枚举、长度、范围在调用 API 前于 CLI 端校验；无任何确认提示。
+
+```bash
+good7ob pm health 10
+good7ob pm health modules 10 --json
+good7ob pm health baseline 10 --note "Q4 范围冻结"
+good7ob pm health config get 10
+good7ob pm health config set 10 --basis STORY_POINT --status-completion in_progress=40,blocked=10
+good7ob pm health scope-changes 10 --release 5 -p 2
+good7ob pm health scope-change add 10 --delta -12.5 --reason "砍掉导出功能" --release 5
+good7ob pm health scope-change annotate 3 --reason "客户追加需求"
+good7ob pm health burnup 10 --from 2026-09-01 --to 2026-09-19
+good7ob pm health snapshots rebuild 10 --days 14
+```
+
+------|------|
 | `pm health <productId>` | 产品健康度 KPI：进度、范围基线与增长、加权进度、阻塞占比、AI 贡献 |
 | `pm health modules <productId>` | 各模块进度（按延期天数降序，含加权进度） |
 | `pm health baseline <productId> [--note <text>]` | 把**当前**范围快照为新基线（备注 ≤500 字符） |
@@ -902,8 +937,11 @@ API 端点前缀：`/forge/releases`（需登录 + 产品所属组织成员）�
 | `release tasks <id>` | 该发布下的任务（状态、进度、项目、负责人） |
 | `release tasks add <id> --task-ids 1,2,3` | 关联任务（幂等，全部成功或全部失败） |
 | `release tasks remove <id> --task-ids 1,2,3` | 解除关联（只影响属于本发布的任务） |
+| `release health <releaseId>` | Release 级 KPI：范围、基线、加权进度、阻塞、AI 贡献、速度与预计完成（口径 = 产品配置；`⚠` 提示同 `pm health`） |
+| `release baseline <releaseId> [--note <text>]` | 把 Release **当前**范围存为新基线（追加式，只影响 Release 级，不动产品基线；备注 ≤500 字符） |
 
 `--status`：planned|in_progress|awaiting_approval|released|cancelled。`--product` 缺省读 `GOOD7OB_PRODUCT_ID`。
+`release health` / `release baseline` 走 `/progress/releases/{id}`（任一产品组织成员），错误码是进度模块的一套：`1001` 参数不合法、`1002` Release 不存在、`1008` 缺 id、`2000` 非成员（与 `/forge/releases` 的 `1006` / `1007` 不同）。
 `--task-ids`：逗号分隔的正整数，去重后 1–200 个。名称 ≤200、版本号 ≤50 字符；`--end` 不得早于 `--start`。
 `update` 传空字符串不会清空字段（后端把空值视为"不修改"）。所有命令支持 `--json`（`delete` 输出 `{"deleted":true,"id":N}`），无二次确认。
 业务错误码：`1000` 缺参、`1001` 值非法（日期倒置 / 任务不存在或不属于该产品）、`1002` 不存在、`1006` 冲突（版本号重复 / 任务已属于另一个未取消的发布 / 已有待处理审批）、`1007` 状态不允许、`2000` 无权限、`999/401` 未登录。
@@ -915,6 +953,8 @@ good7ob release create --product 12 --name "v1.2 发布" --version 1.2.0 --start
 good7ob release tasks add 7 --task-ids 101,102,103
 good7ob release start 7
 good7ob release request-approval 7 --description "测试通过，申请发布"   # → 输出新审批 ID
+good7ob release baseline 7 --note "冻结范围"
+good7ob release health 7
 good7ob release get 7
 ```
 
