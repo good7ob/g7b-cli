@@ -18,6 +18,9 @@ const log_1 = require("./commands/log");
 const case_1 = require("./commands/case");
 const idea_1 = require("./commands/idea");
 const workspace_1 = require("./commands/workspace");
+const release_1 = require("./commands/release");
+const approval_1 = require("./commands/approval");
+const trace_1 = require("./commands/trace");
 const program = new commander_1.Command();
 program
     .name('good7ob')
@@ -36,6 +39,13 @@ program
 (0, case_1.registerCaseCommands)(program);
 (0, idea_1.registerIdeaCommands)(program);
 (0, workspace_1.registerWorkspaceCommands)(program);
+(0, release_1.registerReleaseCommands)(program);
+(0, approval_1.registerApprovalCommands)(program);
+(0, trace_1.registerTraceCommands)(program);
+// Called after the groups are registered so it only affects the root: without it the root
+// swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
+// print the CLI version and exit). `good7ob --version` / `-V` still work.
+program.enablePositionalOptions();
 // Parse command line arguments
 program.parse(process.argv);
 // Show help if no arguments provided

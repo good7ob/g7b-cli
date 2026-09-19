@@ -129,6 +129,36 @@ good7ob workspace queue --limit 50
 
 What is waiting on you: approvals, info requests, blocked/paused tasks, alerts, requirements to triage.
 
+### `release`
+
+```bash
+good7ob release create --product 12 --name "v1.2 发布" --version 1.2.0 --end 2026-10-15
+good7ob release tasks add 7 --task-ids 101,102,103
+good7ob release start 7
+good7ob release request-approval 7 --description "ready to ship"   # opens an approval
+```
+
+Plan a release, attach tasks, start it, ask for approval. Approving is done with `approval`. See `FEATURES.md`.
+
+### `approval`
+
+```bash
+good7ob approval list --mine              # pending requests I can decide
+good7ob approval approve 31 --comment "LGTM"
+good7ob approval reject 31 --comment "scope unclear"   # --comment is required
+```
+
+Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`).
+
+### `trace`
+
+```bash
+good7ob trace create --product 12 --source-type IDEA --source-id 5 --target-type REQUIREMENT --target-id 9 --link-type derived_from
+good7ob trace list --product 12 --source-type IDEA --source-id 5
+```
+
+Directed trace links between product objects (idea → requirement → task → test). See `FEATURES.md`.
+
 ### `org`
 
 ```bash

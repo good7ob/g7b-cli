@@ -12,6 +12,7 @@ import {
   parseIntInRange,
   requireOneOf,
   requireText,
+  resolveProductId,
 } from '../../utils/cliHelpers';
 
 export const SOURCES = [
@@ -38,14 +39,6 @@ export const IDEA_ERROR_CODES: ErrorCodeMap = {
 };
 
 /** Raw commander options -> validated request pieces. All throw before any HTTP call. */
-
-export function resolveProductId(raw?: string): number {
-  const value = raw ?? process.env.GOOD7OB_PRODUCT_ID;
-  if (value === undefined) {
-    throw new InputError('缺少产品 ID。用 --product <id> 指定，或设置环境变量 GOOD7OB_PRODUCT_ID。');
-  }
-  return parseId(value, '--product');
-}
 
 export function buildListParams(o: {
   product?: string; status?: string; keyword?: string; page?: string; pageSize?: string;
