@@ -1,6 +1,7 @@
 import { ApiDate } from '../../../utils/cliHelpers';
+import { ScopeKpi } from './kpi';
 /** Fields the backend cannot always compute are nullable — rendered as "—", never 0. */
-export interface ProductHealth {
+export interface ProductHealth extends ScopeKpi {
     productId?: number | null;
     productName?: string | null;
     overallProgress?: number | null;
@@ -12,17 +13,6 @@ export interface ProductHealth {
     riskLevel?: string | null;
     moduleCount?: number | null;
     asOf?: ApiDate;
-    currentScopeWeight?: number | null;
-    baselineScopeWeight?: number | null;
-    scopeChange?: number | null;
-    scopeGrowthPct?: number | null;
-    baselineSetAt?: ApiDate;
-    weightedProgress?: number | null;
-    blockedWeight?: number | null;
-    blockedWeightRatio?: number | null;
-    aiCompletedWeight?: number | null;
-    humanCompletedWeight?: number | null;
-    aiContributionPct?: number | null;
 }
 export interface ModuleHealth {
     projectId?: number | null;
@@ -39,6 +29,8 @@ export interface ModuleHealth {
     completedTasks?: number | null;
     blockedTasks?: number | null;
     weightedProgress?: number | null;
+    /** Only the basis is per-module; the other new KPI fields exist on the product response. */
+    weightBasis?: string | null;
 }
 export interface Baseline {
     baselineId?: number | null;

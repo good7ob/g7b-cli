@@ -5,6 +5,7 @@ import {
   RELEASE_ERROR_CODES, STATUSES, buildCreateBody, buildListParams, buildRequestApprovalBody,
   buildTaskIdsBody, buildUpdateBody,
 } from './input';
+import { registerReleaseProgressCommands } from './progress';
 import { Release, ReleaseTask, renderReleaseDetail, renderReleaseList, renderReleaseTasks } from './render';
 
 /**
@@ -183,4 +184,5 @@ export function registerReleaseCommands(program: Command) {
     });
 
   registerTaskCommands(release);
+  registerReleaseProgressCommands(release);
 }

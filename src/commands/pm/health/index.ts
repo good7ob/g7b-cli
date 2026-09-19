@@ -1,15 +1,17 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { ErrorCodeMap, checkMaxLength, fail, parseId } from '../../../utils/cliHelpers';
+import { MAX_NOTE } from './input';
+import { registerProgressCommands } from './progressCommands';
 import { Baseline, ModuleHealth, ProductHealth, renderBaseline, renderHealth, renderModules } from './render';
 
 /**
- * Product health dashboard (/progress/products/{id}/health, prd-0080).
+ * Product health dashboard (/progress/products/{id}/health, prd-0080) plus the C1 progress
+ * commands (config, scope changes, burnup, snapshots — see progressCommands.ts).
  * Needs org membership on the product. Not the same thing as
  * /forge/products/{id}/progress (requirement-structuring completeness).
+ * These three (health, modules, baseline) keep the old 40480/40380/40080 error codes.
  */
-
-export const MAX_NOTE = 500;
 
 export const HEALTH_ERROR_CODES: ErrorCodeMap = {
   40480: '产品不存在或已删除',
@@ -26,7 +28,7 @@ const output = (json: boolean | undefined, data: unknown, text: () => string) =>
 export function registerHealthCommands(pmCommand: Command) {
   const health = pmCommand
     .command('health <productId>')
-    .description('Product health KPI (subcommands: modules, baseline)')
+    .description('Product health KPI (subcommands: modules, baseline, config, scope-changes, scope-change, burnup, snapshots)')
     .option('--json', 'Output as JSON')
     .action(async (productId, o) => {
       try {
@@ -69,4 +71,6 @@ export function registerHealthCommands(pmCommand: Command) {
         fail('设置基线失败', error, HEALTH_ERROR_CODES);
       }
     });
+
+  registerProgressCommands(health);
 }

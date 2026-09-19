@@ -3,16 +3,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerHealthCommands = exports.HEALTH_ERROR_CODES = exports.MAX_NOTE = void 0;
+exports.registerHealthCommands = exports.HEALTH_ERROR_CODES = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
 const cliHelpers_1 = require("../../../utils/cliHelpers");
+const input_1 = require("./input");
+const progressCommands_1 = require("./progressCommands");
 const render_1 = require("./render");
 /**
- * Product health dashboard (/progress/products/{id}/health, prd-0080).
+ * Product health dashboard (/progress/products/{id}/health, prd-0080) plus the C1 progress
+ * commands (config, scope changes, burnup, snapshots — see progressCommands.ts).
  * Needs org membership on the product. Not the same thing as
  * /forge/products/{id}/progress (requirement-structuring completeness).
+ * These three (health, modules, baseline) keep the old 40480/40380/40080 error codes.
  */
-exports.MAX_NOTE = 500;
 exports.HEALTH_ERROR_CODES = {
     40480: '产品不存在或已删除',
     40380: '无权访问：你不是该产品所属组织的成员',
@@ -25,7 +28,7 @@ const output = (json, data, text) => console.log(json ? JSON.stringify(data, nul
 function registerHealthCommands(pmCommand) {
     const health = pmCommand
         .command('health <productId>')
-        .description('Product health KPI (subcommands: modules, baseline)')
+        .description('Product health KPI (subcommands: modules, baseline, config, scope-changes, scope-change, burnup, snapshots)')
         .option('--json', 'Output as JSON')
         .action(async (productId, o) => {
         try {
@@ -55,13 +58,13 @@ function registerHealthCommands(pmCommand) {
     health
         .command('baseline <productId>')
         .description('Snapshot the CURRENT scope as the new baseline (replaces the active one)')
-        .option('--note <text>', `Why (max ${exports.MAX_NOTE} chars)`)
+        .option('--note <text>', `Why (max ${input_1.MAX_NOTE} chars)`)
         .option('--json', 'Output as JSON')
         .action(async (productId, _o, cmd) => {
         try {
             const id = (0, cliHelpers_1.parseId)(productId, 'productId');
             const o = cmd.optsWithGlobals();
-            const body = o.note === undefined ? {} : { note: (0, cliHelpers_1.checkMaxLength)(o.note, exports.MAX_NOTE, '--note') };
+            const body = o.note === undefined ? {} : { note: (0, cliHelpers_1.checkMaxLength)(o.note, input_1.MAX_NOTE, '--note') };
             const baseline = await ApiClient_1.default.post(`/progress/products/${id}/health/baseline`, body);
             output(o.json, baseline, () => (0, render_1.renderBaseline)(baseline ?? {}));
         }
@@ -69,6 +72,7 @@ function registerHealthCommands(pmCommand) {
             (0, cliHelpers_1.fail)('设置基线失败', error, exports.HEALTH_ERROR_CODES);
         }
     });
+    (0, progressCommands_1.registerProgressCommands)(health);
 }
 exports.registerHealthCommands = registerHealthCommands;
 //# sourceMappingURL=index.js.map

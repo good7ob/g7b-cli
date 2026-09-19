@@ -7,6 +7,7 @@ exports.registerReleaseCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const cliHelpers_1 = require("../../utils/cliHelpers");
 const input_1 = require("./input");
+const progress_1 = require("./progress");
 const render_1 = require("./render");
 /**
  * Release commands (/forge/releases): plan a release, attach tasks, then walk it through
@@ -172,6 +173,7 @@ function registerReleaseCommands(program) {
         }
     });
     registerTaskCommands(release);
+    (0, progress_1.registerReleaseProgressCommands)(release);
 }
 exports.registerReleaseCommands = registerReleaseCommands;
 //# sourceMappingURL=index.js.map

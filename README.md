@@ -111,6 +111,16 @@ good7ob pm health --help
 
 Project management commands for projects, tasks, workflows, reports, tags, and product health.
 
+```bash
+good7ob pm health 10                                   # KPIs: progress, scope vs baseline, velocity, ETA
+good7ob pm health config set 10 --basis STORY_POINT --status-completion in_progress=40
+good7ob pm health scope-change add 10 --delta -12.5 --reason "drop export"
+good7ob pm health burnup 10 --from 2026-09-01           # table + text chart
+good7ob pm health snapshots rebuild 10 --days 14
+```
+
+`pm health` also covers the workload basis config, the scope-change log, burnup and snapshot rebuild. See `FEATURES.md`.
+
 ### `idea`
 
 ```bash
@@ -151,9 +161,11 @@ good7ob release create --product 12 --name "v1.2 发布" --version 1.2.0 --end 2
 good7ob release tasks add 7 --task-ids 101,102,103
 good7ob release start 7
 good7ob release request-approval 7 --description "ready to ship"   # opens an approval
+good7ob release baseline 7 --note "scope frozen"
+good7ob release health 7
 ```
 
-Plan a release, attach tasks, start it, ask for approval. Approving is done with `approval`. See `FEATURES.md`.
+Plan a release, attach tasks, start it, ask for approval; baseline its scope and read its health/velocity. Approving is done with `approval`. See `FEATURES.md`.
 
 ### `approval`
 

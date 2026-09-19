@@ -1,7 +1,8 @@
 import { ApiDate, DASH, dash, fmtDate, fmtNum, renderTable } from '../../../utils/cliHelpers';
+import { ScopeKpi, basisLabel, block, renderScopeSections } from './kpi';
 
 /** Fields the backend cannot always compute are nullable — rendered as "—", never 0. */
-export interface ProductHealth {
+export interface ProductHealth extends ScopeKpi {
   productId?: number | null;
   productName?: string | null;
   overallProgress?: number | null;
@@ -13,17 +14,6 @@ export interface ProductHealth {
   riskLevel?: string | null;
   moduleCount?: number | null;
   asOf?: ApiDate;
-  currentScopeWeight?: number | null;
-  baselineScopeWeight?: number | null;
-  scopeChange?: number | null;
-  scopeGrowthPct?: number | null;
-  baselineSetAt?: ApiDate;
-  weightedProgress?: number | null;
-  blockedWeight?: number | null;
-  blockedWeightRatio?: number | null;
-  aiCompletedWeight?: number | null;
-  humanCompletedWeight?: number | null;
-  aiContributionPct?: number | null;
 }
 
 export interface ModuleHealth {
@@ -41,6 +31,8 @@ export interface ModuleHealth {
   completedTasks?: number | null;
   blockedTasks?: number | null;
   weightedProgress?: number | null;
+  /** Only the basis is per-module; the other new KPI fields exist on the product response. */
+  weightBasis?: string | null;
 }
 
 export interface Baseline {
@@ -52,9 +44,6 @@ export interface Baseline {
   setBy?: number | null;
   setAt?: ApiDate;
 }
-
-/** Label/value block; `table` measures CJK width so the values line up. */
-const block = (rows: [string, string][]) => renderTable(rows);
 
 export function renderHealth(h: ProductHealth): string {
   const done = h.completedTasks == null || h.totalTasks == null ? DASH : `${h.completedTasks} / ${h.totalTasks}`;
@@ -71,28 +60,7 @@ export function renderHealth(h: ProductHealth): string {
       ['进度偏差', fmtNum(h.scheduleVariance, '%', 1)],
     ]),
     '',
-    '范围与基线',
-    block([
-      ['当前范围', fmtNum(h.currentScopeWeight)],
-      ['基线范围', fmtNum(h.baselineScopeWeight)],
-      ['范围变化', fmtNum(h.scopeChange)],
-      ['范围增长', fmtNum(h.scopeGrowthPct, '%', 1)],
-      ['基线时间', fmtDate(h.baselineSetAt)],
-    ]),
-    '',
-    '加权进度与阻塞',
-    block([
-      ['加权进度', fmtNum(h.weightedProgress, '%')],
-      ['阻塞权重', fmtNum(h.blockedWeight)],
-      ['阻塞占比', fmtNum(h.blockedWeightRatio, '%', 1)],
-    ]),
-    '',
-    'AI 贡献',
-    block([
-      ['AI 完成权重', fmtNum(h.aiCompletedWeight)],
-      ['人工完成权重', fmtNum(h.humanCompletedWeight)],
-      ['AI 占比', fmtNum(h.aiContributionPct, '%', 1)],
-    ]),
+    ...renderScopeSections(h, `pm health baseline ${dash(h.productId)}`),
   ].join('\n');
 }
 
@@ -106,7 +74,9 @@ export function renderModules(modules: ModuleHealth[]): string {
       dash(m.riskLevel), pair(m.completedTasks, m.totalTasks), dash(m.blockedTasks),
     ])
   );
-  return `${renderTable(rows, { 0: { truncate: 28 } })}\n共 ${modules.length} 个模块（按延期天数降序）`;
+  const basis = modules.find((m) => m.weightBasis)?.weightBasis;
+  const footer = `共 ${modules.length} 个模块（按延期天数降序）${basis ? `；加权进度口径 ${basisLabel(basis)}` : ''}`;
+  return `${renderTable(rows, { 0: { truncate: 28 } })}\n${footer}`;
 }
 
 export function renderBaseline(b: Baseline): string {
