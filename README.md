@@ -132,9 +132,17 @@ good7ob idea select 12 34 --reason "lowest cost" --require-approval   # files an
 good7ob idea comment add 12 --text "go with the backend option"
 good7ob idea tag set 12 --tags backend,ai
 good7ob idea merge 13 --into 12
+good7ob idea generate 12 --count 3 --hints "reuse the export component"   # AI drafts 2-4 solutions (ESTIMATES; spends tokens)
+good7ob idea correction 3                                                 # per-product estimate correction factors
+good7ob idea change-set create 12 --title "order export rollout"
+good7ob idea change-set analyze 5 && good7ob idea change-set item confirm 5 11
+good7ob idea change-set submit 5                                          # files an approval
+good7ob idea change-set apply 5                                           # creates tasks + trace links; documents are NOT edited
+good7ob idea review start 12 && good7ob idea review metrics 12 --metric "NPS:40::pts"
+good7ob idea review complete 12                                           # released -> validated
 ```
 
-Idea pool: capture ideas, compare solutions with structured estimates, pick one (optionally through approval), collaborate with comments / attachments / tags / relations, merge duplicates. See `FEATURES.md`.
+Idea pool: capture ideas, compare solutions with structured estimates, pick one (optionally through approval), collaborate with comments / attachments / tags / relations, merge duplicates, AI-generated solutions with historical estimate correction, change sets (impact analysis → approval → Apply into tasks) and post-release effect reviews. See `FEATURES.md`.
 
 ### `workspace`
 

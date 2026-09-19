@@ -6,15 +6,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerIdeaCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const cliHelpers_1 = require("../../utils/cliHelpers");
+const aiCommands_1 = require("./aiCommands");
+const changeSetCommands_1 = require("./changeSetCommands");
 const collabCommands_1 = require("./collabCommands");
 const input_1 = require("./input");
 const render_1 = require("./render");
+const reviewCommands_1 = require("./reviewCommands");
 const solutionCommands_1 = require("./solutionCommands");
 /**
  * Idea pool commands (forge/ideas): capture an idea, attach candidate
  * solutions, then pick one — which approves the idea and drops a requirement
  * into the requirement inbox (see `good7ob req`). Solutions live in solutionCommands.ts,
- * restore/merge/comment/attachment/tag/relation in collabCommands.ts.
+ * restore/merge/comment/attachment/tag/relation in collabCommands.ts, and the A2 groups (generate/correction,
+ * change-set, review) in aiCommands.ts / changeSetCommands.ts / reviewCommands.ts.
  *
  * Business errors come back as HTTP 200 + non-200 `code`; ApiClient throws on
  * those, and `fail` maps the idea error codes to readable messages.
@@ -149,6 +153,9 @@ function registerIdeaCommands(program) {
     });
     (0, solutionCommands_1.registerSolutionCommands)(idea);
     (0, collabCommands_1.registerCollabCommands)(idea);
+    (0, aiCommands_1.registerAiCommands)(idea);
+    (0, changeSetCommands_1.registerChangeSetCommands)(idea);
+    (0, reviewCommands_1.registerReviewCommands)(idea);
     idea
         .command('select <ideaId> <solutionId>')
         .description('Pick the winning solution: approves the idea and creates a requirement in the inbox (or files an approval with --require-approval)')
