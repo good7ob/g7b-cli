@@ -116,10 +116,15 @@ Project management commands for projects, tasks, workflows, reports, tags, and p
 ```bash
 good7ob idea list --product 3
 good7ob idea get 12
+good7ob idea solution add 12 --name "async export" --effort-backend 5 --cost 30000 --confidence medium --kpi "time:5h:2h:hours"
 good7ob idea select 12 34 --reason "lowest cost"   # approves the idea, creates a requirement in the inbox
+good7ob idea select 12 34 --reason "lowest cost" --require-approval   # files an approval instead; idea stays evaluating
+good7ob idea comment add 12 --text "go with the backend option"
+good7ob idea tag set 12 --tags backend,ai
+good7ob idea merge 13 --into 12
 ```
 
-Idea pool: capture ideas, compare candidate solutions, pick one. See `FEATURES.md`.
+Idea pool: capture ideas, compare solutions with structured estimates, pick one (optionally through approval), collaborate with comments / attachments / tags / relations, merge duplicates. See `FEATURES.md`.
 
 ### `workspace`
 

@@ -76,7 +76,7 @@ good7ob
 │   ├── report               # AI 进度报告
 │   ├── tag                  # 标签管理
 │   └── health               # 产品健康度、模块进度、范围基线
-├── idea                     # Idea 池：方案对比、选定后生成需求
+├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复
 ├── workspace                # 个人工作台：待我处理队列
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
@@ -758,32 +758,70 @@ good7ob pm health baseline 10 --note "Q4 范围冻结"
 
 ## idea — Idea 池
 
-API 端点前缀：`/forge/ideas`（需登录 + 该 Idea 所属产品的组织成员）。
-状态：draft / evaluating / approved / rejected / archived；已批准/已归档的 Idea 不可修改（错误码 1007）。
+API 端点前缀：`/forge/ideas`（需登录 + 该 Idea 所属产品的组织成员）。契约见 api-0088（good7ob-forge-idea-management）。
+状态：draft / evaluating / approved / rejected / archived / planning / developing / released / validated。`approved` / `rejected` 只能经 `idea select` / `idea reject` 到达；自 approved 起 Idea 自身字段锁定（错误码 1007），但 `--release` 在 approved / planning / developing 仍可改；方案仅 draft / evaluating 可增改删。
 
 | 命令 | 说明 |
 |------|------|
-| `idea list --product <id>` | 列表；`--status` `-k/--keyword` `-p/--page` `--page-size`（≤100） |
-| `idea get <id>` | 详情，方案并排对比（成本/周期/预期效果/是否选中）；已批准时显示关联需求 ID |
+| `idea list --product <id>` | 列表；`--status` `-k/--keyword` `--tag <标签>`（精确、不区分大小写）`--release <发布ID>` `-p/--page` `--page-size`（≤100） |
+| `idea get <id>` | 详情：发布、标签；方案并排对比（成本/周期/预期效果/是否选中）；有结构化估算时另出「估算对比」表（总人日及各角色人日、预计成本、月度成本、周期、技术/产品风险、可信度 + `[AI 估算]` 标记、预期效果、KPI、落选原因）；决策行（选定方案、理由、审批状态/审批单）；已批准时显示关联需求 ID |
 | `idea create --product <id> --title <t> --source <s>` | 创建（始终 draft）；`--priority` `--description` `--expected-value` |
-| `idea update <id>` | 修改（未给的字段保持不变） |
-| `idea delete <id>` | 软删除 |
-| `idea status <id> <evaluating\|archived>` | 状态流转 |
+| `idea update <id>` | 修改（未给的字段保持不变）；`--release <发布ID>` 关联发布（须同产品且 planned / in_progress / awaiting_approval），`--clear-release` 解除（两者互斥） |
+| `idea delete <id>` | 软删除（可用 `idea restore` 恢复） |
+| `idea restore <id>` | 恢复：已删除 → 取消删除；已归档且未生成需求 → draft |
+| `idea status <id> <evaluating\|archived\|planning\|developing\|released\|validated>` | 状态流转（合法路径 draft→evaluating→approved→planning→developing→released→validated，任意态可→archived；released 通常由 Release 发布自动同步） |
 | `idea reject <id> --reason <text>` | 驳回（evaluating → rejected） |
-| `idea solution add <ideaId> --name <n>` | 添加方案；`--description` `--cost-note` `--cycle-note` `--effect-note` |
-| `idea solution update <ideaId> <solutionId>` | 修改方案 |
+| `idea solution add <ideaId> --name <n>` | 添加方案；备注类 `--description` `--cost-note` `--cycle-note` `--effect-note`；结构化估算见下 |
+| `idea solution update <ideaId> <solutionId>` | 修改方案（未给的字段不变；`--kpi` 整体替换 KPI 列表，`--clear-kpi` 清空） |
 | `idea solution delete <ideaId> <solutionId>` | 删除方案 |
-| `idea select <ideaId> <solutionId> --reason <text>` | 选定方案：Idea 变 approved，并在需求收件箱创建需求 |
+| `idea select <ideaId> <solutionId> --reason <text>` | 选定方案：Idea 变 approved，并在需求收件箱创建需求；`--rejected-reason <方案ID>:<原因>`（可重复，写入落选方案的 rejectionReason）；`--require-approval` 改为发起 `IDEA_DECISION` 审批，Idea 保持 evaluating，批准后才生成需求 |
+| `idea merge <id> --into <目标ID>` | 把本 Idea（源）并入目标：迁移方案/评论/附件/标签，源归档，并建立 duplicate_of 关联；要求同产品、双方 draft/evaluating、均无待审批决策 |
+| `idea duplicates <id> [--limit N]` | 同产品内标题相似的 Idea（相似度 0–1）；`--limit` 1–20，默认 5 |
+| `idea comment add <id> --text <t>` | 发表评论；`--parent <评论ID>` 回复同一 Idea 的评论；≤2000 字符 |
+| `idea comment list <id>` | 评论列表（时间正序）；`-p/--page` `--page-size`（≤100） |
+| `idea comment delete <id> <commentId>` | 删除评论（作者或组织 owner/admin） |
+| `idea attachment add <id> --name <n> --url <u> --size <bytes>` | 登记附件元数据（文件须先经 `POST /file/upload2s3` 上传，把返回的 fileUrl 填到 `--url`）；`--content-type`；每个 Idea 最多 20 个，单个 ≤20 MiB |
+| `idea attachment list <id>` | 附件列表 |
+| `idea attachment delete <id> <attachmentId>` | 取消登记（不删 S3 对象；登记人或组织 owner/admin） |
+| `idea tag set <id> --tags a,b,c` | **整体替换**标签集；最多 10 个、每个 1–30 字符；去空白、转小写、去重；`--tags ""` 清空 |
+| `idea relation add <id> --to <ideaId> --type <t>` | 建立 `<id> —type→ to` 关联；`--type`：related\|duplicate_of\|blocks；同产品、不能自关联、重复报 1006 |
+| `idea relation list <id>` | 双向关联列表（→ 本 Idea 指向对方，← 对方指向本 Idea） |
+| `idea relation remove <id> <relationId>` | 删除关联（任一端 Idea 的成员均可） |
+
+**方案结构化估算**（`idea solution add|update` 的可选参数，未给的不发送；全部在 CLI 侧先校验范围/小数位）：
+
+| 参数 | 含义 / 限制 |
+|------|------------|
+| `--effort-frontend` `--effort-backend` `--effort-ai` `--effort-test` `--effort-pm` | 各角色人日，0–99999.9，1 位小数；`get` 里的「总人日」由后端按五项非空值求和，不能写入 |
+| `--cost` | 预计总成本，0–9999999999.99，2 位小数 |
+| `--cloud-cost` `--token-cost` `--maintenance-cost` | 云资源 / AI token / 维护成本，**每月**，2 位小数 |
+| `--cycle-weeks` | 周期（周），0–999.9，1 位小数 |
+| `--technical-risk` `--product-risk` `--confidence` | low\|medium\|high |
+| `--estimation-source` | manual（默认）\|ai；ai 时 `get` 在可信度旁标 `[AI 估算]` |
+| `--expected-effect` | 预期效果，≤2000 字符（与 ≤500 的 `--effect-note` 备注不同） |
+| `--kpi "name:current:target:unit"` | 效果指标，可重复，最多 20 项；只有 name 必填（≤100），current/target ≤100，unit ≤20；各段内不能含冒号 |
 
 `--source`：customer|feedback|pm|dev|ai|ops|bug|competitor|market|management；`--priority`：low|medium|high。
-`--product` 缺省读环境变量 `GOOD7OB_PRODUCT_ID`。长度上限：标题/方案名 200，预期价值/方案备注 500，原因 1000。
-业务错误码：`1000` 缺参、`1001` 值非法、`1002` 不存在、`1007` 状态不允许、`1009` 并发冲突（重试）、`2000` 无权限、`999/401` 未登录。
+`--product` 缺省读环境变量 `GOOD7OB_PRODUCT_ID`。长度上限：标题/方案名 200，预期价值/方案备注 500，原因 1000，评论 2000。
+`--url`（附件）形态：`https://<bucket>.s3[.-<region>].amazonaws.com/public/...`，无查询串 / `#` / 用户信息 / `..`；桶名由服务端配置，CLI 只校验形态。
+所有命令支持 `--json`（删除类命令只输出确认行）；无确认提示。空值一律显示 `—`。
+业务错误码（HTTP 200 + 非 200 `code`）：`1000` 缺参、`1001` 值非法、`1002` 不存在、`1006` 已存在（关联重复 / 已有待审批决策）、`1007` 状态不允许、`1008` 缺 id、`1009` 并发冲突（重试）、`2000` 无权限、`999/401` 未登录。
 
 ```bash
 good7ob idea create --product 3 --title "订单导出" --source customer --priority high
 good7ob idea status 12 evaluating
 good7ob idea solution add 12 --name "前端导出" --cost-note "2 人天" --cycle-note "1 周"
-good7ob idea select 12 34 --reason "成本最低"   # → 需求收件箱出现新需求
+good7ob idea solution add 12 --name "后端异步导出" --effort-frontend 2 --effort-backend 5 --effort-test 2 \
+  --cost 30000 --cloud-cost 120 --cycle-weeks 3 --technical-risk medium --confidence medium \
+  --expected-effect "对账耗时下降 60%" --kpi "对账耗时:5h:2h:小时"
+good7ob idea get 12                                    # 方案并排 + 估算对比 + 决策
+good7ob idea select 12 34 --reason "成本最低" --rejected-reason 35:周期过长   # → 需求收件箱出现新需求
+good7ob idea select 12 34 --reason "成本最低" --require-approval             # → 待审批，Idea 仍是 evaluating
+good7ob idea tag set 12 --tags backend,ai
+good7ob idea duplicates 12 && good7ob idea merge 13 --into 12
+good7ob idea comment add 12 --text "先做后端方案"
+good7ob idea relation add 12 --to 15 --type blocks
+good7ob idea update 12 --release 7 && good7ob idea list --product 3 --release 7 --tag backend
 ```
 
 ---

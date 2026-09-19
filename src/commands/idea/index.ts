@@ -1,17 +1,19 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { fail, parseId, requireOneOf } from '../../utils/cliHelpers';
+import { collect, emit, fail, parseId } from '../../utils/cliHelpers';
+import { registerCollabCommands } from './collabCommands';
 import {
   IDEA_ERROR_CODES, TRANSITIONS, SOURCES, PRIORITIES, STATUSES,
-  buildCreateBody, buildListParams, buildReasonBody, buildSolutionCreateBody,
-  buildSolutionUpdateBody, buildUpdateBody,
+  buildCreateBody, buildListParams, buildReasonBody, buildSelectBody, buildUpdateBody, parseTransition,
 } from './input';
 import { IdeaDetail, renderIdeaDetail, renderIdeaList } from './render';
+import { registerSolutionCommands } from './solutionCommands';
 
 /**
  * Idea pool commands (forge/ideas): capture an idea, attach candidate
  * solutions, then pick one — which approves the idea and drops a requirement
- * into the requirement inbox (see `good7ob req`).
+ * into the requirement inbox (see `good7ob req`). Solutions live in solutionCommands.ts,
+ * restore/merge/comment/attachment/tag/relation in collabCommands.ts.
  *
  * Business errors come back as HTTP 200 + non-200 `code`; ApiClient throws on
  * those, and `fail` maps the idea error codes to readable messages.
@@ -20,9 +22,15 @@ import { IdeaDetail, renderIdeaDetail, renderIdeaList } from './render';
 const BASE = '/forge/ideas';
 const oneOf = (values: readonly string[]) => values.join('|');
 
-/** Print JSON when asked, otherwise the rendered text. */
-function emit(json: boolean | undefined, data: unknown, text: () => string): void {
-  console.log(json ? JSON.stringify(data, null, 2) : text());
+function renderSelectOutcome(id: number, sid: number, detail: IdeaDetail): string {
+  const decision = detail?.decision;
+  if (decision?.approvalStatus === 'pending') {
+    const approval = decision.approvalId ? `审批单 #${decision.approvalId}（good7ob approval get ${decision.approvalId}）` : '审批单已创建';
+    return `✓ 已提交审批: 方案 #${sid} 待审批，Idea #${id} 仍为 evaluating，${approval}；批准后才会批准 Idea 并创建需求`;
+  }
+  const reqId = detail?.idea?.requirementId;
+  return `✓ 已选定方案 #${sid}，Idea #${id} 已批准` +
+    (reqId ? `，已在需求收件箱创建需求 #${reqId}（good7ob req show ${reqId}）` : '');
 }
 
 /** Add the shared idea field flags (create requires some of them; update none). */
@@ -31,62 +39,6 @@ function withIdeaFields(cmd: Command): Command {
     .option('--description <text>', 'Description')
     .option('--priority <p>', `Priority (${oneOf(PRIORITIES)})`)
     .option('--expected-value <text>', 'Expected value (max 500 chars)');
-}
-
-function withSolutionNotes(cmd: Command): Command {
-  return cmd
-    .option('--description <text>', 'Description')
-    .option('--cost-note <text>', 'Cost note (max 500 chars)')
-    .option('--cycle-note <text>', 'Cycle / timeline note (max 500 chars)')
-    .option('--effect-note <text>', 'Expected effect note (max 500 chars)');
-}
-
-function registerSolutionCommands(idea: Command): void {
-  const solution = idea.command('solution').description('Candidate solutions of an idea');
-
-  withSolutionNotes(solution.command('add <ideaId>'))
-    .description('Add a solution (idea must be draft or evaluating)')
-    .requiredOption('--name <name>', 'Solution name (max 200 chars)')
-    .option('--json', 'Output as JSON')
-    .action(async (ideaId, o) => {
-      try {
-        const id = parseId(ideaId, 'ideaId');
-        const body = buildSolutionCreateBody(o);
-        const created = await apiClient.post(`${BASE}/${id}/solutions`, body);
-        emit(o.json, created, () => `✓ 方案已添加: #${created?.id ?? '-'} ${body.name}`);
-      } catch (error) {
-        fail('添加方案失败', error, IDEA_ERROR_CODES);
-      }
-    });
-
-  withSolutionNotes(solution.command('update <ideaId> <solutionId>'))
-    .description('Update a solution (omitted flags stay unchanged)')
-    .option('--name <name>', 'Solution name (max 200 chars)')
-    .option('--json', 'Output as JSON')
-    .action(async (ideaId, solutionId, o) => {
-      try {
-        const id = parseId(ideaId, 'ideaId');
-        const sid = parseId(solutionId, 'solutionId');
-        const updated = await apiClient.put(`${BASE}/${id}/solutions/${sid}`, buildSolutionUpdateBody(o));
-        emit(o.json, updated, () => `✓ 方案已更新: #${sid}`);
-      } catch (error) {
-        fail('更新方案失败', error, IDEA_ERROR_CODES);
-      }
-    });
-
-  solution
-    .command('delete <ideaId> <solutionId>')
-    .description('Delete a solution')
-    .action(async (ideaId, solutionId) => {
-      try {
-        const id = parseId(ideaId, 'ideaId');
-        const sid = parseId(solutionId, 'solutionId');
-        await apiClient.delete(`${BASE}/${id}/solutions/${sid}`);
-        console.log(`✓ 方案已删除: #${sid}`);
-      } catch (error) {
-        fail('删除方案失败', error, IDEA_ERROR_CODES);
-      }
-    });
 }
 
 export function registerIdeaCommands(program: Command) {
@@ -100,6 +52,8 @@ export function registerIdeaCommands(program: Command) {
     .option('--product <id>', 'Product id (defaults to GOOD7OB_PRODUCT_ID)')
     .option('--status <status>', `Filter by status (${oneOf(STATUSES)})`)
     .option('-k, --keyword <text>', 'Search title and description')
+    .option('--tag <tag>', 'Only ideas carrying this tag (exact, case-insensitive)')
+    .option('--release <id>', 'Only ideas linked to this release id')
     .option('-p, --page <num>', 'Page number', '1')
     .option('--page-size <num>', 'Items per page (1-100)', '20')
     .option('--json', 'Output as JSON')
@@ -142,9 +96,11 @@ export function registerIdeaCommands(program: Command) {
     });
 
   withIdeaFields(idea.command('update <id>'))
-    .description('Update an idea (omitted flags stay unchanged; locked once approved/archived)')
+    .description('Update an idea (omitted flags stay unchanged; locked once approved/archived; only --release stays editable through developing)')
     .option('--title <title>', 'Title (max 200 chars)')
     .option('--source <source>', `Source (${oneOf(SOURCES)})`)
+    .option('--release <id>', 'Link to a release of the same product (planned|in_progress|awaiting_approval)')
+    .option('--clear-release', 'Unlink from its release')
     .option('--json', 'Output as JSON')
     .action(async (id, o) => {
       try {
@@ -173,7 +129,7 @@ export function registerIdeaCommands(program: Command) {
     .option('--json', 'Output as JSON')
     .action(async (id, toStatus, o) => {
       try {
-        const target = requireOneOf(toStatus, TRANSITIONS, 'toStatus');
+        const target = parseTransition(toStatus);
         const moved = await apiClient.post(`${BASE}/${parseId(id, 'id')}/status`, { toStatus: target });
         emit(o.json, moved, () => `✓ Idea #${id} → ${target}`);
       } catch (error) {
@@ -196,23 +152,22 @@ export function registerIdeaCommands(program: Command) {
     });
 
   registerSolutionCommands(idea);
+  registerCollabCommands(idea);
 
   idea
     .command('select <ideaId> <solutionId>')
-    .description('Pick the winning solution: approves the idea and creates a requirement in the inbox')
+    .description('Pick the winning solution: approves the idea and creates a requirement in the inbox (or files an approval with --require-approval)')
     .requiredOption('--reason <text>', 'Decision reason (max 1000 chars)')
+    .option('--rejected-reason <solutionId:text>', 'Why another solution lost, repeatable (text max 1000 chars)', collect)
+    .option('--require-approval', 'Ask the org owner/admins to approve first; the idea stays evaluating until they do')
     .option('--json', 'Output as JSON')
     .action(async (ideaId, solutionId, o) => {
       try {
         const id = parseId(ideaId, 'ideaId');
         const sid = parseId(solutionId, 'solutionId');
-        const body = buildReasonBody('decisionReason', o.reason);
+        const body = buildSelectBody(sid, o);
         const detail: IdeaDetail = await apiClient.post(`${BASE}/${id}/solutions/${sid}/select`, body);
-        emit(o.json, detail, () => {
-          const reqId = detail?.idea?.requirementId;
-          return `✓ 已选定方案 #${sid}，Idea #${id} 已批准` +
-            (reqId ? `，已在需求收件箱创建需求 #${reqId}（good7ob req show ${reqId}）` : '');
-        });
+        emit(o.json, detail, () => renderSelectOutcome(id, sid, detail));
       } catch (error) {
         fail('选定方案失败', error, IDEA_ERROR_CODES);
       }
