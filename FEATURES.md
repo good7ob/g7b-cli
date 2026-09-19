@@ -21,7 +21,7 @@
 - [pm tag — 标签管理](#pm-tag--标签管理)
 - [pm health — 产品健康度](#pm-health--产品健康度)
 - [idea — Idea 池](#idea--idea-池)
-- [workspace — 我的待办队列](#workspace--我的待办队列)
+- [workspace — 我的工作台](#workspace--我的工作台)
 - [release — 发布管理](#release--发布管理)
 - [approval — 审批](#approval--审批)
 - [trace — 追溯关系](#trace--追溯关系)
@@ -77,7 +77,7 @@ good7ob
 │   ├── tag                  # 标签管理
 │   └── health               # 产品健康度、模块进度、范围基线
 ├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复
-├── workspace                # 个人工作台：待我处理队列
+├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略）、总览、我的任务/产品/组织
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 └── trace                    # 追溯关系：对象之间的有向关联
@@ -826,14 +826,60 @@ good7ob idea update 12 --release 7 && good7ob idea list --product 3 --release 7 
 
 ---
 
-## workspace — 我的待办队列
+## workspace — 我的工作台
+
+API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在本 CLI 里 inbox 指需求收件箱状态（`good7ob req`）。
+
+### 待办队列（等待我处理的事项）
+
+来源：我负责的等待态任务、未读消息、我创建的 inbox 需求、我能决定的审批、我所在组织的高风险产品。
+动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊 / `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警。
+状态：new / in_progress / waiting / snoozed / dismissed / done（到期的 snooze 读作 new）。
 
 | 命令 | 说明 |
 |------|------|
-| `workspace queue [--limit N]` | 等待我处理的事项（计划审批、完成审批、信息请求、阻塞、暂停、系统提醒、需求分诊），新的在前；`--limit` 1–200，默认 50 |
+| `workspace queue` | 队列列表，新的在前；`-l/--limit` 1–200（默认 50）、`--status`（active｜snoozed｜dismissed｜done｜all｜new｜in_progress｜waiting，默认 active）、`--action-type`、`--product <id>` |
+| `workspace queue counts` | 计数：活跃总数与各动作类型，以及已稍后 / 已忽略 / 已完成 |
+| `workspace queue dismiss <id>` | 忽略（来源仍在时保持忽略；幂等；已完成的项不行） |
+| `workspace queue done <id>` | 标记已处理（幂等） |
+| `workspace queue reopen <id>` | 把已忽略 / 已稍后 / 已完成的项变回 new（对活跃项无操作） |
+| `workspace queue snooze <id> --until <time>` | 稍后处理；`--until` 是 ISO 日期时间（`2026-09-20T09:00:00Z`、`2026-09-20T17:00:00+08:00`；**无时区按 UTC**）或相对时间 `+30m` / `+2h` / `+1d`；必须晚于现在且不超过 30 天；可对已稍后的项重设时间 |
+| `workspace queue approve <id>` | 就地批准：审批申请 / 任务计划（会**同步恢复 Agent 执行**，可能较慢）/ 任务完成；`--comment` 可选（只对审批申请记录） |
+| `workspace queue reject <id> --comment <text>` | 就地驳回；`--comment` 必填（不能为空白） |
 
-先显示各类计数（总数与计数不受 `--limit` 影响），再列出事项表。支持 `--json`。
-注意：这里不叫 inbox —— 在本 CLI 里 inbox 指需求收件箱状态（`good7ob req`）。
+`<id>` 是列表第一列 **ID（队列项 id）**，不是来源对象的 id（`来源ID` 列）。列表先显示各动作类型计数（总数与计数不受 `--limit` 影响，也不受 `--action-type` 影响），再列出事项表；已稍后的项在“到期/稍后”列显示 `稍后至 … UTC`，任务显示截止时间。
+`approve` / `reject` 只对活跃项、且类型有就地审批（审批申请 / 计划审批 / 完成审批）；其他类型（阻塞、信息请求、风险预警等）返回 `1007`，需到来源对象处理。成功后该项自动置 done。
+`approve` 若客户端超时（默认 30 秒，Agent 执行可能更久），CLI 会提示服务端可能仍在处理，先用 `queue --status all` 核对，不要盲目重试。
+
+### 总览与“我的”视图
+
+| 命令 | 说明 |
+|------|------|
+| `workspace overview` | 一屏总览：队列计数、任务分组计数、开放任务最多的前 5 个产品、最近动态；某一块加载失败时该块显示“（加载失败）”并在末尾列出 |
+| `workspace tasks` | 不带 `--group`：开放任务摘要（今日 / 进行中 / 待审批 / 已逾期）+ 最紧急的几个（`-l/--limit` 1–50，默认 5） |
+| `workspace tasks --group <g>` | 某分组一页：`today`｜`todo`｜`in_progress`｜`waiting`｜`blocked`｜`done`；`-p/--page`（默认 1）`--page-size`（1–100，默认 20）；各分组计数会重叠，不可相加 |
+| `workspace products` | 我的产品卡片：我的开放任务、产品内阻塞数 / AI 执行中数、进度与风险；`--scope all｜owned｜participating｜following｜archived`（默认 all，最多 50 张；进度/风险只评估前 20 张，其余显示 —） |
+| `workspace product follow <productId>` | 关注产品（幂等；仅产品所属组织的 active 成员） |
+| `workspace product unfollow <productId>` | 取消关注（幂等，只影响自己） |
+| `workspace orgs` | 我所在的组织：我的角色、成员 / AI 员工 / 产品 / 活跃任务数 |
+
+所有命令支持 `--json`（`product follow|unfollow` 后端无返回，`--json` 输出 `{"productId":N,"following":true|false}`），无二次确认；空值一律显示 `—`（不会显示成 0）。
+参数在 CLI 端先校验（枚举、范围、id 为正整数、snooze 时间），错误不发请求。`--group` 与 `--page/--page-size`、不带 `--group` 与 `--limit` 的组合被拒绝而不是被悄悄忽略。
+业务错误码：`1000` 缺参、`1001` 值非法、`1002` 不存在（队列项不存在或不属于你 / 任务无待审批计划 / 产品不存在）、`1007` 状态不允许（对已完成 / 已忽略的项 dismiss·snooze，或该类型不能就地决定）、`1009` 已被他人处理（并发）、`2000` 无权限（审批需组织 owner/admin；任务门禁需责任人 / 创建人 / owner；关注非成员产品）、`400/999/401` 未登录。
+
+```bash
+good7ob workspace queue --status active --action-type PLAN_APPROVAL
+good7ob workspace queue counts
+good7ob workspace queue snooze 501 --until +2h          # 或 2026-09-20T17:00:00+08:00
+good7ob workspace queue approve 501 --comment "LGTM"
+good7ob workspace queue reject 502 --comment "范围不清，补充后重提"
+good7ob workspace queue dismiss 503 && good7ob workspace queue reopen 503
+good7ob workspace overview
+good7ob workspace tasks --group waiting -p 2 --page-size 50
+good7ob workspace products --scope following
+good7ob workspace product follow 12
+good7ob workspace orgs --json
+```
 
 ---
 
