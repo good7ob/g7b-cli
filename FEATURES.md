@@ -76,7 +76,7 @@ good7ob
 │   ├── report               # AI 进度报告
 │   ├── tag                  # 标签管理
 │   └── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建
-├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复
+├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复、AI 生成方案与估算修正、变更集、效果复盘
 ├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略）、总览、我的任务/产品/组织
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
@@ -857,6 +857,62 @@ good7ob idea duplicates 12 && good7ob idea merge 13 --into 12
 good7ob idea comment add 12 --text "先做后端方案"
 good7ob idea relation add 12 --to 15 --type blocks
 good7ob idea update 12 --release 7 && good7ob idea list --product 3 --release 7 --tag backend
+```
+
+### A2：AI 生成方案、估算修正、变更集、效果复盘
+
+契约见 api-0088 §4~§6（后端 PR #264）。所有命令支持 `--json`、无确认提示、空值显示 `—`，且在 CLI 侧先校验枚举 / 长度 / 范围（失败即退出码 1，不发请求）。
+
+**AI 生成方案与估算修正**
+
+| 命令 | 说明 |
+|------|------|
+| `idea generate <ideaId> [--count 2..4] [--hints <text>]` | AI 一次生成 2~4 个（默认 3）带估算的候选方案，单事务写入；仅 draft / evaluating 的 Idea（否则 1007）；`--hints` ≤1000 字符。**消耗 token / 月度配额**，客户端超时放宽到 180 s；超时时提示服务端可能仍在处理并已计费，先 `idea get` 核对再重试。输出标 `[AI 估算]`，附估算对比表、本次采用的修正系数、模型与 token 用量。AI 数值只是估算，须人工核对（`idea solution update`，可 `--estimation-source manual`）后再 `idea select` |
+| `idea correction <productId>` | 产品的估算修正系数（人日 / 周期 / 成本）：已完成复盘中 实际 ÷ 预期 的均值，限幅 0.5~3.0；样本 <3 时系数恒为 1.000 并标「历史样本不足」 |
+
+AI 错误码（调用失败时**无写入、不扣 token**）：`7101` 模型调用失败、`7102` 调用超时、`7103` 输出无法解析 / 字段不合法（服务端 msg 指出第几个方案的哪个字段）、`7104` 本月 API 配额用完、`7105` Token 余额不足（<15000）。
+
+**变更集**（`idea change-set ...`）：把已批准 Idea 的选定方案落成「受影响对象清单」→ 审批 → Apply 成任务。状态：draft → impact_analyzed → pending_approval → approved → applied；draft / impact_analyzed / approved 可 cancel（`rejected` 为预留值，A2 不产生：审批被驳回 / 撤销后回到 impact_analyzed）。
+
+| 命令 | 说明 |
+|------|------|
+| `idea change-set create <ideaId> --title <t> [--solution <id>] [--summary <s>]` | 创建 draft 变更集（Idea 须 approved / planning，否则 1007）；标题 ≤200、摘要 ≤2000；`--solution` 缺省取选定方案 |
+| `idea change-set list [--idea <id> \| --product <id>] [--status <s>] [-p/--page] [--page-size]` | 倒序列表；`--idea` 与 `--product` 二选一（`--product` 缺省读 `GOOD7OB_PRODUCT_ID`）；`--status`：draft\|impact_analyzed\|pending_approval\|approved\|applied\|rejected\|cancelled；`--page-size` ≤100 |
+| `idea change-set get <id>` | 详情 + 条目表（类型 / 变更 / 对象 / 说明 / 来源 / 可信度 / 是否已确认 / 生成的任务） |
+| `idea change-set update <id> [--title <t>] [--summary <s>]` | 改标题 / 摘要（至少一个；仅 draft / impact_analyzed） |
+| `idea change-set item add <id> --type <T> --kind <k> --description <d> (--object-id <n> \| --object-ref <r>)` | 加手工条目（加入即已确认）。`--type`：PRD\|FP\|RP\|UI\|API\|DB\|ARCH\|TEST_CASE\|TASK\|OTHER（不区分大小写）；`--kind`：add\|update\|remove；`--description` ≤1000；`--object-ref` ≤300；`--object-id` 与 `--object-ref` **至少给一个**（可同时给）；同一对象在同一变更集内只能有一条（1006） |
+| `idea change-set item update <id> <itemId> [--type --kind --description --object-id --object-ref]` | 改条目（未给的不变，至少一个；不改确认状态）；仅 draft / impact_analyzed |
+| `idea change-set item remove <id> <itemId>` | 删条目（软删除） |
+| `idea change-set item confirm <id> <itemId> [--no]` | 确认条目；`--no` 取消确认。只有已确认条目会计入 submit / apply |
+| `idea change-set analyze <id>` | 影响分析：沿追溯关系（≤2 跳）+ AI 建议**只追加**条目（均未确认）。AI 失败不报错，降级为仅追溯并打印 `⚠ 告警`；客户端超时同样放宽到 180 s |
+| `idea change-set submit <id>` | 提交审批（须 impact_analyzed 且至少 1 个已确认条目）；打印审批单 ID，审批人 = 组织 owner / admin，走 `good7ob approval ...` |
+| `idea change-set apply <id> [--module <id>]` | Apply（须 approved，原子且幂等）：为每个已确认条目建一个人工任务 + 追溯关系，Idea approved → planning。`--module` 缺省自动建 `Change <code>` 模块。打印任务列表、追溯条数、Idea 状态。**只生成任务与追溯，不会自动修改 PRD / UI / API / DB 文档** |
+| `idea change-set cancel <id>` | 取消（审批中的须先撤销审批） |
+
+**效果复盘**（`idea review ...`，每个 Idea 至多一条）：
+
+| 命令 | 说明 |
+|------|------|
+| `idea review start <ideaId>` | 创建 / 刷新草稿：快照选定方案的预期，重新收集实际值（Idea 须 planning / developing / released；已完成的复盘不可刷新） |
+| `idea review get <ideaId>` | 预期（AI 方案同时显示修正前原值）、实际、准确度（草稿实时计算，完成后冻结）、手工指标。实际值 `—` = 不可得（不是 0）；成本暂无可推导口径，恒为 `—` |
+| `idea review metrics <ideaId> [--metric "name:expected:actual:unit"]... [--clear-metrics] [--notes <n>]` | 填手工指标（**整体替换**，可重复，≤20）与备注（≤2000，`--notes ""` 清空）；至少给一项。`--metric`：只有 name 必填（≤100）；expected / actual 留空 = 不可得（如 `NPS:40::pts`），可为负数、≤4 位小数；unit ≤20；各段内不能含冒号；仅草稿可改 |
+| `idea review complete <ideaId>` | 完成：冻结准确度，Idea released → validated，重算该产品的估算修正系数（Idea 须 released） |
+
+A2 业务错误码在 A1 基础上：变更集 `1007`（创建要求 Idea approved / planning；改条目仅 draft / impact_analyzed；提交要求已确认条目；Apply 要求 approved 且未 Apply），`2000`（Apply 另要求 owner / admin 或创建人）；复盘 `1002` 表示尚无复盘（先 `idea review start`）。
+
+```bash
+good7ob idea generate 21 --count 3 --hints "面向中小企业，优先复用现有导出组件"
+good7ob idea correction 12
+good7ob idea select 21 41 --reason "成本最低"
+good7ob idea change-set create 21 --title "订单导出落地" --summary "按方案 A 实施"
+good7ob idea change-set item add 5 --type API --kind add --description "新增导出接口" --object-ref "POST /orders/export"
+good7ob idea change-set analyze 5                       # 追加追溯 / AI 条目（未确认）
+good7ob idea change-set item confirm 5 11               # 逐条确认；--no 取消
+good7ob idea change-set submit 5 && good7ob approval get 8
+good7ob idea change-set apply 5 --module 40             # 生成任务 + 追溯，不改文档
+good7ob idea review start 21
+good7ob idea review metrics 21 --metric "对账耗时:2:3:小时" --metric "NPS:40::pts" --notes "首月数据"
+good7ob idea review complete 21                         # released → validated，重算修正系数
 ```
 
 ---

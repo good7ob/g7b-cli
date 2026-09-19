@@ -86,9 +86,12 @@ class ApiClient {
     /**
      * Make POST request
      */
-    async post(url, data) {
+    async post(url, data, config) {
         try {
-            const response = await this.instance.post(url, data);
+            // `config` (e.g. a longer timeout for AI calls) is forwarded only when given
+            const response = config
+                ? await this.instance.post(url, data, config)
+                : await this.instance.post(url, data);
             return this.unwrap(response.data);
         }
         catch (error) {

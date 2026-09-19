@@ -1,19 +1,23 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { collect, emit, fail, parseId } from '../../utils/cliHelpers';
+import { registerAiCommands } from './aiCommands';
+import { registerChangeSetCommands } from './changeSetCommands';
 import { registerCollabCommands } from './collabCommands';
 import {
   IDEA_ERROR_CODES, TRANSITIONS, SOURCES, PRIORITIES, STATUSES,
   buildCreateBody, buildListParams, buildReasonBody, buildSelectBody, buildUpdateBody, parseTransition,
 } from './input';
 import { IdeaDetail, renderIdeaDetail, renderIdeaList } from './render';
+import { registerReviewCommands } from './reviewCommands';
 import { registerSolutionCommands } from './solutionCommands';
 
 /**
  * Idea pool commands (forge/ideas): capture an idea, attach candidate
  * solutions, then pick one — which approves the idea and drops a requirement
  * into the requirement inbox (see `good7ob req`). Solutions live in solutionCommands.ts,
- * restore/merge/comment/attachment/tag/relation in collabCommands.ts.
+ * restore/merge/comment/attachment/tag/relation in collabCommands.ts, and the A2 groups (generate/correction,
+ * change-set, review) in aiCommands.ts / changeSetCommands.ts / reviewCommands.ts.
  *
  * Business errors come back as HTTP 200 + non-200 `code`; ApiClient throws on
  * those, and `fail` maps the idea error codes to readable messages.
@@ -153,6 +157,9 @@ export function registerIdeaCommands(program: Command) {
 
   registerSolutionCommands(idea);
   registerCollabCommands(idea);
+  registerAiCommands(idea);
+  registerChangeSetCommands(idea);
+  registerReviewCommands(idea);
 
   idea
     .command('select <ideaId> <solutionId>')
