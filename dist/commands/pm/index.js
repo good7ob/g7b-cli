@@ -7,16 +7,18 @@ const plan_1 = require("./plan");
 const workflow_1 = require("./workflow");
 const report_1 = require("./report");
 const tag_1 = require("./tag");
+const health_1 = require("./health");
 function registerPmCommands(program) {
     const pmCommand = program
         .command('pm')
-        .description('Project management — projects, tasks, workflows, reports, tags');
+        .description('Project management — projects, tasks, workflows, reports, tags, product health');
     (0, project_1.registerProjectCommands)(pmCommand);
     (0, task_1.registerTaskCommands)(pmCommand);
     (0, plan_1.registerPlanCommands)(pmCommand);
     (0, workflow_1.registerWorkflowCommands)(pmCommand);
     (0, report_1.registerReportCommands)(pmCommand);
     (0, tag_1.registerTagCommands)(pmCommand);
+    (0, health_1.registerHealthCommands)(pmCommand);
     return pmCommand;
 }
 exports.registerPmCommands = registerPmCommands;

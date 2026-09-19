@@ -106,9 +106,28 @@ good7ob pm task --help
 good7ob pm workflow --help
 good7ob pm report --help
 good7ob pm tag --help
+good7ob pm health --help
 ```
 
-Project management commands for projects, tasks, workflows, reports, and tags.
+Project management commands for projects, tasks, workflows, reports, tags, and product health.
+
+### `idea`
+
+```bash
+good7ob idea list --product 3
+good7ob idea get 12
+good7ob idea select 12 34 --reason "lowest cost"   # approves the idea, creates a requirement in the inbox
+```
+
+Idea pool: capture ideas, compare candidate solutions, pick one. See `FEATURES.md`.
+
+### `workspace`
+
+```bash
+good7ob workspace queue --limit 50
+```
+
+What is waiting on you: approvals, info requests, blocked/paused tasks, alerts, requirements to triage.
 
 ### `org`
 
