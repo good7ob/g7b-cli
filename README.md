@@ -129,10 +129,20 @@ Idea pool: capture ideas, compare solutions with structured estimates, pick one 
 ### `workspace`
 
 ```bash
-good7ob workspace queue --limit 50
+good7ob workspace queue --limit 50 --status active --action-type PLAN_APPROVAL
+good7ob workspace queue counts
+good7ob workspace queue snooze 501 --until +2h        # or an ISO time (no offset = UTC)
+good7ob workspace queue approve 501 --comment "LGTM"   # decide in place: approval / task plan / task completion
+good7ob workspace queue reject 502 --comment "out of scope"
+good7ob workspace queue dismiss 503                    # also: done, reopen
+good7ob workspace overview
+good7ob workspace tasks --group waiting -p 1 --page-size 20
+good7ob workspace products --scope following
+good7ob workspace product follow 12                    # or unfollow
+good7ob workspace orgs
 ```
 
-What is waiting on you: approvals, info requests, blocked/paused tasks, alerts, requirements to triage.
+What is waiting on you (approvals, info requests, blocked/paused tasks, alerts, requirements to triage, risks) with snooze / dismiss / done / reopen and in-place approve / reject, plus overview and your tasks, products and organizations. See `FEATURES.md`.
 
 ### `release`
 
