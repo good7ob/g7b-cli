@@ -5,13 +5,14 @@
  * instead of as a 1000/1001 round-trip.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildActionBody = exports.parseSnoozeUntil = exports.buildQueueParams = exports.ACTION_ERROR_CODES = exports.WORKSPACE_ERROR_CODES = exports.MAX_SNOOZE_DAYS = exports.MAX_QUEUE_LIMIT = exports.ACTION_TYPES = exports.QUEUE_STATUSES = void 0;
+exports.buildActionBody = exports.parseSnoozeUntil = exports.buildQueueParams = exports.ACTION_ERROR_CODES = exports.WORKSPACE_ERROR_CODES = exports.MAX_SNOOZE_DAYS = exports.MAX_QUEUE_LIMIT = exports.QUEUE_SORTS = exports.ACTION_TYPES = exports.QUEUE_STATUSES = void 0;
 const cliHelpers_1 = require("../../utils/cliHelpers");
 exports.QUEUE_STATUSES = ['active', 'snoozed', 'dismissed', 'done', 'all', 'new', 'in_progress', 'waiting'];
 exports.ACTION_TYPES = [
     'PLAN_APPROVAL', 'COMPLETION_APPROVAL', 'INFO_REQUEST', 'BLOCKED', 'PAUSED', 'SYSTEM_ALERT',
     'REQUIREMENT_TRIAGE', 'APPROVAL', 'RISK_ALERT',
 ];
+exports.QUEUE_SORTS = ['newest', 'score'];
 exports.MAX_QUEUE_LIMIT = 200;
 exports.MAX_SNOOZE_DAYS = 30;
 const MINUTE_MS = 60000;
@@ -47,6 +48,8 @@ function buildQueueParams(o) {
         params.actionType = enumFlag(o.actionType, exports.ACTION_TYPES, '--action-type', true);
     if (o.product !== undefined)
         params.productId = (0, cliHelpers_1.parseId)(o.product, '--product');
+    if (o.sort !== undefined)
+        params.sort = enumFlag(o.sort, exports.QUEUE_SORTS, '--sort', false);
     return params;
 }
 exports.buildQueueParams = buildQueueParams;

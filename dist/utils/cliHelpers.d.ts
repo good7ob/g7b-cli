@@ -16,7 +16,7 @@ export type ApiDate = string | number[] | null;
 export declare function fmtDate(value: unknown): string;
 /** Same as fmtDate, but for `yyyy-MM-dd'T'HH:mm:ss` strings shows `yyyy-MM-dd HH:mm:ss`. */
 export declare function fmtDateTime(value: unknown): string;
-/** Print JSON when asked, otherwise the rendered text. */
+/** Print JSON when asked, otherwise the rendered text (control characters stripped, see stripControl). */
 export declare function emit(json: boolean | undefined, data: unknown, text: () => string): void;
 /** Null -> "—"; otherwise the number rounded to `digits` with trailing zeros dropped. */
 export declare function fmtNum(value: number | null | undefined, suffix?: string, digits?: number): string;
@@ -48,5 +48,22 @@ export declare const AUTH_CODES: ErrorCodeMap;
  */
 export declare function describeError(error: unknown, codeMap?: ErrorCodeMap): string;
 export declare function fail(prefix: string, error: unknown, codeMap?: ErrorCodeMap): never;
+/** Run an action; any failure (bad input or API) ends as a readable one-line error + exit 1. */
+export declare function guarded(prefix: string, codes: ErrorCodeMap, fn: () => Promise<void>): Promise<void>;
+/** Client timeout for calls that may run an AI model (the default 30 s is too short). */
+export declare const AI_REQUEST_CONFIG: {
+    readonly timeout: 180000;
+};
+/**
+ * Adds `hint` to a client timeout / gateway failure: the server may still be working, so a blind retry can
+ * duplicate. Business errors (they carry a numeric `code`) pass through untouched so their code mapping survives.
+ */
+export declare function withTimeoutHint(error: unknown, hint: string): unknown;
+/**
+ * Report titles / bodies, AI text and names inside them carry unescaped user text (api-0090 §13: treat as
+ * untrusted). A terminal is not an HTML page, but the equivalent attack is an escape sequence in a task
+ * name that rewrites the screen, so strip control characters before printing. Never applied to --json / --out.
+ */
+export declare function stripControl(text: string): string;
 export declare function renderTable(rows: string[][], columnConfig?: Record<number, ColumnUserConfig>): string;
 //# sourceMappingURL=cliHelpers.d.ts.map

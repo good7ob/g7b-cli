@@ -257,3 +257,40 @@ describe('workspace orgs', () => {
     expect(err.stderr).toContain('系统错误');
   });
 });
+
+describe('workspace overview: AI team block (B2)', () => {
+  const base = { queue: { total: 0, counts: {} }, tasks: {}, products: [], recentActivity: [], degraded: [] };
+  const aiTeam = {
+    total: 3, working: 1, waiting: 0, error: 1, idle: 1,
+    top: [{ id: 7, orgId: 3, orgName: 'RemoStudio', name: 'Cursor Agent', state: 'error', stateReason: 'blocked_tasks', currentTasks: [{ id: 182, name: '支付', status: 'blocked' }] }],
+  };
+
+  it('renders counters and the top employees between products and recent activity', async () => {
+    const out = (await ws(['overview'], ok({ ...base, aiTeam }))).stdout;
+    expect(out).toContain('── 我的 AI 团队 ──');
+    expect(out).toContain('共 3    工作中 1  等待中 0  异常 1  空闲 1');
+    expect(out).toMatch(/Cursor Agent\s+RemoStudio\s+异常（有阻塞任务）\s+#182 支付 \[blocked\]/);
+    expect(out.indexOf('我的产品')).toBeLessThan(out.indexOf('我的 AI 团队'));
+    expect(out.indexOf('我的 AI 团队')).toBeLessThan(out.indexOf('最近动态'));
+  });
+
+  it('a team without employees shows the counters only (0 stays 0)', async () => {
+    const out = (await ws(['overview'], ok({ ...base, aiTeam: { total: 0, working: 0, waiting: 0, error: 0, idle: 0, top: [] } }))).stdout;
+    expect(out).toContain('共 0    工作中 0  等待中 0  异常 0  空闲 0');
+  });
+
+  it('a failed block reads （加载失败） and is named in the degraded footer', async () => {
+    const out = (await ws(['overview'], ok({ ...base, aiTeam: null, degraded: ['aiTeam'] }))).stdout;
+    expect(out).toMatch(/── 我的 AI 团队 ──\n（加载失败）/);
+    expect(out).toContain('⚠ 部分内容加载失败: aiTeam');
+  });
+
+  it('an older server without the field (or a null that is not degraded) shows no such section', async () => {
+    expect((await ws(['overview'], ok(base))).stdout).not.toContain('AI 团队');
+    expect((await ws(['overview'], ok({ ...base, aiTeam: null }))).stdout).not.toContain('AI 团队');
+  });
+
+  it('--json carries aiTeam untouched', async () => {
+    expect(JSON.parse((await ws(['overview', '--json'], ok({ ...base, aiTeam }))).stdout).aiTeam.total).toBe(3);
+  });
+});

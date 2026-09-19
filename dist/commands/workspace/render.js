@@ -32,12 +32,23 @@ function renderQueue(queue, status) {
     const lines = [`${heading}: ${(0, cliHelpers_1.dash)(queue.total)}`, renderCountsSummary(queue.counts)];
     if (!items.length)
         return [...lines, '', '队列为空。'].join('\n');
-    const rows = [['ID', '状态', '类型', '来源ID', '动作', '优先级', '项目', '标题', '到期/稍后', '创建时间']].concat(items.map((i) => [
-        (0, cliHelpers_1.dash)(i.id), (0, cliHelpers_1.dash)(i.status), (0, cliHelpers_1.dash)(i.sourceType), (0, cliHelpers_1.dash)(i.sourceId),
-        exports.ACTION_LABELS[i.actionType ?? ''] ?? (0, cliHelpers_1.dash)(i.actionType), (0, cliHelpers_1.dash)(i.priority),
-        (0, cliHelpers_1.dash)(i.projectName ?? i.projectId), (0, cliHelpers_1.dash)(i.title), whenCell(i), (0, cliHelpers_1.fmtDateTime)(i.createdAt),
-    ]));
-    lines.push('', (0, cliHelpers_1.renderTable)(rows, { 6: { truncate: 20 }, 7: { truncate: 40 } }));
+    // The priority score column only appears when the backend sent one (B2 and later).
+    const scored = items.some((i) => i.priorityScore != null);
+    const cells = (i) => {
+        const row = [
+            (0, cliHelpers_1.dash)(i.id), (0, cliHelpers_1.dash)(i.status), (0, cliHelpers_1.dash)(i.sourceType), (0, cliHelpers_1.dash)(i.sourceId),
+            exports.ACTION_LABELS[i.actionType ?? ''] ?? (0, cliHelpers_1.dash)(i.actionType), (0, cliHelpers_1.dash)(i.priority),
+            (0, cliHelpers_1.dash)(i.projectName ?? i.projectId), (0, cliHelpers_1.dash)(i.title), whenCell(i), (0, cliHelpers_1.fmtDateTime)(i.createdAt),
+        ];
+        if (scored)
+            row.splice(6, 0, (0, cliHelpers_1.dash)(i.priorityScore));
+        return row;
+    };
+    const header = ['ID', '状态', '类型', '来源ID', '动作', '优先级', '项目', '标题', '到期/稍后', '创建时间'];
+    if (scored)
+        header.splice(6, 0, '优先分');
+    const shift = scored ? 1 : 0;
+    lines.push('', (0, cliHelpers_1.renderTable)([header].concat(items.map(cells)), { [6 + shift]: { truncate: 20 }, [7 + shift]: { truncate: 40 } }));
     if (typeof queue.total === 'number' && queue.total > items.length) {
         lines.push(`显示 ${items.length} / ${queue.total} 条（用 --limit 调大，最大 200）`);
     }

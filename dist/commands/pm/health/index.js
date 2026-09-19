@@ -7,11 +7,16 @@ exports.registerHealthCommands = exports.HEALTH_ERROR_CODES = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
 const cliHelpers_1 = require("../../../utils/cliHelpers");
 const input_1 = require("./input");
+const costCommands_1 = require("./costCommands");
+const forecastCommands_1 = require("./forecastCommands");
 const progressCommands_1 = require("./progressCommands");
+const reportCommands_1 = require("./reportCommands");
 const render_1 = require("./render");
 /**
  * Product health dashboard (/progress/products/{id}/health, prd-0080) plus the C1 progress
- * commands (config, scope changes, burnup, snapshots — see progressCommands.ts).
+ * commands (config, scope changes, burnup, snapshots — see progressCommands.ts) and the C2 progress
+ * intelligence commands (forecast, what-if, diagnosis, explain — forecastCommands.ts; cost, budget,
+ * cost-entry — costCommands.ts; management reports — reportCommands.ts).
  * Needs org membership on the product. Not the same thing as
  * /forge/products/{id}/progress (requirement-structuring completeness).
  * These three (health, modules, baseline) keep the old 40480/40380/40080 error codes.
@@ -28,7 +33,7 @@ const output = (json, data, text) => console.log(json ? JSON.stringify(data, nul
 function registerHealthCommands(pmCommand) {
     const health = pmCommand
         .command('health <productId>')
-        .description('Product health KPI (subcommands: modules, baseline, config, scope-changes, scope-change, burnup, snapshots)')
+        .description('Product health KPI (subcommands: modules, baseline, config, scope-changes, scope-change, burnup, snapshots, forecast, cost, budget, cost-entry, what-if, diagnosis, explain, report)')
         .option('--json', 'Output as JSON')
         .action(async (productId, o) => {
         try {
@@ -73,6 +78,9 @@ function registerHealthCommands(pmCommand) {
         }
     });
     (0, progressCommands_1.registerProgressCommands)(health);
+    (0, forecastCommands_1.registerForecastCommands)(health);
+    (0, costCommands_1.registerCostCommands)(health);
+    (0, reportCommands_1.registerReportCommands)(health);
 }
 exports.registerHealthCommands = registerHealthCommands;
 //# sourceMappingURL=index.js.map

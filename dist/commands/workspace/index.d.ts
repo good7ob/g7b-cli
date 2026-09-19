@@ -4,7 +4,8 @@ import { Command } from 'commander';
  * requests, info requests, blocked/paused tasks, alerts, requirements to triage, risks) and acts
  * on those items; `overview / tasks / products / orgs` are the "mine" views. Deliberately not
  * called "inbox": in this CLI that word is the requirement-inbox status (`good7ob req`).
- * Queue lives in queueCommands.ts, the other views in viewCommands.ts.
+ * Queue lives in queueCommands.ts, the other views in viewCommands.ts, the AI team / daily report /
+ * next actions (B2) in aiTeamCommands.ts.
  */
 export { MAX_QUEUE_LIMIT } from './input';
 export declare function registerWorkspaceCommands(program: Command): void;

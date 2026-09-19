@@ -1,5 +1,6 @@
 import { ApiDate, dash, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 import { QueueCounts, renderQueueCounts } from './render';
+import { AiTeamSummary, renderAiTeamSummary } from './renderAiTeam';
 import { MyProduct, TaskGroupCounts, productTable, renderTaskCounts } from './renderViews';
 
 export interface Activity {
@@ -17,6 +18,8 @@ export interface Overview {
   tasks?: TaskGroupCounts | null;
   products?: MyProduct[] | null;
   recentActivity?: Activity[] | null;
+  /** B2; absent on older servers (null + named in `degraded` when it failed to load). */
+  aiTeam?: AiTeamSummary | null;
   degraded?: string[] | null;
 }
 
@@ -49,6 +52,10 @@ export function renderOverview(o: Overview): string {
     section('我的产品（开放任务最多的前 5 个）', productsBlock(o.products)),
     section('最近动态', activityBlock(o.recentActivity)),
   ];
+  // Shown only when the backend knows about it (B2+): present, or degraded while loading.
+  if (o.aiTeam || o.degraded?.includes('aiTeam')) {
+    parts.splice(3, 0, section('我的 AI 团队', o.aiTeam ? renderAiTeamSummary(o.aiTeam) : FAILED));
+  }
   if (o.degraded?.length) parts.push(`⚠ 部分内容加载失败: ${o.degraded.join(', ')}`);
   return parts.join('\n\n');
 }

@@ -92,12 +92,13 @@ function registerDecisionCommands(queue) {
 function registerQueueCommands(workspace) {
     const queue = workspace
         .command('queue')
-        .description('List items awaiting me, newest first (counts cover everything, the table is capped by --limit); subcommands act on one item')
+        .description('List items awaiting me, newest first or by priority score (counts cover everything, the table is capped by --limit); subcommands act on one item')
         .allowExcessArguments(false)
         .option('-l, --limit <num>', `Max items to list (1-${input_1.MAX_QUEUE_LIMIT})`, '50')
         .option('--status <status>', `Filter by status (${input_1.QUEUE_STATUSES.join('|')}; default active)`)
         .option('--action-type <type>', `Filter by action type (${input_1.ACTION_TYPES.join('|')}); counts ignore it`)
         .option('--product <id>', 'Only items of this product')
+        .option('--sort <sort>', `Order (${input_1.QUEUE_SORTS.join('|')}; default newest). score = highest priority score first, ties by earliest due`)
         .option('--json', 'Output as JSON')
         .action((o) => run('获取我的待办队列失败', input_1.WORKSPACE_ERROR_CODES, async () => {
         const params = (0, input_1.buildQueueParams)(o);

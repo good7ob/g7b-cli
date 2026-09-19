@@ -1,1 +1,1 @@
-{"version":3,"file":"queueCommands.d.ts","sourceRoot":"","sources":["../../../src/commands/workspace/queueCommands.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AA0GpC,wBAAgB,qBAAqB,CAAC,SAAS,EAAE,OAAO,GAAG,IAAI,CAkB9D"}
+{"version":3,"file":"queueCommands.d.ts","sourceRoot":"","sources":["../../../src/commands/workspace/queueCommands.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AA0GpC,wBAAgB,qBAAqB,CAAC,SAAS,EAAE,OAAO,GAAG,IAAI,CAmB9D"}

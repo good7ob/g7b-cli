@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { ErrorCodeMap, emit, fail, parseId } from '../../utils/cliHelpers';
 import {
-  ACTION_ERROR_CODES, ACTION_TYPES, Decision, MAX_QUEUE_LIMIT, MAX_SNOOZE_DAYS, QUEUE_STATUSES, WORKSPACE_ERROR_CODES,
+  ACTION_ERROR_CODES, ACTION_TYPES, Decision, MAX_QUEUE_LIMIT, MAX_SNOOZE_DAYS, QUEUE_SORTS, QUEUE_STATUSES, WORKSPACE_ERROR_CODES,
   buildActionBody, buildQueueParams, parseSnoozeUntil,
 } from './input';
 import {
@@ -107,12 +107,13 @@ function registerDecisionCommands(queue: Command): void {
 export function registerQueueCommands(workspace: Command): void {
   const queue = workspace
     .command('queue')
-    .description('List items awaiting me, newest first (counts cover everything, the table is capped by --limit); subcommands act on one item')
+    .description('List items awaiting me, newest first or by priority score (counts cover everything, the table is capped by --limit); subcommands act on one item')
     .allowExcessArguments(false)
     .option('-l, --limit <num>', `Max items to list (1-${MAX_QUEUE_LIMIT})`, '50')
     .option('--status <status>', `Filter by status (${QUEUE_STATUSES.join('|')}; default active)`)
     .option('--action-type <type>', `Filter by action type (${ACTION_TYPES.join('|')}); counts ignore it`)
     .option('--product <id>', 'Only items of this product')
+    .option('--sort <sort>', `Order (${QUEUE_SORTS.join('|')}; default newest). score = highest priority score first, ties by earliest due`)
     .option('--json', 'Output as JSON')
     .action((o) => run('获取我的待办队列失败', WORKSPACE_ERROR_CODES, async () => {
       const params = buildQueueParams(o);

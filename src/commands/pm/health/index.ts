@@ -2,12 +2,17 @@ import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { ErrorCodeMap, checkMaxLength, fail, parseId } from '../../../utils/cliHelpers';
 import { MAX_NOTE } from './input';
+import { registerCostCommands } from './costCommands';
+import { registerForecastCommands } from './forecastCommands';
 import { registerProgressCommands } from './progressCommands';
+import { registerReportCommands } from './reportCommands';
 import { Baseline, ModuleHealth, ProductHealth, renderBaseline, renderHealth, renderModules } from './render';
 
 /**
  * Product health dashboard (/progress/products/{id}/health, prd-0080) plus the C1 progress
- * commands (config, scope changes, burnup, snapshots — see progressCommands.ts).
+ * commands (config, scope changes, burnup, snapshots — see progressCommands.ts) and the C2 progress
+ * intelligence commands (forecast, what-if, diagnosis, explain — forecastCommands.ts; cost, budget,
+ * cost-entry — costCommands.ts; management reports — reportCommands.ts).
  * Needs org membership on the product. Not the same thing as
  * /forge/products/{id}/progress (requirement-structuring completeness).
  * These three (health, modules, baseline) keep the old 40480/40380/40080 error codes.
@@ -28,7 +33,7 @@ const output = (json: boolean | undefined, data: unknown, text: () => string) =>
 export function registerHealthCommands(pmCommand: Command) {
   const health = pmCommand
     .command('health <productId>')
-    .description('Product health KPI (subcommands: modules, baseline, config, scope-changes, scope-change, burnup, snapshots)')
+    .description('Product health KPI (subcommands: modules, baseline, config, scope-changes, scope-change, burnup, snapshots, forecast, cost, budget, cost-entry, what-if, diagnosis, explain, report)')
     .option('--json', 'Output as JSON')
     .action(async (productId, o) => {
       try {
@@ -73,4 +78,7 @@ export function registerHealthCommands(pmCommand: Command) {
     });
 
   registerProgressCommands(health);
+  registerForecastCommands(health);
+  registerCostCommands(health);
+  registerReportCommands(health);
 }

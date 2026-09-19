@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.renderOverview = void 0;
 const cliHelpers_1 = require("../../utils/cliHelpers");
 const render_1 = require("./render");
+const renderAiTeam_1 = require("./renderAiTeam");
 const renderViews_1 = require("./renderViews");
 const ACTIVITY_LABELS = { STATE_CHANGE: '状态变更', COMMENT: '评论', AI_WORK: 'AI 工作' };
 const FAILED = '（加载失败）';
@@ -30,6 +31,10 @@ function renderOverview(o) {
         section('我的产品（开放任务最多的前 5 个）', productsBlock(o.products)),
         section('最近动态', activityBlock(o.recentActivity)),
     ];
+    // Shown only when the backend knows about it (B2+): present, or degraded while loading.
+    if (o.aiTeam || o.degraded?.includes('aiTeam')) {
+        parts.splice(3, 0, section('我的 AI 团队', o.aiTeam ? (0, renderAiTeam_1.renderAiTeamSummary)(o.aiTeam) : FAILED));
+    }
     if (o.degraded?.length)
         parts.push(`⚠ 部分内容加载失败: ${o.degraded.join(', ')}`);
     return parts.join('\n\n');

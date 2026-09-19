@@ -5,7 +5,7 @@
  * backend business codes to readable errors.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.renderTable = exports.fail = exports.describeError = exports.AUTH_CODES = exports.requireText = exports.checkMaxLength = exports.requireOneOf = exports.parseIntInRange = exports.normalizeTypeCode = exports.resolveProductId = exports.parseDate = exports.parseIdList = exports.parseId = exports.InputError = exports.collect = exports.fmtNum = exports.emit = exports.fmtDateTime = exports.fmtDate = exports.dash = exports.DASH = void 0;
+exports.renderTable = exports.stripControl = exports.withTimeoutHint = exports.AI_REQUEST_CONFIG = exports.guarded = exports.fail = exports.describeError = exports.AUTH_CODES = exports.requireText = exports.checkMaxLength = exports.requireOneOf = exports.parseIntInRange = exports.normalizeTypeCode = exports.resolveProductId = exports.parseDate = exports.parseIdList = exports.parseId = exports.InputError = exports.collect = exports.fmtNum = exports.emit = exports.fmtDateTime = exports.fmtDate = exports.dash = exports.DASH = void 0;
 const table_1 = require("table");
 /** Shown for any value the backend could not compute. Never render null as 0. */
 exports.DASH = '—';
@@ -29,9 +29,9 @@ function fmtDateTime(value) {
     return fmtDate(value).replace('T', ' ');
 }
 exports.fmtDateTime = fmtDateTime;
-/** Print JSON when asked, otherwise the rendered text. */
+/** Print JSON when asked, otherwise the rendered text (control characters stripped, see stripControl). */
 function emit(json, data, text) {
-    console.log(json ? JSON.stringify(data, null, 2) : text());
+    console.log(json ? JSON.stringify(data, null, 2) : stripControl(text()));
 }
 exports.emit = emit;
 /** Null -> "—"; otherwise the number rounded to `digits` with trailing zeros dropped. */
@@ -155,13 +155,48 @@ function fail(prefix, error, codeMap = {}) {
     process.exit(1);
 }
 exports.fail = fail;
+/** Run an action; any failure (bad input or API) ends as a readable one-line error + exit 1. */
+async function guarded(prefix, codes, fn) {
+    try {
+        await fn();
+    }
+    catch (error) {
+        fail(prefix, error, codes);
+    }
+}
+exports.guarded = guarded;
+/** Client timeout for calls that may run an AI model (the default 30 s is too short). */
+exports.AI_REQUEST_CONFIG = { timeout: 180000 };
+/**
+ * Adds `hint` to a client timeout / gateway failure: the server may still be working, so a blind retry can
+ * duplicate. Business errors (they carry a numeric `code`) pass through untouched so their code mapping survives.
+ */
+function withTimeoutHint(error, hint) {
+    if (typeof error?.code === 'number')
+        return error;
+    const message = error instanceof Error ? error.message : String(error);
+    return /timeout|status code 50[234]|ECONNRESET|socket hang up/i.test(message) ? new Error(`${message}（${hint}）`) : error;
+}
+exports.withTimeoutHint = withTimeoutHint;
+// ANSI CSI / OSC escape sequences, then every other C0 / C1 control character except \t and \n.
+const ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b./g;
+const CONTROLS = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+/**
+ * Report titles / bodies, AI text and names inside them carry unescaped user text (api-0090 §13: treat as
+ * untrusted). A terminal is not an HTML page, but the equivalent attack is an escape sequence in a task
+ * name that rewrites the screen, so strip control characters before printing. Never applied to --json / --out.
+ */
+function stripControl(text) {
+    return text.replace(ESCAPES, '').replace(CONTROLS, '');
+}
+exports.stripControl = stripControl;
 // ── Tables (the `table` package handles CJK width, unlike String#padEnd) ──
 function renderTable(rows, columnConfig = {}) {
     const columns = {};
     Object.entries(columnConfig).forEach(([i, cfg]) => {
         columns[Number(i)] = { paddingLeft: 0, paddingRight: 2, ...cfg };
     });
-    return (0, table_1.table)(rows, {
+    return (0, table_1.table)(rows.map((row) => row.map(stripControl)), {
         border: (0, table_1.getBorderCharacters)('void'),
         columnDefault: { paddingLeft: 0, paddingRight: 2 },
         columns,

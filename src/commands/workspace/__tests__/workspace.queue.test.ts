@@ -275,3 +275,57 @@ describe('workspace queue approve / reject', () => {
     expect(r.stderr).toContain('不要盲目重试');
   });
 });
+
+describe('workspace queue --sort / priorityScore (B2)', () => {
+  const scored = (id: number, priorityScore: number | null) => item({ id, priorityScore, title: `任务${id}`, projectName: '主项目' });
+
+  it('sends --sort score / newest (case-insensitive) with the limit', async () => {
+    const r = await q(['--sort', 'SCORE', '-l', '10'], ok({ total: 0, counts: {}, items: [] }));
+    expect(r.http.get).toHaveBeenCalledWith('/workspace/my-queue', { params: { limit: 10, sort: 'score' } });
+    expect((await q(['--sort', 'newest'], ok({ total: 0, counts: {}, items: [] }))).http.get)
+      .toHaveBeenCalledWith('/workspace/my-queue', { params: { limit: 50, sort: 'newest' } });
+  });
+
+  it('sends no sort at all by default (existing behaviour)', async () => {
+    const r = await q([], ok({ total: 0, counts: {}, items: [] }));
+    expect(r.http.get).toHaveBeenCalledWith('/workspace/my-queue', { params: { limit: 50 } });
+  });
+
+  it.each(['oldest', 'priority', ''])('rejects --sort %j before calling the API', async (bad) => {
+    const r = await q(['--sort', bad]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('--sort');
+    expect(noHttpCalls(r)).toBe(true);
+  });
+
+  it('shows an 优先分 column, keeping the server order, when items carry priorityScore', async () => {
+    const out = (await q(['--sort', 'score'], ok({ total: 3, counts: {}, items: [scored(503, 112), scored(501, 0), scored(502, null)] }))).stdout;
+    expect(out).toMatch(/ID\s+状态\s+类型\s+来源ID\s+动作\s+优先级\s+优先分\s+项目\s+标题/);
+    expect(out).toMatch(/503\s+new\s+APPROVAL\s+31\s+审批申请\s+medium\s+112\s+主项目\s+任务503/);
+    expect(out).toMatch(/501\s+new\s+APPROVAL\s+31\s+审批申请\s+medium\s+0\s+主项目/);
+    expect(out).toMatch(/502\s+new\s+APPROVAL\s+31\s+审批申请\s+medium\s+—\s+主项目/);
+    expect(out.indexOf('503')).toBeLessThan(out.indexOf('501'));
+  });
+
+  it('omits the column when no item has a score (older server) — the table is unchanged', async () => {
+    const out = (await q([], ok({ total: 1, counts: {}, items: [item()] }))).stdout;
+    expect(out).not.toContain('优先分');
+    expect(out).toMatch(/ID\s+状态\s+类型\s+来源ID\s+动作\s+优先级\s+项目\s+标题/);
+  });
+
+  it('a long project / title are still truncated with the extra column', async () => {
+    const long = item({ id: 9, priorityScore: 5, projectName: 'P'.repeat(60), title: 'T'.repeat(80) });
+    const out = (await q([], ok({ total: 1, counts: {}, items: [long] }))).stdout;
+    expect(out).not.toContain('P'.repeat(30));
+    expect(out).not.toContain('T'.repeat(60));
+  });
+
+  it('--json keeps priorityScore', async () => {
+    const r = await q(['--sort', 'score', '--json'], ok({ total: 1, counts: {}, items: [scored(501, 74)] }));
+    expect(JSON.parse(r.stdout).items[0].priorityScore).toBe(74);
+  });
+
+  it('maps 1001 for an unknown sort answered by the server', async () => {
+    expect((await q(['--sort', 'score'], bizError(1001, 'sort'))).stderr).toContain('参数值不合法');
+  });
+});
