@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
+import { registerImportStructureCommand } from './importStructure';
 
 export function registerPrdCommands(program: Command) {
   const prdCommand = program
@@ -452,6 +453,8 @@ export function registerPrdCommands(program: Command) {
         process.exit(1);
       }
     });
+
+  registerImportStructureCommand(prdCommand);
 
   return prdCommand;
 }

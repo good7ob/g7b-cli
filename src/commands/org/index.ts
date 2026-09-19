@@ -4,6 +4,7 @@ import { extractRecords } from '../../utils/extractRecords';
 import { registerMemberCommands } from './members';
 import { registerInvitationCommands } from './invitations';
 import { registerProductCommands } from './products';
+import { registerPlanCommands } from './plans';
 
 export function registerOrgCommands(program: Command) {
   const orgCommand = program
@@ -219,6 +220,7 @@ export function registerOrgCommands(program: Command) {
   registerMemberCommands(orgCommand);
   registerInvitationCommands(orgCommand);
   registerProductCommands(orgCommand);
+  registerPlanCommands(orgCommand);
 
   return orgCommand;
 }

@@ -19,6 +19,9 @@
 - [pm workflow — 工作流管理](#pm-workflow--工作流管理)
 - [pm report — 进度报告](#pm-report--进度报告)
 - [pm tag — 标签管理](#pm-tag--标签管理)
+- [pm health — 产品健康度](#pm-health--产品健康度)
+- [idea — Idea 池](#idea--idea-池)
+- [workspace — 我的待办队列](#workspace--我的待办队列)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -63,12 +66,15 @@ good7ob
 │   ├── resource             # 云资源管理
 │   ├── cost                 # 成本分析与监控
 │   └── bill                 # 账单导入与管理
-└── pm                       # 项目管理
-    ├── project              # 项目 CRUD、归档、参与者
-    ├── task                 # 任务 CRUD、批量更新
-    ├── workflow             # 工作流模板与阶段管理
-    ├── report               # AI 进度报告
-    └── tag                  # 标签管理
+├── pm                       # 项目管理
+│   ├── project              # 项目 CRUD、归档、参与者
+│   ├── task                 # 任务 CRUD、批量更新
+│   ├── workflow             # 工作流模板与阶段管理
+│   ├── report               # AI 进度报告
+│   ├── tag                  # 标签管理
+│   └── health               # 产品健康度、模块进度、范围基线
+├── idea                     # Idea 池：方案对比、选定后生成需求
+└── workspace                # 个人工作台：待我处理队列
 ```
 
 ---
@@ -720,6 +726,70 @@ API 端点前缀：`/progress/tags`
 |------|------|
 | `--name` | 标签名称（必填） |
 | `--color` | 标签颜色（如 #FF5733） |
+
+---
+
+## pm health — 产品健康度
+
+API 端点前缀：`/progress/products/{productId}/health`（需登录 + 产品所属组织成员）
+
+| 命令 | 说明 |
+|------|------|
+| `pm health <productId>` | 产品健康度 KPI：进度、范围基线与增长、加权进度、阻塞占比、AI 贡献 |
+| `pm health modules <productId>` | 各模块进度（按延期天数降序，含加权进度） |
+| `pm health baseline <productId> [--note <text>]` | 把**当前**范围快照为新基线（备注 ≤500 字符） |
+
+所有命令支持 `--json`。后端算不出来的字段（无基线、无计划日期等）显示为 `—`，绝不显示为 0。
+业务错误码：`40480` 产品不存在、`40380` 非组织成员、`40080` 备注过长。
+
+```bash
+good7ob pm health 10
+good7ob pm health modules 10 --json
+good7ob pm health baseline 10 --note "Q4 范围冻结"
+```
+
+---
+
+## idea — Idea 池
+
+API 端点前缀：`/forge/ideas`（需登录 + 该 Idea 所属产品的组织成员）。
+状态：draft / evaluating / approved / rejected / archived；已批准/已归档的 Idea 不可修改（错误码 1007）。
+
+| 命令 | 说明 |
+|------|------|
+| `idea list --product <id>` | 列表；`--status` `-k/--keyword` `-p/--page` `--page-size`（≤100） |
+| `idea get <id>` | 详情，方案并排对比（成本/周期/预期效果/是否选中）；已批准时显示关联需求 ID |
+| `idea create --product <id> --title <t> --source <s>` | 创建（始终 draft）；`--priority` `--description` `--expected-value` |
+| `idea update <id>` | 修改（未给的字段保持不变） |
+| `idea delete <id>` | 软删除 |
+| `idea status <id> <evaluating\|archived>` | 状态流转 |
+| `idea reject <id> --reason <text>` | 驳回（evaluating → rejected） |
+| `idea solution add <ideaId> --name <n>` | 添加方案；`--description` `--cost-note` `--cycle-note` `--effect-note` |
+| `idea solution update <ideaId> <solutionId>` | 修改方案 |
+| `idea solution delete <ideaId> <solutionId>` | 删除方案 |
+| `idea select <ideaId> <solutionId> --reason <text>` | 选定方案：Idea 变 approved，并在需求收件箱创建需求 |
+
+`--source`：customer|feedback|pm|dev|ai|ops|bug|competitor|market|management；`--priority`：low|medium|high。
+`--product` 缺省读环境变量 `GOOD7OB_PRODUCT_ID`。长度上限：标题/方案名 200，预期价值/方案备注 500，原因 1000。
+业务错误码：`1000` 缺参、`1001` 值非法、`1002` 不存在、`1007` 状态不允许、`1009` 并发冲突（重试）、`2000` 无权限、`999/401` 未登录。
+
+```bash
+good7ob idea create --product 3 --title "订单导出" --source customer --priority high
+good7ob idea status 12 evaluating
+good7ob idea solution add 12 --name "前端导出" --cost-note "2 人天" --cycle-note "1 周"
+good7ob idea select 12 34 --reason "成本最低"   # → 需求收件箱出现新需求
+```
+
+---
+
+## workspace — 我的待办队列
+
+| 命令 | 说明 |
+|------|------|
+| `workspace queue [--limit N]` | 等待我处理的事项（计划审批、完成审批、信息请求、阻塞、暂停、系统提醒、需求分诊），新的在前；`--limit` 1–200，默认 50 |
+
+先显示各类计数（总数与计数不受 `--limit` 影响），再列出事项表。支持 `--json`。
+注意：这里不叫 inbox —— 在本 CLI 里 inbox 指需求收件箱状态（`good7ob req`）。
 
 ---
 

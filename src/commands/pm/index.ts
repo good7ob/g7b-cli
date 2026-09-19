@@ -5,11 +5,12 @@ import { registerPlanCommands } from './plan';
 import { registerWorkflowCommands } from './workflow';
 import { registerReportCommands } from './report';
 import { registerTagCommands } from './tag';
+import { registerHealthCommands } from './health';
 
 export function registerPmCommands(program: Command) {
   const pmCommand = program
     .command('pm')
-    .description('Project management — projects, tasks, workflows, reports, tags');
+    .description('Project management — projects, tasks, workflows, reports, tags, product health');
 
   registerProjectCommands(pmCommand);
   registerTaskCommands(pmCommand);
@@ -17,6 +18,7 @@ export function registerPmCommands(program: Command) {
   registerWorkflowCommands(pmCommand);
   registerReportCommands(pmCommand);
   registerTagCommands(pmCommand);
+  registerHealthCommands(pmCommand);
 
   return pmCommand;
 }

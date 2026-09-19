@@ -9,6 +9,7 @@ const extractRecords_1 = require("../../utils/extractRecords");
 const members_1 = require("./members");
 const invitations_1 = require("./invitations");
 const products_1 = require("./products");
+const plans_1 = require("./plans");
 function registerOrgCommands(program) {
     const orgCommand = program
         .command('org')
@@ -215,6 +216,7 @@ function registerOrgCommands(program) {
     (0, members_1.registerMemberCommands)(orgCommand);
     (0, invitations_1.registerInvitationCommands)(orgCommand);
     (0, products_1.registerProductCommands)(orgCommand);
+    (0, plans_1.registerPlanCommands)(orgCommand);
     return orgCommand;
 }
 exports.registerOrgCommands = registerOrgCommands;
