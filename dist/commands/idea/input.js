@@ -5,7 +5,7 @@
  * here with a clear message instead of as a 1001 round-trip.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildReasonBody = exports.buildSolutionUpdateBody = exports.buildSolutionCreateBody = exports.buildUpdateBody = exports.buildCreateBody = exports.buildListParams = exports.resolveProductId = exports.IDEA_ERROR_CODES = exports.MAX_PAGE_SIZE = exports.MAX_REASON = exports.MAX_SOLUTION_NOTE = exports.MAX_SOLUTION_NAME = exports.MAX_EXPECTED_VALUE = exports.MAX_TITLE = exports.TRANSITIONS = exports.STATUSES = exports.PRIORITIES = exports.SOURCES = void 0;
+exports.buildReasonBody = exports.buildSolutionUpdateBody = exports.buildSolutionCreateBody = exports.buildUpdateBody = exports.buildCreateBody = exports.buildListParams = exports.IDEA_ERROR_CODES = exports.MAX_PAGE_SIZE = exports.MAX_REASON = exports.MAX_SOLUTION_NOTE = exports.MAX_SOLUTION_NAME = exports.MAX_EXPECTED_VALUE = exports.MAX_TITLE = exports.TRANSITIONS = exports.STATUSES = exports.PRIORITIES = exports.SOURCES = void 0;
 const cliHelpers_1 = require("../../utils/cliHelpers");
 exports.SOURCES = [
     'customer', 'feedback', 'pm', 'dev', 'ai', 'ops', 'bug', 'competitor', 'market', 'management',
@@ -28,17 +28,9 @@ exports.IDEA_ERROR_CODES = {
     2000: '无权访问：你不是该 Idea 所属产品的组织成员',
 };
 /** Raw commander options -> validated request pieces. All throw before any HTTP call. */
-function resolveProductId(raw) {
-    const value = raw ?? process.env.GOOD7OB_PRODUCT_ID;
-    if (value === undefined) {
-        throw new cliHelpers_1.InputError('缺少产品 ID。用 --product <id> 指定，或设置环境变量 GOOD7OB_PRODUCT_ID。');
-    }
-    return (0, cliHelpers_1.parseId)(value, '--product');
-}
-exports.resolveProductId = resolveProductId;
 function buildListParams(o) {
     const params = {
-        productId: resolveProductId(o.product),
+        productId: (0, cliHelpers_1.resolveProductId)(o.product),
         pageNum: (0, cliHelpers_1.parseIntInRange)(o.page ?? '1', '--page', 1, 1000000),
         pageSize: (0, cliHelpers_1.parseIntInRange)(o.pageSize ?? '20', '--page-size', 1, exports.MAX_PAGE_SIZE),
     };
@@ -61,7 +53,7 @@ function applyOptionalIdeaFields(body, o) {
 }
 function buildCreateBody(o) {
     const body = {
-        productId: resolveProductId(o.product),
+        productId: (0, cliHelpers_1.resolveProductId)(o.product),
         title: (0, cliHelpers_1.requireText)(o.title, exports.MAX_TITLE, '--title'),
         source: (0, cliHelpers_1.requireOneOf)(o.source ?? '', exports.SOURCES, '--source'),
     };

@@ -16,7 +16,6 @@ export declare const MAX_REASON = 1000;
 export declare const MAX_PAGE_SIZE = 100;
 export declare const IDEA_ERROR_CODES: ErrorCodeMap;
 /** Raw commander options -> validated request pieces. All throw before any HTTP call. */
-export declare function resolveProductId(raw?: string): number;
 export declare function buildListParams(o: {
     product?: string;
     status?: string;

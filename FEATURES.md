@@ -22,6 +22,9 @@
 - [pm health — 产品健康度](#pm-health--产品健康度)
 - [idea — Idea 池](#idea--idea-池)
 - [workspace — 我的待办队列](#workspace--我的待办队列)
+- [release — 发布管理](#release--发布管理)
+- [approval — 审批](#approval--审批)
+- [trace — 追溯关系](#trace--追溯关系)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -74,7 +77,10 @@ good7ob
 │   ├── tag                  # 标签管理
 │   └── health               # 产品健康度、模块进度、范围基线
 ├── idea                     # Idea 池：方案对比、选定后生成需求
-└── workspace                # 个人工作台：待我处理队列
+├── workspace                # 个人工作台：待我处理队列
+├── release                  # 发布管理：计划、关联任务、开始、申请审批
+├── approval                 # 通用审批：列表、批准、驳回、撤销
+└── trace                    # 追溯关系：对象之间的有向关联
 ```
 
 ---
@@ -790,6 +796,94 @@ good7ob idea select 12 34 --reason "成本最低"   # → 需求收件箱出现�
 
 先显示各类计数（总数与计数不受 `--limit` 影响），再列出事项表。支持 `--json`。
 注意：这里不叫 inbox —— 在本 CLI 里 inbox 指需求收件箱状态（`good7ob req`）。
+
+---
+
+## release — 发布管理
+
+API 端点前缀：`/forge/releases`（需登录 + 产品所属组织成员）。
+状态：planned → in_progress → awaiting_approval → released（planned / in_progress 可 cancel → cancelled）。
+批准/驳回发布走 `approval approve|reject`，不在这里。
+
+| 命令 | 说明 |
+|------|------|
+| `release list --product <id>` | 该产品全部发布（不分页，新的在前）；`--status` |
+| `release get <id>` | 详情；待审批时显示 `pendingApprovalId` |
+| `release create --product <id> --name <n> --version <v>` | 创建（始终 planned，版本号在产品内唯一）；`--description` `--start` `--end`（`yyyy-MM-dd`） |
+| `release update <id>` | 修改（未给的字段保持不变，仅 planned / in_progress）；`--name` `--version` `--description` `--start` `--end` |
+| `release delete <id>` | 软删除并解除任务关联（仅 planned / cancelled） |
+| `release start <id>` | planned → in_progress |
+| `release request-approval <id>` | in_progress → awaiting_approval，同时创建一条 `RELEASE` 审批；`--description` 给审批人的说明 |
+| `release cancel <id>` | planned / in_progress → cancelled |
+| `release tasks <id>` | 该发布下的任务（状态、进度、项目、负责人） |
+| `release tasks add <id> --task-ids 1,2,3` | 关联任务（幂等，全部成功或全部失败） |
+| `release tasks remove <id> --task-ids 1,2,3` | 解除关联（只影响属于本发布的任务） |
+
+`--status`：planned|in_progress|awaiting_approval|released|cancelled。`--product` 缺省读 `GOOD7OB_PRODUCT_ID`。
+`--task-ids`：逗号分隔的正整数，去重后 1–200 个。名称 ≤200、版本号 ≤50 字符；`--end` 不得早于 `--start`。
+`update` 传空字符串不会清空字段（后端把空值视为"不修改"）。所有命令支持 `--json`（`delete` 输出 `{"deleted":true,"id":N}`），无二次确认。
+业务错误码：`1000` 缺参、`1001` 值非法（日期倒置 / 任务不存在或不属于该产品）、`1002` 不存在、`1006` 冲突（版本号重复 / 任务已属于另一个未取消的发布 / 已有待处理审批）、`1007` 状态不允许、`2000` 无权限、`999/401` 未登录。
+
+> `--version` 注意：根命令 `-V/--version` 打印 CLI 版本。为让 `release create --version 1.2.0` 生效，`src/index.ts` 对根命令启用了 `enablePositionalOptions()`（根命令的选项只在子命令名之前生效）。
+
+```bash
+good7ob release create --product 12 --name "v1.2 发布" --version 1.2.0 --start 2026-10-01 --end 2026-10-15
+good7ob release tasks add 7 --task-ids 101,102,103
+good7ob release start 7
+good7ob release request-approval 7 --description "测试通过，申请发布"   # → 输出新审批 ID
+good7ob release get 7
+```
+
+---
+
+## approval — 审批
+
+API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审批"命令：申请由拥有目标对象的功能发起（发布用 `release request-approval`）。
+状态：pending / approved / rejected / cancelled。
+
+| 命令 | 说明 |
+|------|------|
+| `approval list` | 我所在组织的审批（新的在前，分页）；`--status` `--target-type`（如 RELEASE，不区分大小写）`--target-id` `--product` `--mine` `-p/--page` `--page-size`（≤100，默认 20） |
+| `approval get <id>` | 详情；显示我能否决定 / 撤销、决定人与意见、是否自批 |
+| `approval approve <id>` | 批准；`--comment` 可选 |
+| `approval reject <id> --comment <text>` | 驳回；`--comment` 必填 |
+| `approval cancel <id>` | 撤销（申请人或 owner/admin） |
+
+`--mine`：只列**我能决定的** pending 申请（我是 owner/admin 且不是申请人；若我是唯一审批人，自己的申请也算），后端会忽略 `--status`，所以 `--mine` 不能与 pending 以外的 `--status` 同用。
+`--product` 只是过滤条件，**不**读 `GOOD7OB_PRODUCT_ID`（否则会悄悄缩小"待我决定"的范围）。
+决定权限：仅组织 owner/admin；申请人不能批准/驳回自己的申请，唯一例外是组织里没有其他审批人，此时批准会标记 `selfApproved`（CLI 会提示）。
+业务错误码：`1000` 缺参（驳回没写意见）、`1001` 值非法、`1002` 不存在、`1009` 已被处理（含并发的第二个决定者，用 `approval get` 看结果）、`2000` 无权限、`999/401` 未登录。所有命令支持 `--json`，无二次确认。
+
+```bash
+good7ob approval list --mine
+good7ob approval list --target-type release --target-id 7 --status approved
+good7ob approval approve 31 --comment "LGTM"
+good7ob approval reject 31 --comment "范围不清，补充测试报告后重提"
+```
+
+---
+
+## trace — 追溯关系
+
+API 端点前缀：`/forge/trace-links`（需登录 + 产品所属组织成员）。关系有方向：`source —linkType→ target`。
+后端**不**校验来源/目标对象是否存在，由调用方保证。
+
+| 命令 | 说明 |
+|------|------|
+| `trace create --product <id> --source-type <T> --source-id <n> --target-type <T> --target-id <n> --link-type <l>` | 创建；同一产品下相同的 (source, target, linkType) 重复返回 `1006` |
+| `trace list --product <id>` | 查询（新的在前，分页）；`--source-type` + `--source-id`、`--target-type` + `--target-id`（各自必须成对）、`--link-type`、`-p/--page`、`--page-size`（≤200，默认 50） |
+| `trace delete <id>` | 软删除（之后可重新创建） |
+
+`--link-type`：derived_from|impacts|implements|verifies。类型代码 2–32 位字母/数字/下划线（如 IDEA、REQUIREMENT、TASK），不区分大小写，CLI 会转成大写再发送；来源与目标不能是同一个对象。
+`--product` 缺省读 `GOOD7OB_PRODUCT_ID`。所有命令支持 `--json`（`delete` 输出 `{"deleted":true,"id":N}`），无二次确认。
+业务错误码：`1000` 缺参、`1001` 值非法、`1002` 不存在、`1006` 已存在、`2000` 无权限、`999/401` 未登录。
+
+```bash
+good7ob trace create --product 12 --source-type IDEA --source-id 5 --target-type REQUIREMENT --target-id 9 --link-type derived_from
+good7ob trace list --product 12 --source-type IDEA --source-id 5
+good7ob trace list --product 12 --target-type TASK --target-id 101 --link-type implements
+good7ob trace delete 3
+```
 
 ---
 

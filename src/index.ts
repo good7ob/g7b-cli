@@ -18,6 +18,9 @@ import { registerLogCommands } from './commands/log';
 import { registerCaseCommands } from './commands/case';
 import { registerIdeaCommands } from './commands/idea';
 import { registerWorkspaceCommands } from './commands/workspace';
+import { registerReleaseCommands } from './commands/release';
+import { registerApprovalCommands } from './commands/approval';
+import { registerTraceCommands } from './commands/trace';
 
 const program = new Command();
 
@@ -39,6 +42,14 @@ registerLogCommands(program);
 registerCaseCommands(program);
 registerIdeaCommands(program);
 registerWorkspaceCommands(program);
+registerReleaseCommands(program);
+registerApprovalCommands(program);
+registerTraceCommands(program);
+
+// Called after the groups are registered so it only affects the root: without it the root
+// swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
+// print the CLI version and exit). `good7ob --version` / `-V` still work.
+program.enablePositionalOptions();
 
 // Parse command line arguments
 program.parse(process.argv);
