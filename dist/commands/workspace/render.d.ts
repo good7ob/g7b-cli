@@ -15,6 +15,8 @@ export interface QueueItem {
     productId?: number | null;
     orgId?: number | null;
     createdAt?: ApiDate;
+    /** B2: 0.. deterministic priority score (api-0089 §9); null / absent on older servers. */
+    priorityScore?: number | null;
 }
 export interface MyQueue {
     total?: number | null;

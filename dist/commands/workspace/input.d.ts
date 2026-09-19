@@ -6,6 +6,7 @@
 import { ErrorCodeMap } from '../../utils/cliHelpers';
 export declare const QUEUE_STATUSES: readonly ["active", "snoozed", "dismissed", "done", "all", "new", "in_progress", "waiting"];
 export declare const ACTION_TYPES: readonly ["PLAN_APPROVAL", "COMPLETION_APPROVAL", "INFO_REQUEST", "BLOCKED", "PAUSED", "SYSTEM_ALERT", "REQUIREMENT_TRIAGE", "APPROVAL", "RISK_ALERT"];
+export declare const QUEUE_SORTS: readonly ["newest", "score"];
 export type Decision = 'approve' | 'reject';
 export declare const MAX_QUEUE_LIMIT = 200;
 export declare const MAX_SNOOZE_DAYS = 30;
@@ -18,6 +19,7 @@ export declare function buildQueueParams(o: {
     status?: string;
     actionType?: string;
     product?: string;
+    sort?: string;
 }): Record<string, string | number>;
 /**
  * `--until` -> the UTC instant the backend expects (`yyyy-MM-ddTHH:mm:ssZ`). Accepts an ISO

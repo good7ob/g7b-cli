@@ -75,9 +75,9 @@ good7ob
 │   ├── workflow             # 工作流模板与阶段管理
 │   ├── report               # AI 进度报告
 │   ├── tag                  # 标签管理
-│   └── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建
+│   └── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建；P50/P80 预测、成本/预算、What-if、诊断、AI 解读、管理报告
 ├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复、AI 生成方案与估算修正、变更集、效果复盘
-├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略）、总览、我的任务/产品/组织
+├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略/按优先分排序）、总览、我的任务/产品/组织、我的 AI 团队、AI 日报、下一步推荐
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 └── trace                    # 追溯关系：对象之间的有向关联
@@ -737,7 +737,7 @@ API 端点前缀：`/progress/tags`
 
 ## pm health — 产品健康度
 
-API 端点前缀：`/progress/products/{productId}`（需登录 + 产品所属组织成员）。对应后端 C1（`api-0090`）。
+API 端点前缀：`/progress/products/{productId}`（需登录 + 产品所属组织成员）。对应后端 C1 + C2（`api-0090`）；C2（预测、成本、What-if、诊断、管理报告）见本节末尾「进度智能」。
 
 | 命令 | 说明 |
 |------|------|
@@ -775,18 +775,44 @@ good7ob pm health burnup 10 --from 2026-09-01 --to 2026-09-19
 good7ob pm health snapshots rebuild 10 --days 14
 ```
 
-------|------|
-| `pm health <productId>` | 产品健康度 KPI：进度、范围基线与增长、加权进度、阻塞占比、AI 贡献 |
-| `pm health modules <productId>` | 各模块进度（按延期天数降序，含加权进度） |
-| `pm health baseline <productId> [--note <text>]` | 把**当前**范围快照为新基线（备注 ≤500 字符） |
+### 进度智能（C2）：预测 / 成本 / What-if / 诊断 / 解读 / 管理报告
 
-所有命令支持 `--json`。后端算不出来的字段（无基线、无计划日期等）显示为 `—`，绝不显示为 0。
-业务错误码：`40480` 产品不存在、`40380` 非组织成员、`40080` 备注过长。
+对应后端 `api-0090` §8–§13（`ProductIntelligenceController`）。读 = 产品所属组织成员；**预算与成本条目的写入 = 组织 owner/admin**（否则 `2000`）。所有命令支持 `--json`（可放在子命令前或后），无任何确认提示，空值 / 算不出的值显示 `—`，绝不显示为 0。
+
+| 命令 | 说明 |
+|------|------|
+| `pm health forecast <productId> [--release <id>]` | P50/P80 完成预测（按历史周速度蒙特卡洛，同一份数据结果固定）：预计完成日期、还需周数、相对计划的偏差（晚 / 早 N 天）、周完成量走势。**历史不足（`INSUFFICIENT_DATA`）时显示 `数据不足`，绝不给日期**；某分位 520 周内无法完成显示 `不收敛` |
+| `pm health cost <productId> [--release <id>]` | 成本进度：预算、实际（按类别 + 推导人力，推导的会标明「非手工录入」）、剩余预算、开发 / 时间 / 成本三条进度线、成本偏差（正 = 成本消耗快于交付）、完工估算 EAC。`NO_BUDGET`（无预算）仍列出实际成本；`INSUFFICIENT_DATA`（含同范围多币种）不求和。`aiTokensConsumed` 是 token **数量**不是金额，`ai_token` 成本只能手工录入 |
+| `pm health budget get <productId> [--release <id>]` | 读预算（未设置会明确提示） |
+| `pm health budget set <productId> --amount <n> --currency <C> [--labor-rate <n>] [--note <text>] [--release <id>]` | 设置 / 替换预算（owner/admin，幂等）。`--amount` > 0、最多 2 位小数、≤ 9999999999.99；`--currency` 3 位字母（自动大写；**一个产品只能用一种币种**，首次写入决定）；`--labor-rate` (0, 100000]，用于把任务实际工时推导成人力成本；`--note` ≤500 字符；`--release` 设 Release 级预算 |
+| `pm health budget clear <productId> [--release <id>]` | 删除预算（owner/admin；之后可重设） |
+| `pm health cost-entry list <productId> [--category c] [--release <id>] [--from d] [--to d] [-p n] [--page-size n]` | 成本条目，发生日新的在前；`--category` `labor｜cloud｜ai_token｜other`；`--from/--to`（`yyyy-MM-dd`，闭区间，`--from ≤ --to`）；`--page-size` ≤100（默认 20）。`source=auto` 的条目只读 |
+| `pm health cost-entry add <productId> --category c --amount n --currency C --date yyyy-MM-dd [--release <id>] [--note <text>]` | 记录一笔实际成本（owner/admin）。`--date` 为 2000-01-01 ~ 明天（UTC）；币种须与该产品已有币种一致（否则 `1001`） |
+| `pm health cost-entry update <id> --category … --amount … --currency … --date … [--release] [--note]` | **整体替换**一条手工条目（四个必填项都要给；省略 `--release` / `--note` 即清空它们）。`auto` 条目不可改（`1007`） |
+| `pm health cost-entry delete <id>` | 删除一条手工条目（`auto` 条目不可删，`1007`） |
+| `pm health what-if <productId> [--add-scope n] [--remove-scope n] [--velocity-multiplier x] [--extra-capacity n] [--deadline d] [--release <id>]` | What-if 模拟（**纯计算，不保存任何数据**）：基线 vs 场景的 P50/P80 日期、变化天数（提前 / 延后）、目标日期是否赶得上、成本影响。`--add-scope` / `--remove-scope` 0–1e9（移出只能移出未完成部分）；`--velocity-multiplier` 0.1–10；`--extra-capacity` 0–1e6（每周额外产能，「加人 / 加 AI」的抽象量）；`--deadline` 2000-01-01 ~ 2100-01-01。不带任何参数 = 场景等于基线（后端会给出提示） |
+| `pm health diagnosis <productId> [--release <id>]` | 确定性诊断（**非 AI**）：总体严重度、发现清单（级别 / 代码 / 说明）、事实（加权进度、时间进度、加权延期、速度趋势、阻塞占比、范围增长、各模块延期贡献） |
+| `pm health explain <productId> [--release <id>] [--question <text>]` | AI 解读（**AI 生成，需人工确认**，输出里会明确标注；消耗 AI token）。`--question` ≤500 字符（缺省 = 「为什么进度是现在这样？下一步该做什么？」）。AI 不可用（无余额 / 配额 / 密钥、调用失败）时后端仍返回 HTTP 200，CLI 显示原因并照常给出确定性发现；10 分钟内相同事实 + 问题命中缓存（`缓存命中`，不再扣费）。客户端超时 180 秒，超时会提示服务端可能仍在处理 |
+| `pm health report generate <productId> --period week｜month｜custom [--from d] [--to d] [--release <id>] [--ai]` | 生成并保存一份管理报告（任一成员）。`week` / `month`：不给 `--from` = 上一个**完整**周（周一至周日）/ 月；给 `--from` = 其所在的周 / 月（不接受 `--to`）；`custom`：`--from` 与 `--to` 必填，`--from ≤ --to`，含首尾 ≤92 天，`--to` 不晚于今天（UTC）。`--ai` 在顶部加一节 AI 摘要（AI 生成，需人工确认；失败时报告照常生成并显示 `⚠ AI 摘要未生成` 及原因）。输出报告元信息 + Markdown 全文 |
+| `pm health report list <productId> [--release <id>] [--period week｜month｜custom] [-p n] [--page-size n]` | 已保存的报告（新的在前，不含正文）；`--page-size` ≤100（默认 20） |
+| `pm health report get <id> [--out file.md]` | 报告详情：元信息 + Markdown 全文；`--out` 把 Markdown 写入文件（覆盖已存在的文件，目录须已存在；写文件时终端只显示元信息和路径）。`--json` 另含结构化分节（`structured`） |
+
+业务错误码（HTTP 200 + 非 200 `code`，服务端消息会一并显示）：`1000` 缺必填、`1001` 参数不合法（数值 / 日期越界、混币种、Release 不属于该产品、报告期不合法、问题超长）、`1002` 产品 / Release / 预算 / 条目 / 报告不存在、`1007` 自动入账（`auto`）条目只读、`2000` 无权限（非成员；写预算 / 成本需 owner/admin）、`999` 未登录。
+所有必填项、枚举、长度、范围、日期在调用 API 前于 CLI 端校验（金额多于 2 位小数会被拒绝而不是被后端悄悄四舍五入）；`report generate` 的日期 / 区间规则与后端 `ReportPeriod` 一致。
 
 ```bash
-good7ob pm health 10
-good7ob pm health modules 10 --json
-good7ob pm health baseline 10 --note "Q4 范围冻结"
+good7ob pm health forecast 10
+good7ob pm health cost 10 --release 5
+good7ob pm health budget set 10 --amount 10000000 --currency CNY --labor-rate 200 --note "2026 H2"
+good7ob pm health cost-entry add 10 --category cloud --amount 1200.50 --currency CNY --date 2026-09-01 --note EKS
+good7ob pm health cost-entry list 10 --category cloud --from 2026-09-01 --to 2026-09-30
+good7ob pm health cost-entry update 9 --category cloud --amount 1300 --currency CNY --date 2026-09-01
+good7ob pm health what-if 10 --add-scope 100 --velocity-multiplier 1.5 --deadline 2026-12-01
+good7ob pm health diagnosis 10
+good7ob pm health explain 10 --question "为什么延期？"
+good7ob pm health report generate 10 --period week --ai
+good7ob pm health report list 10 --period custom
+good7ob pm health report get 7 --out weekly.md
 ```
 
 ---
@@ -929,7 +955,7 @@ API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在�
 
 | 命令 | 说明 |
 |------|------|
-| `workspace queue` | 队列列表，新的在前；`-l/--limit` 1–200（默认 50）、`--status`（active｜snoozed｜dismissed｜done｜all｜new｜in_progress｜waiting，默认 active）、`--action-type`、`--product <id>` |
+| `workspace queue` | 队列列表，默认新的在前；`-l/--limit` 1–200（默认 50）、`--status`（active｜snoozed｜dismissed｜done｜all｜new｜in_progress｜waiting，默认 active）、`--action-type`、`--product <id>`、`--sort newest｜score`（`score` = 按优先分从高到低，同分截止早的在前，无截止最后；先排序再取 `--limit`）。后端返回 `priorityScore` 时表格多一列「优先分」（0 显示 0，没有显示 `—`），旧后端不显示这一列 |
 | `workspace queue counts` | 计数：活跃总数与各动作类型，以及已稍后 / 已忽略 / 已完成 |
 | `workspace queue dismiss <id>` | 忽略（来源仍在时保持忽略；幂等；已完成的项不行） |
 | `workspace queue done <id>` | 标记已处理（幂等） |
@@ -946,7 +972,7 @@ API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在�
 
 | 命令 | 说明 |
 |------|------|
-| `workspace overview` | 一屏总览：队列计数、任务分组计数、开放任务最多的前 5 个产品、最近动态；某一块加载失败时该块显示“（加载失败）”并在末尾列出 |
+| `workspace overview` | 一屏总览：队列计数、任务分组计数、开放任务最多的前 5 个产品、我的 AI 团队（各状态人数 + 最需要关注的员工）、最近动态；某一块加载失败时该块显示“（加载失败）”并在末尾列出 |
 | `workspace tasks` | 不带 `--group`：开放任务摘要（今日 / 进行中 / 待审批 / 已逾期）+ 最紧急的几个（`-l/--limit` 1–50，默认 5） |
 | `workspace tasks --group <g>` | 某分组一页：`today`｜`todo`｜`in_progress`｜`waiting`｜`blocked`｜`done`；`-p/--page`（默认 1）`--page-size`（1–100，默认 20）；各分组计数会重叠，不可相加 |
 | `workspace products` | 我的产品卡片：我的开放任务、产品内阻塞数 / AI 执行中数、进度与风险；`--scope all｜owned｜participating｜following｜archived`（默认 all，最多 50 张；进度/风险只评估前 20 张，其余显示 —） |
@@ -970,6 +996,31 @@ good7ob workspace tasks --group waiting -p 2 --page-size 50
 good7ob workspace products --scope following
 good7ob workspace product follow 12
 good7ob workspace orgs --json
+```
+
+### 我的 AI 团队 / AI 日报 / 下一步推荐（B2）
+
+对应后端 `api-0089` §7–§9（`WorkspaceAiController`），都在 `/workspace` 下；只看自己所在组织（active 成员）的数据。
+
+| 命令 | 说明 |
+|------|------|
+| `workspace ai-team [--status s] [--org <id>]` | 我的 AI 员工：状态（工作中 / 等待中 / 异常 / 空闲，异常会标注原因：有阻塞任务 / 最近工作记录失败）、当前任务（≤5，表里显示第一个 + `+N`）、排队任务数、累计统计（完成数、成功率、工时、tokens、说明充分度、被驳回数、阻塞次数）。`--status` `working｜waiting｜error｜idle｜all`（默认 all，不区分大小写）；`--org` 必须是你所在的组织（否则 `2000`）。各状态人数不受 `--status` 影响 |
+| `workspace ai-team log <employeeId> [--from t] [--to t] [-p n] [--page-size n]` | 一个 AI 员工的时间线（新的在前）：工作记录 / 状态变更 / 评论 / 评审。`--from` / `--to` 为 `yyyy-MM-dd`（`--to` 取当天结束）或 `yyyy-MM-ddTHH:mm[:ss]`（服务器本地时间，无时区）；默认最近 7 天；两端都给时范围 ≤31 天且 `--from ≤ --to`；`--page-size` ≤100（默认 20） |
+| `workspace daily-report [--date d]` | 读已保存的 AI 日报（默认今天；`--date` 为 `yyyy-MM-dd`，不能晚于今天）。**还没有 → `1002`，CLI 提示用 `daily-report generate` 生成**。输出来源（`template` 确定性 / `ai`）、生成时间、Markdown 全文；`--json` 另含结构化分节（`sections`） |
+| `workspace daily-report generate [--date d] [--ai]` | 生成或**重新生成**该日期的日报（同一天只有一份，会替换已存的）。`--ai` 加一段 AI 叙述总结（AI 生成，需人工确认；配额不足 / 调用失败时降级为确定性日报并显示 `⚠ 未能使用 AI` 及原因）。带 `--ai` 时客户端超时 180 秒 |
+| `workspace next-actions [-l n]` | 「现在先做哪几件事」：按得分排序（确定性规则、无 AI），每项给出得分、类型（队列项 / 任务）、队列项 / 任务 id、动作、优先级、到期时间和逐条理由（`--json` 另含机器可读的 `factors`）。`-l/--limit` 1–20（默认 5）。队列项可直接用 `workspace queue approve｜reject｜dismiss｜snooze <队列项id>` 处理 |
+
+统计口径：累计值，只含执行者登记为 `emp:<员工id>` 的任务（默认 Agent、外部 Agent 名无法归属，不计入）；成功率 = 完成 /（完成 + 被驳回 + 阻塞），分母为 0 时显示 `—`；「说明充分度」是交给员工的任务说明是否充分，**不是员工质量评分**；`cost` 后端恒为 null（没有 token 单价来源），CLI 不显示成本列。
+业务错误码：`400/999/401` 未登录、`1001` 参数不合法（status 未知、work-log 时间格式错 / 范围超 31 天、日报日期错或晚于今天）、`1002` 不存在（AI 员工不存在或不在你的组织里 / 该日期还没有日报）、`2000` `--org` 不是你所在的组织。
+`--date` 的「不晚于今天」CLI 只拒绝比 UTC 明天还晚的日期（服务端按自己的时区判断「今天」，边界由服务端裁决）；`--from/--to` 等参数在调用 API 前于 CLI 端校验，错误不发请求。
+
+```bash
+good7ob workspace ai-team --status error
+good7ob workspace ai-team log 7 --from 2026-09-12 --to 2026-09-19 -p 2
+good7ob workspace daily-report --date 2026-09-18
+good7ob workspace daily-report generate --ai
+good7ob workspace next-actions --limit 10
+good7ob workspace queue --sort score --limit 20
 ```
 
 ---

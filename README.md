@@ -117,9 +117,16 @@ good7ob pm health config set 10 --basis STORY_POINT --status-completion in_progr
 good7ob pm health scope-change add 10 --delta -12.5 --reason "drop export"
 good7ob pm health burnup 10 --from 2026-09-01           # table + text chart
 good7ob pm health snapshots rebuild 10 --days 14
+good7ob pm health forecast 10                          # P50/P80 completion dates ("数据不足" when history is too short)
+good7ob pm health cost 10                              # budget vs actual vs progress, EAC
+good7ob pm health budget set 10 --amount 10000000 --currency CNY --labor-rate 200
+good7ob pm health cost-entry add 10 --category cloud --amount 1200.50 --currency CNY --date 2026-09-01
+good7ob pm health what-if 10 --add-scope 100 --deadline 2026-12-01   # simulation only, nothing is saved
+good7ob pm health diagnosis 10                         # deterministic findings; `explain` adds AI commentary
+good7ob pm health report generate 10 --period week     # then: report list 10 / report get 7 --out weekly.md
 ```
 
-`pm health` also covers the workload basis config, the scope-change log, burnup and snapshot rebuild. See `FEATURES.md`.
+`pm health` also covers the workload basis config, the scope-change log, burnup and snapshot rebuild, plus progress intelligence: P50/P80 forecast, budget and cost entries, cost progress, what-if, diagnosis, AI explanation (AI-generated, needs human review) and management reports. See `FEATURES.md`.
 
 ### `idea`
 
@@ -158,9 +165,14 @@ good7ob workspace tasks --group waiting -p 1 --page-size 20
 good7ob workspace products --scope following
 good7ob workspace product follow 12                    # or unfollow
 good7ob workspace orgs
+good7ob workspace queue --sort score                  # highest priority score first (adds a score column)
+good7ob workspace ai-team --status error              # my AI employees: state, tasks, queue, stats
+good7ob workspace ai-team log 7 --from 2026-09-12 --to 2026-09-19
+good7ob workspace daily-report generate --ai          # or: daily-report [--date d] to read the stored one
+good7ob workspace next-actions --limit 10             # what to do first, with scores and reasons
 ```
 
-What is waiting on you (approvals, info requests, blocked/paused tasks, alerts, requirements to triage, risks) with snooze / dismiss / done / reopen and in-place approve / reject, plus overview and your tasks, products and organizations. See `FEATURES.md`.
+What is waiting on you (approvals, info requests, blocked/paused tasks, alerts, requirements to triage, risks) with snooze / dismiss / done / reopen and in-place approve / reject, plus overview and your tasks, products and organizations, your AI team (state, work log), the AI daily report and ranked next actions. See `FEATURES.md`.
 
 ### `release`
 

@@ -16,6 +16,8 @@ export interface QueueItem {
   productId?: number | null;
   orgId?: number | null;
   createdAt?: ApiDate;
+  /** B2: 0.. deterministic priority score (api-0089 §9); null / absent on older servers. */
+  priorityScore?: number | null;
 }
 
 export interface MyQueue {
@@ -73,14 +75,21 @@ export function renderQueue(queue: MyQueue, status?: string): string {
 
   if (!items.length) return [...lines, '', '队列为空。'].join('\n');
 
-  const rows = [['ID', '状态', '类型', '来源ID', '动作', '优先级', '项目', '标题', '到期/稍后', '创建时间']].concat(
-    items.map((i) => [
+  // The priority score column only appears when the backend sent one (B2 and later).
+  const scored = items.some((i) => i.priorityScore != null);
+  const cells = (i: QueueItem): string[] => {
+    const row = [
       dash(i.id), dash(i.status), dash(i.sourceType), dash(i.sourceId),
       ACTION_LABELS[i.actionType ?? ''] ?? dash(i.actionType), dash(i.priority),
       dash(i.projectName ?? i.projectId), dash(i.title), whenCell(i), fmtDateTime(i.createdAt),
-    ])
-  );
-  lines.push('', renderTable(rows, { 6: { truncate: 20 }, 7: { truncate: 40 } }));
+    ];
+    if (scored) row.splice(6, 0, dash(i.priorityScore));
+    return row;
+  };
+  const header = ['ID', '状态', '类型', '来源ID', '动作', '优先级', '项目', '标题', '到期/稍后', '创建时间'];
+  if (scored) header.splice(6, 0, '优先分');
+  const shift = scored ? 1 : 0;
+  lines.push('', renderTable([header].concat(items.map(cells)), { [6 + shift]: { truncate: 20 }, [7 + shift]: { truncate: 40 } }));
   if (typeof queue.total === 'number' && queue.total > items.length) {
     lines.push(`显示 ${items.length} / ${queue.total} 条（用 --limit 调大，最大 200）`);
   }

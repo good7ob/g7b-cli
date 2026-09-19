@@ -17,6 +17,7 @@ export const ACTION_TYPES = [
   'PLAN_APPROVAL', 'COMPLETION_APPROVAL', 'INFO_REQUEST', 'BLOCKED', 'PAUSED', 'SYSTEM_ALERT',
   'REQUIREMENT_TRIAGE', 'APPROVAL', 'RISK_ALERT',
 ] as const;
+export const QUEUE_SORTS = ['newest', 'score'] as const;
 export type Decision = 'approve' | 'reject';
 
 export const MAX_QUEUE_LIMIT = 200;
@@ -50,7 +51,7 @@ function enumFlag<T extends string>(raw: string, allowed: readonly T[], label: s
 }
 
 export function buildQueueParams(o: {
-  limit?: string; status?: string; actionType?: string; product?: string;
+  limit?: string; status?: string; actionType?: string; product?: string; sort?: string;
 }): Record<string, string | number> {
   const params: Record<string, string | number> = {
     limit: parseIntInRange(o.limit ?? '50', '--limit', 1, MAX_QUEUE_LIMIT),
@@ -58,6 +59,7 @@ export function buildQueueParams(o: {
   if (o.status !== undefined) params.status = enumFlag(o.status, QUEUE_STATUSES, '--status', false);
   if (o.actionType !== undefined) params.actionType = enumFlag(o.actionType, ACTION_TYPES, '--action-type', true);
   if (o.product !== undefined) params.productId = parseId(o.product, '--product');
+  if (o.sort !== undefined) params.sort = enumFlag(o.sort, QUEUE_SORTS, '--sort', false);
   return params;
 }
 

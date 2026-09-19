@@ -1,5 +1,6 @@
 import { ApiDate } from '../../utils/cliHelpers';
 import { QueueCounts } from './render';
+import { AiTeamSummary } from './renderAiTeam';
 import { MyProduct, TaskGroupCounts } from './renderViews';
 export interface Activity {
     type?: string | null;
@@ -15,6 +16,8 @@ export interface Overview {
     tasks?: TaskGroupCounts | null;
     products?: MyProduct[] | null;
     recentActivity?: Activity[] | null;
+    /** B2; absent on older servers (null + named in `degraded` when it failed to load). */
+    aiTeam?: AiTeamSummary | null;
     degraded?: string[] | null;
 }
 export declare function renderOverview(o: Overview): string;
