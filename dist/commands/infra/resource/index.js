@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerResourceCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const cliHelpers_1 = require("../../../utils/cliHelpers");
 const extractRecords_1 = require("../../../utils/extractRecords");
 function registerResourceCommands(infraCommand) {
     const resourceCommand = infraCommand
@@ -69,10 +70,11 @@ function registerResourceCommands(infraCommand) {
                 console.log(`云资源列表 (共${result.total}个):`);
                 console.log('─'.repeat(100));
                 result.records?.forEach((res) => {
-                    console.log(`${res.id.toString().padEnd(5)} ${res.resourceName.padEnd(25)} ${res.resourceType.padEnd(15)} ${res.cloudProvider.padEnd(10)} ${res.environment.padEnd(12)} ${res.status}`);
+                    console.log(`${(0, cliHelpers_1.dash)(res.id).padEnd(5)} ${(0, cliHelpers_1.dash)(res.resourceName).padEnd(25)} ${(0, cliHelpers_1.dash)(res.resourceType).padEnd(15)} ${(0, cliHelpers_1.dash)(res.cloudProvider).padEnd(10)} ${(0, cliHelpers_1.dash)(res.environment).padEnd(12)} ${(0, cliHelpers_1.dash)(res.status)}`);
                 });
             }
-            if (result.total > params.pageSize) {
+            // 分页提示只在人读的输出里打印：追加到 --json / --csv 后面会让输出无法被解析。
+            if (!options.json && !options.csv && result.total > params.pageSize) {
                 console.log(`\n显示第 ${params.pageNo} 页，共 ${Math.ceil(result.total / params.pageSize)} 页`);
             }
         }

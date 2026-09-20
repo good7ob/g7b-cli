@@ -15,6 +15,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerBillCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const cliHelpers_1 = require("../../../utils/cliHelpers");
 function registerBillCommands(infraCommand) {
     const billCommand = infraCommand
         .command('bill')
@@ -135,16 +136,17 @@ function registerBillCommands(infraCommand) {
                     '创建时间');
                 console.log('─'.repeat(100));
                 result.records?.forEach((bill) => {
-                    console.log(bill.id.toString().padEnd(10) +
-                        (bill.month || '-').padEnd(12) +
-                        bill.cloudProvider.padEnd(12) +
-                        bill.status.padEnd(10) +
+                    console.log((0, cliHelpers_1.dash)(bill.id).padEnd(10) +
+                        (0, cliHelpers_1.dash)(bill.month).padEnd(12) +
+                        (0, cliHelpers_1.dash)(bill.cloudProvider).padEnd(12) +
+                        (0, cliHelpers_1.dash)(bill.status).padEnd(10) +
                         (bill.recordCount || 0).toString().padEnd(8) +
                         `$${(bill.totalCost || 0).toFixed(2)}`.padEnd(15) +
-                        (bill.createdAt || '-'));
+                        (0, cliHelpers_1.dash)(bill.createdAt));
                 });
             }
-            if (result.total > params.pageSize) {
+            // 分页提示只在人读的输出里打印（同 infra resource list）。
+            if (!options.json && !options.csv && result.total > params.pageSize) {
                 console.log(`\n显示第 ${params.pageNo} 页，共 ${Math.ceil(result.total / params.pageSize)} 页`);
             }
         }
@@ -250,11 +252,11 @@ function registerBillCommands(infraCommand) {
                     console.log('ID'.padEnd(10) + '云提供商'.padEnd(12) + '频率'.padEnd(10) + '状态'.padEnd(10) + '下次运行'.padEnd(20) + '创建时间');
                     console.log('─'.repeat(100));
                     schedules.forEach((schedule) => {
-                        console.log((schedule.id || '-').toString().padEnd(10) +
-                            schedule.cloudProvider.padEnd(12) +
-                            schedule.frequency.padEnd(10) +
+                        console.log((0, cliHelpers_1.dash)(schedule.id).padEnd(10) +
+                            (0, cliHelpers_1.dash)(schedule.cloudProvider).padEnd(12) +
+                            (0, cliHelpers_1.dash)(schedule.frequency).padEnd(10) +
                             (schedule.enabled ? '已启用' : '已禁用').padEnd(10) +
-                            (schedule.nextRun || '-').padEnd(20) +
+                            (0, cliHelpers_1.dash)(schedule.nextRun).padEnd(20) +
                             (schedule.createdAt || '-'));
                     });
                 }
