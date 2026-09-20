@@ -29,11 +29,24 @@ export function fmtDate(value: unknown): string {
   return value.length > 3 ? `${date} ${two(h)}:${two(mi)}:${two(s)}` : date;
 }
 
+/** Same as fmtDate, but for `yyyy-MM-dd'T'HH:mm:ss` strings shows `yyyy-MM-dd HH:mm:ss`. */
+export function fmtDateTime(value: unknown): string {
+  return fmtDate(value).replace('T', ' ');
+}
+
+/** Print JSON when asked, otherwise the rendered text (control characters stripped, see stripControl). */
+export function emit(json: boolean | undefined, data: unknown, text: () => string): void {
+  console.log(json ? JSON.stringify(data, null, 2) : stripControl(text()));
+}
+
 /** Null -> "—"; otherwise the number rounded to `digits` with trailing zeros dropped. */
 export function fmtNum(value: number | null | undefined, suffix = '', digits = 2): string {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return DASH;
   return `${Number(Number(value).toFixed(digits))}${suffix}`;
 }
+
+/** Commander collector for repeatable options: `--x a --x b` -> ['a', 'b']. */
+export const collect = (value: string, prev: string[] = []): string[] => [...prev, value];
 
 // ── Input validation (throws InputError with a message meant for the terminal) ──
 
@@ -41,10 +54,51 @@ export function fmtNum(value: number | null | undefined, suffix = '', digits = 2
 export class InputError extends Error {}
 
 export function parseId(raw: string | undefined, label: string): number {
-  if (raw === undefined || !/^[1-9][0-9]*$/.test(raw.trim())) {
+  // Beyond 2^53 a JS number silently rounds to a different id, so refuse it outright.
+  if (raw === undefined || !/^[1-9][0-9]*$/.test(raw.trim()) || !Number.isSafeInteger(Number(raw.trim()))) {
     throw new InputError(`${label} 必须是正整数，收到: ${raw === undefined ? '(空)' : raw}`);
   }
   return parseInt(raw.trim(), 10);
+}
+
+/** `1,2,3` -> [1,2,3]: positive integers, de-duplicated (as the backend does), 1..max entries. */
+export function parseIdList(raw: string | undefined, label: string, max: number): number[] {
+  if (raw === undefined || !raw.trim()) {
+    throw new InputError(`${label} 不能为空（逗号分隔的正整数，如 1,2,3）`);
+  }
+  const ids = Array.from(new Set(raw.split(',').map((part) => parseId(part, `${label} 的每一项`))));
+  if (ids.length > max) {
+    throw new InputError(`${label} 最多 ${max} 个，当前 ${ids.length} 个`);
+  }
+  return ids;
+}
+
+/** `yyyy-MM-dd` and a real calendar day (rejects 2026-02-30). */
+export function parseDate(raw: string, label: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const real = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (!m || real.getUTCFullYear() !== +m[1] || real.getUTCMonth() !== +m[2] - 1 || real.getUTCDate() !== +m[3]) {
+    throw new InputError(`${label} 必须是 yyyy-MM-dd 格式的有效日期，收到: ${raw}`);
+  }
+  return raw;
+}
+
+/** Product id from `--product`, falling back to GOOD7OB_PRODUCT_ID. */
+export function resolveProductId(raw?: string): number {
+  const value = raw ?? process.env.GOOD7OB_PRODUCT_ID;
+  if (value === undefined) {
+    throw new InputError('缺少产品 ID。用 --product <id> 指定，或设置环境变量 GOOD7OB_PRODUCT_ID。');
+  }
+  return parseId(value, '--product');
+}
+
+/** Object type code as the backend stores it: 2-32 chars of A-Z/0-9/_, case-insensitive input. */
+export function normalizeTypeCode(raw: string, label: string): string {
+  const code = raw.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9_]{1,31}$/.test(code)) {
+    throw new InputError(`${label} 必须是 2~32 位的字母/数字/下划线代码（如 RELEASE、IDEA），收到: ${raw}`);
+  }
+  return code;
 }
 
 export function parseIntInRange(raw: string, label: string, min: number, max: number): number {
@@ -108,6 +162,41 @@ export function fail(prefix: string, error: unknown, codeMap: ErrorCodeMap = {})
   process.exit(1);
 }
 
+/** Run an action; any failure (bad input or API) ends as a readable one-line error + exit 1. */
+export async function guarded(prefix: string, codes: ErrorCodeMap, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    fail(prefix, error, codes);
+  }
+}
+
+/** Client timeout for calls that may run an AI model (the default 30 s is too short). */
+export const AI_REQUEST_CONFIG = { timeout: 180_000 } as const;
+
+/**
+ * Adds `hint` to a client timeout / gateway failure: the server may still be working, so a blind retry can
+ * duplicate. Business errors (they carry a numeric `code`) pass through untouched so their code mapping survives.
+ */
+export function withTimeoutHint(error: unknown, hint: string): unknown {
+  if (typeof (error as { code?: unknown } | null)?.code === 'number') return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout|status code 50[234]|ECONNRESET|socket hang up/i.test(message) ? new Error(`${message}（${hint}）`) : error;
+}
+
+// ANSI CSI / OSC escape sequences, then every other C0 / C1 control character except \t and \n.
+const ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b./g;
+const CONTROLS = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+
+/**
+ * Report titles / bodies, AI text and names inside them carry unescaped user text (api-0090 §13: treat as
+ * untrusted). A terminal is not an HTML page, but the equivalent attack is an escape sequence in a task
+ * name that rewrites the screen, so strip control characters before printing. Never applied to --json / --out.
+ */
+export function stripControl(text: string): string {
+  return text.replace(ESCAPES, '').replace(CONTROLS, '');
+}
+
 // ── Tables (the `table` package handles CJK width, unlike String#padEnd) ──
 
 export function renderTable(rows: string[][], columnConfig: Record<number, ColumnUserConfig> = {}): string {
@@ -115,7 +204,7 @@ export function renderTable(rows: string[][], columnConfig: Record<number, Colum
   Object.entries(columnConfig).forEach(([i, cfg]) => {
     columns[Number(i)] = { paddingLeft: 0, paddingRight: 2, ...cfg };
   });
-  return table(rows, {
+  return table(rows.map((row) => row.map(stripControl)), {
     border: getBorderCharacters('void'),
     columnDefault: { paddingLeft: 0, paddingRight: 2 },
     columns,

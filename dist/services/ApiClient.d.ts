@@ -2,6 +2,7 @@
  * API Client Service
  * Handles HTTP communication with the good7ob backend API
  */
+import { AxiosRequestConfig } from 'axios';
 export declare class ApiClient {
     private instance;
     private baseURL;
@@ -14,7 +15,7 @@ export declare class ApiClient {
     /**
      * Make POST request
      */
-    post<T = any>(url: string, data?: any): Promise<any>;
+    post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<any>;
     /**
      * Make PUT request
      */

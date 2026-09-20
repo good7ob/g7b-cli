@@ -78,9 +78,12 @@ export class ApiClient {
   /**
    * Make POST request
    */
-  async post<T = any>(url: string, data?: any): Promise<any> {
+  async post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<any> {
     try {
-      const response = await this.instance.post<ApiResponse<T>>(url, data);
+      // `config` (e.g. a longer timeout for AI calls) is forwarded only when given
+      const response = config
+        ? await this.instance.post<ApiResponse<T>>(url, data, config)
+        : await this.instance.post<ApiResponse<T>>(url, data);
       return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);

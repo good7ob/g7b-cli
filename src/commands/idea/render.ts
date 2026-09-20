@@ -1,19 +1,8 @@
 import { ApiDate, DASH, dash, fmtDate, renderTable } from '../../utils/cliHelpers';
 import { extractRecords, extractTotal } from '../../utils/extractRecords';
+import { IdeaDecision, IdeaSolution, renderSolutions } from './renderSolutions';
 
-export interface IdeaSolution {
-  id: number;
-  ideaId?: number;
-  name?: string | null;
-  description?: string | null;
-  costNote?: string | null;
-  cycleNote?: string | null;
-  expectedEffectNote?: string | null;
-  isSelected?: boolean | null;
-  decisionReason?: string | null;
-  decidedBy?: number | null;
-  decidedAt?: ApiDate;
-}
+export type { IdeaDecision, IdeaSolution };
 
 export interface Idea {
   id: number;
@@ -25,6 +14,7 @@ export interface Idea {
   priority?: string | null;
   expectedValue?: string | null;
   requirementId?: number | null;
+  releaseId?: number | null;
   rejectReason?: string | null;
   createdBy?: number | null;
   createdAt?: ApiDate;
@@ -34,6 +24,8 @@ export interface Idea {
 export interface IdeaDetail {
   idea: Idea;
   solutions?: IdeaSolution[] | null;
+  decision?: IdeaDecision | null;
+  tags?: string[] | null;
 }
 
 export function renderIdeaList(result: unknown, pageNum: number, pageSize: number): string {
@@ -51,29 +43,13 @@ export function renderIdeaList(result: unknown, pageNum: number, pageSize: numbe
   return `${renderTable(rows, { 5: { truncate: 40 } })}\n共 ${total} 条，第 ${pageNum}/${pages} 页`;
 }
 
-function renderSolutions(solutions: IdeaSolution[]): string[] {
-  if (!solutions.length) return ['方案: (暂无方案，用 idea solution add 添加)'];
-  const wrap = { width: 22, wrapWord: false };
-  const rows = [['ID', '方案', '成本', '周期', '预期效果', '选中']].concat(
-    solutions.map((s) => [
-      String(s.id), dash(s.name), dash(s.costNote), dash(s.cycleNote), dash(s.expectedEffectNote),
-      s.isSelected ? '✓' : '',
-    ])
-  );
-  const lines = [`方案 (${solutions.length})`, renderTable(rows, { 1: wrap, 2: wrap, 3: wrap, 4: wrap })];
-  solutions.filter((s) => s.isSelected).forEach((s) => {
-    lines.push(`决策: 选定 #${s.id} ${dash(s.name)} — ${dash(s.decisionReason)}（by ${dash(s.decidedBy)} @ ${fmtDate(s.decidedAt)}）`);
-  });
-  return lines;
-}
-
 export function renderIdeaDetail(detail: IdeaDetail): string {
   const i = detail.idea;
   const lines = [
     `Idea #${i.id}  ${dash(i.title)}`,
     '─'.repeat(60),
     `状态:     ${dash(i.status)}    优先级: ${dash(i.priority)}    来源: ${dash(i.source)}`,
-    `产品:     ${dash(i.productId)}`,
+    `产品:     ${dash(i.productId)}    发布: ${i.releaseId ? `#${i.releaseId}` : DASH}    标签: ${detail.tags?.length ? detail.tags.join(', ') : DASH}`,
     `预期价值: ${dash(i.expectedValue)}`,
   ];
   if (i.status === 'rejected' || i.rejectReason) lines.push(`驳回原因: ${dash(i.rejectReason)}`);
@@ -84,6 +60,6 @@ export function renderIdeaDetail(detail: IdeaDetail): string {
   }
   lines.push(`创建:     ${fmtDate(i.createdAt)} by ${dash(i.createdBy)}    更新: ${fmtDate(i.updatedAt)}`);
   if (i.description) lines.push('', '描述:', i.description);
-  lines.push('', ...renderSolutions(detail.solutions ?? []));
+  lines.push('', ...renderSolutions(detail.solutions ?? [], detail.decision));
   return lines.join('\n');
 }

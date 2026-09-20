@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
-  DASH, InputError, checkMaxLength, describeError, dash, fmtDate, fmtNum, parseId, parseIntInRange, requireOneOf, requireText,
+  AI_REQUEST_CONFIG, DASH, InputError, checkMaxLength, describeError, dash, fmtDate, fmtNum, parseId, parseIntInRange, requireOneOf, requireText, renderTable, stripControl, emit, withTimeoutHint,
 } from '../cliHelpers';
 
 describe('formatting', () => {
@@ -80,5 +80,48 @@ describe('describeError', () => {
     expect(describeError(businessError(1234, 'weird'))).toBe('weird (code=1234)');
     expect(describeError(new Error('Network Error'))).toBe('Network Error');
     expect(describeError('str')).toBe('str');
+  });
+});
+
+describe('AI request helpers', () => {
+  it('AI calls get a client timeout of at least 120 s', () => {
+    expect(AI_REQUEST_CONFIG.timeout).toBeGreaterThanOrEqual(120_000);
+  });
+
+  it('withTimeoutHint only decorates timeouts', () => {
+    const timeout = withTimeoutHint(new Error('timeout of 180000ms exceeded'), '别重试') as Error;
+    expect(timeout.message).toBe('timeout of 180000ms exceeded（别重试）');
+    const other = new Error('boom');
+    expect(withTimeoutHint(other, '别重试')).toBe(other);
+    expect((withTimeoutHint('Timeout!', 'h') as Error).message).toBe('Timeout!（h）');
+    // gateway failures on a long call are as ambiguous as a timeout
+    expect((withTimeoutHint(new Error('Request failed with status code 504'), 'h') as Error).message).toContain('（h）');
+    expect((withTimeoutHint(new Error('socket hang up'), 'h') as Error).message).toContain('（h）');
+    expect(withTimeoutHint(new Error('Request failed with status code 404'), 'h')).toBeInstanceOf(Error);
+    expect((withTimeoutHint(new Error('Request failed with status code 404'), 'h') as Error).message).not.toContain('（h）');
+    // a business error keeps its code (and its mapping) even if its message says "timeout"
+    const business = Object.assign(new Error('AI timeout'), { code: 1001 });
+    expect(withTimeoutHint(business, 'h')).toBe(business);
+  });
+});
+
+describe('untrusted text', () => {
+  it('stripControl removes escape sequences and control characters but keeps newlines, tabs and CJK', () => {
+    expect(stripControl('a\x1b[31mred\x1b[0m b\x1b]0;evil title\x07c\x1b]8;;http://x\x1b\\link\r\nline2\tend\x00\x7f')).toBe('ared bclink\nline2\tend');
+    expect(stripControl('# 周报 · 进度 ✓')).toBe('# 周报 · 进度 ✓');
+  });
+
+  it('emit strips control characters from text output but leaves --json untouched', () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => void lines.push(a.join(' ')));
+    emit(false, {}, () => 'ok\x1b[2J\x1b[Hbye');
+    emit(true, { title: 'a\x1b[31mb' }, () => 'unused');
+    spy.mockRestore();
+    expect(lines[0]).toBe('okbye');
+    expect(JSON.parse(lines[1]).title).toBe('a\x1b[31mb');
+  });
+
+  it('renderTable strips them too', () => {
+    expect(renderTable([['x', 'y\x1b[31m!']])).not.toContain('\x1b');
   });
 });
