@@ -21,6 +21,7 @@ const workspace_1 = require("./commands/workspace");
 const release_1 = require("./commands/release");
 const approval_1 = require("./commands/approval");
 const trace_1 = require("./commands/trace");
+const template_1 = require("./commands/template");
 const program = new commander_1.Command();
 program
     .name('good7ob')
@@ -42,6 +43,7 @@ program
 (0, release_1.registerReleaseCommands)(program);
 (0, approval_1.registerApprovalCommands)(program);
 (0, trace_1.registerTraceCommands)(program);
+(0, template_1.registerTemplateCommands)(program);
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
 // print the CLI version and exit). `good7ob --version` / `-V` still work.

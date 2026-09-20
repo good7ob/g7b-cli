@@ -25,6 +25,7 @@
 - [release — 发布管理](#release--发布管理)
 - [approval — 审批](#approval--审批)
 - [trace — 追溯关系](#trace--追溯关系)
+- [template — 模板中心](#template--模板中心)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -80,7 +81,8 @@ good7ob
 ├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略/按优先分排序）、总览、我的任务/产品/组织、我的 AI 团队、AI 日报、下一步推荐
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
-└── trace                    # 追溯关系：对象之间的有向关联
+├── trace                    # 追溯关系：对象之间的有向关联
+└── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、管理端审核
 ```
 
 ---
@@ -1114,6 +1116,111 @@ good7ob trace create --product 12 --source-type IDEA --source-id 5 --target-type
 good7ob trace list --product 12 --source-type IDEA --source-id 5
 good7ob trace list --product 12 --target-type TASK --target-id 101 --link-type implements
 good7ob trace delete 3
+```
+
+---
+
+## template — 模板中心
+
+API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `docs/documents/api/AI开发工具/api-0091-good7ob-template-center.md`。需登录，没有匿名接口。
+模板类型（`--type`，不区分大小写，CLI 转大写）：PRD|PROJECT|TASK|UI|API|DB|TEST|ARCH|AI_PROMPT|AGENT_SKILL|WORKFLOW|RELEASE。
+状态：模板 DRAFT → REVIEWING → PUBLISHED → SUSPENDED / ARCHIVED（REJECTED）；版本 DRAFT → REVIEWING → PUBLISHED → ARCHIVED。可见性 PUBLIC|ORGANIZATION|PRIVATE：PRIVATE / ORGANIZATION 提交后直接发布，PUBLIC 进入平台管理员审核（内容冻结）。
+版本号一律 `x.y.z`（每段 1–6 位数字，按数值比较：1.10.0 > 1.9.0），新版本必须大于现有最高版本。
+
+### 检索与浏览
+
+| 命令 | 说明 |
+|------|------|
+| `template search` | 模板库（只含已发布且你可见的）；`-k/--keyword` `--type` `--category <id>` `--tag <name>`（可重复，须全部满足，≤10）`--industry` `--tech-stack` `--language` `--platform` `--pricing` `--min-rating <0-5>` `--author <userId>` `--official` / `--no-official` `--sort latest\|popular\|rating\|installs` `-p/--page` `--page-size`（1–50，默认 20） |
+| `template get <id> [--version x.y.z]` | 详情 + 已发布版本的内容 / 变量 / 依赖；带 `--version` 时改为显示该版本（同 `version get`） |
+| `template mine` | 我创建的（任意状态）；`--status` `--type` `-p` `--page-size` |
+| `template org <orgId>` | 组织模板（成员看到库的可见范围，owner/admin 另见草稿 / 被驳回 / 已归档）；同上筛选 |
+| `template favorites` | 我收藏且仍在库中的 |
+| `template categories [--type T]` | 分类树（每个类型一个根） |
+| `template tags` | 热门标签；`--kind GENERAL\|INDUSTRY\|TECH_STACK\|LANGUAGE\|PLATFORM` `-k/--keyword` `--limit`（1–100，默认 50） |
+
+未评分的模板评分显示 `—`（后端对无评价返回 0.00，不是 0 分）。`content` 很长时文本输出只显示前 60 行，完整内容用 `--json`。
+
+### 创建、维护与生命周期
+
+| 命令 | 说明 |
+|------|------|
+| `template create --name <n> --type <T>` | 创建个人模板（`--org <orgId>` 为组织模板，须是 owner/admin）；`--description`（≤2000）`--category` `--visibility`（默认 PRIVATE；ORGANIZATION 必须带 `--org`）`--tags a,b`（≤10 个，每个 1–30 字符）`--license PERSONAL\|ORGANIZATION\|COMMERCIAL\|ENTERPRISE`；带 `--content-file` / `--content` 时同时建首个 DRAFT 版本（`--version` 默认 1.0.0，`--changelog` `--variables-file` `--compatibility-file`），只给 `--version` / `--variables-file` 而没有内容会被 CLI 拒绝 |
+| `template update <id>` | 修改元数据（未给的字段不变）：`--name` `--description` `--category` `--visibility` `--tags`（整体替换）`--clear-tags` `--license` `--resubmit-for-review`（把已发布但从未过审的模板改为 PUBLIC 时必须带，模板与版本退回 DRAFT 重新审核） |
+| `template delete <id>` | 软删除（仅 DRAFT / ARCHIVED 且没有实例） |
+| `template archive <id>` / `unarchive <id>` | 归档（DRAFT / REJECTED / PUBLISHED）/ 恢复（有已发布版本 → PUBLISHED，否则 DRAFT） |
+| `template favorite <id>` / `unfavorite <id>` | 收藏 / 取消收藏（幂等，输出当前收藏数） |
+
+### 版本、提交、差异与依赖
+
+| 命令 | 说明 |
+|------|------|
+| `template version add <id> --version x.y.z (--content-file f.json \| --content '<json>')` | 新建 DRAFT 版本；`--changelog`（≤5000）`--variables-file v.json`（≤50 个变量）`--compatibility-file k.json`（对象 ≤4 KB） |
+| `template version update <id> <version>` | 编辑 DRAFT 版本（未给的不变；content 与 variables 会一起重新校验）；参数同上，至少一项 |
+| `template version list <id>` | 版本列表（不含内容；非管理者只见发布过的版本） |
+| `template version get <id> <version>` | 版本详情：审核结论、依赖、变量、内容 |
+| `template version delete <id> <version>` | 删除 DRAFT 版本（释放版本号） |
+| `template version submit <id> <version>` | 提交发布：PRIVATE / ORGANIZATION → PUBLISHED；PUBLIC → REVIEWING |
+| `template diff <id> <from> <to>` | 两个版本的内容 / 变量差异（新增 `+` / 修改 `~` / 删除 `-`，每类最多 200 条，过多时提示已截断） |
+| `template dependency list <id> <version>` | 依赖列表（对你不可见的被依赖模板名称显示 `—`） |
+| `template dependency set <id> <version> --file deps.json` | **整体替换**（≤20，仅 DRAFT）：`[{"requiredTemplateId":7,"minVersion":"1.0.0","kind":"requires"}]`，也可写成 `{"dependencies":[…]}`；`kind` 为 requires（默认）或 optional |
+| `template dependency add <id> <version> --template <id>` | 新增一条；`--min-version` `--kind` |
+| `template dependency rm <id> <version> <dependencyId>` | 删除一条 |
+
+**本地校验（上传前，与服务端同口径）：** `content` 必须是 JSON 对象，序列化后 ≤1 MB，嵌套 ≤32 层，全部值 ≤50,000 个，单个数组 / 对象 ≤10,000 个元素；`variables` 必须是数组且 ≤50 个；文件只接受普通文件（目录 / 设备 / 管道会被拒绝，读取上限 8 MB）；超大数字（如 `1e999`）会被拒绝，避免被静默改成 null。深度炸弹这类输入在解析前就被迭代扫描拦截，不会发出请求。各类型 `content` 的字段结构、变量的名称 / 类型规则由服务端校验（1001，消息以 JSON 路径开头，如 `content.tasks[2].name: 不能为空`）。`--content-file` 与 `--content` 互斥。
+
+### 评价
+
+| 命令 | 说明 |
+|------|------|
+| `template review add <id> --rating <1-5>` | 评价（已评价则覆盖）；`--comment`（≤1000）。只有安装 / 使用过该模板的用户可评，且不能评价自己的模板（`2000`） |
+| `template review list <id>` | 评价列表（最新在前）；`-p` `--page-size` |
+| `template review rm <id>` | 删除自己的评价（之后可重评） |
+
+### 模板包
+
+一组模板的命名集合，本身没有内容，不单独审核。条目 ≤30；发布要求所有条目都是 PUBLISHED 且可见范围不小于包。
+
+| 命令 | 说明 |
+|------|------|
+| `template package create --name <n>` | 建 DRAFT 包；`--description` `--visibility` `--org <orgId>` `--item <templateId>[:<约束>]`（可重复）。约束：`*`（默认）\| `x.y.z` \| `^x.y.z` \| `~x.y.z` \| `>=x.y.z` |
+| `template package get <id>` | 详情与条目（看不到的模板只显示 id 与约束，其余 `—`） |
+| `template package update <id>` | 修改（未给的不变）：`--name` `--description` `--visibility`；`--item` **整体替换**条目，`--clear-items` 清空 |
+| `template package delete <id>` | 软删除（仅 DRAFT / ARCHIVED） |
+| `template package list` | 包库；`-k/--keyword`，或 `--mine` / `--org <orgId>`（后两者不能与 `--keyword` 同用），`-p` `--page-size` |
+| `template package publish <id>` / `archive <id>` | 发布 / 归档 |
+
+### 管理端审核（平台管理员）
+
+| 命令 | 说明 |
+|------|------|
+| `template admin reviews` | 待审核队列（先提交的在前）；`-p` `--page-size` |
+| `template admin list` | 全部模板（用于下架 / 恢复）；`--status` `-k/--keyword` |
+| `template admin show <versionId>` | 审核详情：模板 + 该版本的内容 / 变量 / 依赖 |
+| `template admin approve <versionId> [--comment <t>]` | 批准：版本成为已发布版本，旧版本归档 |
+| `template admin reject <versionId> --reason <t>` | 驳回（理由必填，≤1000）：版本退回 DRAFT，作者可修改后重提 |
+| `template admin suspend <templateId> --reason <t>` | 下架已发布模板（理由必填）：不再出现在库中、不可实例化，已有实例保留 |
+| `template admin unsuspend <templateId> [--reason <t>]` | 恢复上架 |
+
+**认证：** 管理端只接受管理员身份的 Bearer token（Cognito 管理员池 ID token，或 `userType=admin` 的 JWT）。CLI 目前没有单独的管理员凭证配置，只发送已配置的那一个 token，普通 api-key / MCP key 会得到 HTTP 403（`Access denied: admin privileges required`），此时 CLI 会附上指引。需要时用环境变量临时覆盖：`GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews`。
+
+所有命令支持 `--json`（各 `delete` 输出 `{"deleted":true,"id":N}`），无二次确认。列表命令输出 `共 N 条，第 p/n 页`；接口没有的值统一显示 `—`。
+业务错误码：`1000` 缺必填、`1001` 值非法（含内容 / 变量校验失败）、`1002` 不存在**或对你不可见**（私有模板不可见时同样是它）、`1003` 商业化未开放（只能创建免费模板）、`1006` 已存在（同名 / 版本号 / 依赖 / 包条目重复）、`1007` 状态不允许、`1009` 已被处理或并发冲突、`2000` 无权限、`999/401` 未登录。模板内容是**不可信输入**，CLI 只按文本显示，并去掉终端控制字符。
+
+> `--version` 注意：`template create` / `template version add` / `template get` 的 `--version` 与根命令 `-V/--version` 同名；靠根命令的 `enablePositionalOptions()`（选项只在子命令名之前生效）才不会被吞掉。
+
+```bash
+good7ob template search -k 登录 --type TASK --tag Vue --tag 认证 --min-rating 4 --sort popular
+good7ob template get 4
+good7ob template create --name "登录流程" --type TASK --tags vue,auth --content-file tasks.json --version 1.0.0
+good7ob template version add 21 --version 1.1.0 --content-file tasks.json --variables-file vars.json --changelog "补充估时"
+good7ob template diff 21 1.0.0 1.1.0
+good7ob template dependency set 21 1.1.0 --file deps.json
+good7ob template version submit 21 1.1.0          # PUBLIC → REVIEWING，等待平台管理员
+good7ob template review add 4 --rating 5 --comment "省了一天"
+good7ob template package create --name "Web 起步包" --item 4:^1.0.0 --item 9
+GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews
+GOOD7OB_API_KEY=<管理员 token> good7ob template admin reject 9 --reason "缺少描述"
 ```
 
 ---
