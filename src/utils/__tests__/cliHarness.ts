@@ -23,6 +23,9 @@ export interface Envelope {
 export const ok = (data: unknown): Envelope => ({ code: 200, msg: '操作成功', success: true, data });
 export const bizError = (code: number, msg = 'boom'): Envelope => ({ code, msg, success: false });
 
+/** One envelope for every call, or a function choosing it per call (multi-request commands like `use --dry-run`). */
+export type Responder = Envelope | ((method: Method, url: string) => Envelope);
+
 export interface CliRun {
   stdout: string;
   stderr: string;
@@ -40,12 +43,13 @@ class ExitSignal extends Error {
 export async function runCli(
   register: (program: Command) => void,
   args: string[],
-  response: Envelope = ok(null)
+  response: Responder = ok(null)
 ): Promise<CliRun> {
   const http = apiClient['instance'];
-  const reply = { data: response } as AxiosResponse;
+  const reply = (m: Method, url: string) =>
+    ({ data: typeof response === 'function' ? response(m, url) : response } as AxiosResponse);
   const spies = Object.fromEntries(
-    METHODS.map((m) => [m, vi.spyOn(http, m).mockResolvedValue(reply)])
+    METHODS.map((m) => [m, vi.spyOn(http, m).mockImplementation((async (url: string) => reply(m, url)) as never)])
   ) as Record<Method, SpyInstance>;
 
   const out: string[] = [];

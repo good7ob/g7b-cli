@@ -218,11 +218,18 @@ good7ob template version submit 21 1.1.0              # PRIVATE/ORG publish at o
 good7ob template dependency set 21 1.1.0 --file deps.json
 good7ob template favorite 4 && good7ob template review add 4 --rating 5 --comment "saved a day"
 good7ob template package create --name "Web starter" --item 4:^1.0.0 --item 9
+good7ob template install 4 --org 3 --with-deps         # my installs: `template installed`, `template uninstall 4`
+good7ob template deps 4 --org 3                        # missing / outdated / unavailable dependencies
+good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login --dry-run   # preview, creates nothing
+good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login             # tasks / module / release / test cases / PRD / workflow
+good7ob template use 8 --org 3 --product 9 --var title=Login --out ./api.md            # document templates: body to a file
+good7ob template package use 5 --org 3 --product 9 --var project_name=Shop --item 4:owner=Zhang
+good7ob template instances --product 9 && good7ob template upgrade 31 --preview        # instances are never modified automatically
 good7ob template admin reviews                        # platform admins only (see GOOD7OB_API_KEY below)
 good7ob template admin reject 9 --reason "missing description"
 ```
 
-Template Center: browse the catalog, manage personal / organization templates and their `x.y.z` versions (content and variables are validated locally against the server limits before upload), publish, favorite, review, bundle templates into packages, and moderate public submissions. Admin commands need an admin-identity token: the CLI has no separate admin credential, so run them with `GOOD7OB_API_KEY=<admin token>`. See `FEATURES.md`.
+Template Center: browse the catalog, manage personal / organization templates and their `x.y.z` versions (content and variables are validated locally against the server limits before upload), publish, favorite, review, bundle templates into packages, install and instantiate them (one server transaction; `--dry-run` previews with a local single-pass render, `--out` never overwrites without `--force`; instantiation is not idempotent, so after a timeout check `template instances` before retrying), get upgrade hints, and moderate public submissions. Admin commands need an admin-identity token: the CLI has no separate admin credential, so run them with `GOOD7OB_API_KEY=<admin token>`. See `FEATURES.md`.
 
 ### `org`
 

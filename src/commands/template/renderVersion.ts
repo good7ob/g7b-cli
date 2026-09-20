@@ -45,12 +45,12 @@ export interface VersionVo {
 const CONTENT_LINES = 60;
 
 /** `content` is untrusted user text (api-0091 §1): printed as text only, control characters are stripped by `emit`. */
-export function renderContent(content: unknown): string[] {
-  if (content === null || content === undefined) return [`内容: ${DASH}`];
+export function renderContent(content: unknown, label = '内容'): string[] {
+  if (content === null || content === undefined) return [`${label}: ${DASH}`];
   const lines = JSON.stringify(content, null, 2).split('\n');
   const shown = lines.slice(0, CONTENT_LINES);
   if (lines.length > CONTENT_LINES) shown.push(`… 共 ${lines.length} 行，已省略 ${lines.length - CONTENT_LINES} 行（完整内容用 --json）`);
-  return ['内容:', ...shown];
+  return [`${label}:`, ...shown];
 }
 
 export function renderVariables(variables: VariableDef[] | null | undefined): string[] {

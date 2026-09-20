@@ -82,7 +82,7 @@ good7ob
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 ├── trace                    # 追溯关系：对象之间的有向关联
-└── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、管理端审核
+└── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
 ```
 
 ---
@@ -1190,6 +1190,34 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 | `template package list` | 包库；`-k/--keyword`，或 `--mine` / `--org <orgId>`（后两者不能与 `--keyword` 同用），`-p` `--page-size` |
 | `template package publish <id>` / `archive <id>` | 发布 / 归档 |
 
+### 安装、实例化与升级提示
+
+模板 → 真实业务对象。后端 `POST /templates/{id}/instantiate` 在**同一个事务**里完成依赖安装、渲染、创建对象、记录实例，任何一步失败整体回滚。渲染只做文本替换：内容里 `{{name}}`（花括号内可有首尾空格）被替换成变量值，**单趟、不嵌套**（替换进去的值不会再被展开），只替换字符串值、不替换键，没有表达式、不求值。
+
+| 命令 | 说明 |
+|------|------|
+| `template install <id>` | 安装（幂等；评价资格的来源之一）；`--org <orgId>` 装到组织范围（须是活跃成员，默认个人范围）`--version x.y.z`（须发布过，默认当前已发布版本）`--with-deps` 把缺失 / 过旧的可安装依赖同事务装上。输出「已安装 / 已是安装状态（未变化）」、有新版本时提示、依赖检查表 |
+| `template uninstall <id> [--org <orgId>]` | 卸载（软删除，**保留实例**；没装过也成功，提示未变化） |
+| `template installed` | 我的安装（个人 + 我所在组织，最近的在前）；`--org` `-p` `--page-size`。模板已不可见时显示 `（已不可见）` 与 `—` |
+| `template use <id> --org <N> --product <N>` | 实例化。`--version x.y.z` `--module <id>` `--suite <id>` `--start <yyyy-MM-dd>` `--end <yyyy-MM-dd>` `--var name=value`（可重复）或 `--vars-file vars.json`（二选一）`--with-deps` `--dry-run` `--out <file>` `--force`。输出实例、产出对象（类型 / ID / 名称 / 引用）与 warnings；文档型模板（UI / API / DB / ARCH / AI_PROMPT / AGENT_SKILL）直接打印渲染出的正文，`--out` 改写入文件 |
+| `template use <id> … --dry-run` | **预演，不创建任何东西**：只发 GET（模板 + 版本、`dependencies/check`），按该版本的变量定义在本地校验变量（类型 / 必填 / enum / ≤5000 字符 / ≤50 个）、补全默认值，本地单趟渲染（≤2 MB）并显示「将创建什么」。列出会导致失败的问题（缺必需依赖、TASK 缺 `--module`、RELEASE 渲染出的 version 为空、模板未发布…）与被忽略的选项；`--json` 含 `ready` / `issues` / `variables`（规范化后的值）/ `renderedContent`。组织成员资格、产品 / 模块 / 用例目录归属、渲染结果的类型结构校验只有服务端能判断，输出会明说「未验证」 |
+| `template deps <id>` | 依赖检查（只读）：每个依赖的类型 / 最低版本 / 已装版本 / 最新发布 / 状态（OK、缺失、过旧、不可用）/ 可安装 / 深度 / 被谁依赖；`--org` `--version` |
+| `template instances` | 我创建的实例（最新在前，不含渲染结果）；`--template <id>` `--type <T>` `--org` `--product` `--package <id>` `-p` `--page-size` |
+| `template instance <id>` | 一个实例：变量、产出对象、渲染结果（文档全文；结构化内容只显示前 60 行，完整用 `--json`）；`--out <file>` `--force` |
+| `template package use <packageId> --org <N> --product <N>` | 一次实例化整个包（按条目顺序、**整包一个事务**，任何一项失败整包回滚，合计创建 ≤1000 个对象）。`--module` `--suite` `--start` `--end` 是各条目的默认值；`--var` / `--vars-file` 是**共享变量**（只投给定义了该名字的模板，没有任何条目定义的名字服务端 1001）；`--item <templateId>:<name>=<value>`（可重复）覆盖某个条目的变量，按该模板自己的定义严格校验；`--with-deps` |
+| `template upgrade <instanceId>` | 升级提示（只读）：当前版本 / 最新已发布版本，有新版本时显示差异（新增 `+` / 修改 `~` / 删除 `-`，同 `template diff`），并说明「**已有实例与它创建的业务对象不会被自动修改**；如需使用新版本，请用新版本重新实例化」。模板已下架 / 归档 / 不可见时显示原因 |
+| `template upgrade <instanceId> --preview` | 用实例**保存的变量**（`--var` / `--vars-file` 可覆盖）渲染目标版本（`--version x.y.z`，默认最新已发布），**不创建对象、不改实例**；新版本新增的必填变量没有值时服务端 1001 并指出变量名；`--out` `--force` |
+
+每种类型的目标选项：`TASK` 必须 `--module`（产出 `TASK_BATCH`）；`PROJECT` 无（建一个模块 + 任务）；`RELEASE` 可选 `--start` / `--end`（渲染出的版本号不能为空，同产品重复 1006）；`TEST` 可选 `--suite`；`PRD` 可选 `--module`；`WORKFLOW` 无；文档型无。不适用的选项服务端忽略（`--dry-run` 会提示）。上限：任务 ≤200、用例 ≤500、阶段 ≤50、包条目 ≤20、渲染结果 ≤2 MB。
+
+**本地校验（任何请求之前）：** id 为正整数；日期为 `yyyy-MM-dd` 且是真实日期，`--end` 不早于 `--start`；变量名 `^[A-Za-z][A-Za-z0-9_]{0,49}$`，值 ≤5000 字符且不含 NUL，≤50 个，`--var` 不能重名，`--var` 与 `--vars-file` 不能同用；`--vars-file` 必须是普通文件、≤1 MB、JSON 嵌套 ≤32 层（迭代扫描，深度炸弹不会进入 `JSON.parse`），是扁平对象 `{"名称": 标量}`，**数字不接受指数写法**（`1e5`、`1e100000` 都拒绝）。number 类型的变量只接受普通小数（`12`、`-3.5`；整数部分与小数部分各 ≤30 位）；写不进 JS 双精度的数请在文件里写成字符串。
+
+**`--out` 的安全规则：** 目标目录必须已存在；已存在的文件默认**不覆盖**（要覆盖须 `--force`）；只写普通文件（目录、符号链接、管道 / 设备一律拒绝，即使带 `--force`）；路径在**发请求之前**检查（不会「对象建好了但结果没法保存」），写入时再用 `O_EXCL` / `O_NOFOLLOW` 原子复查。文档型写正文，其他类型写渲染后的 JSON。若对象创建后写文件失败，仍会先打印结果，再报错并以非 0 退出。
+
+**超时与重试：** 实例化是事务性的，但**不是幂等的**（重复调用会再建一份）。客户端超时（120 秒）或网关 502 / 503 / 504 时提示「服务端可能已执行，请先用 `template instances` 核对，勿盲目重试」。业务错误（HTTP 200 + 非 200 `code`）不带此提示。
+
+T2 错误码含义：`1000` 缺 `--org` / `--product` / TASK 缺 `--module`；`1001` 变量缺失 / 未知 / 类型不符、目标模块或用例目录不属于该产品、渲染结果不合法或超 2 MB、超出数量上限；`1002` 模板 / 版本 / 包 / 实例不存在或不可见，**或产品不存在 / 不属于该组织**（不区分二者）；`1003` 非免费；`1006` RELEASE 版本号重复；`1007` 未发布 / 已下架 / 已归档、缺必需依赖（可加 `--with-deps`）、包条目不满足版本约束、该类型暂无实例化处理器；`2000` 不是目标组织的活跃成员。
+
 ### 管理端审核（平台管理员）
 
 | 命令 | 说明 |
@@ -1204,10 +1232,10 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 
 **认证：** 管理端只接受管理员身份的 Bearer token（Cognito 管理员池 ID token，或 `userType=admin` 的 JWT）。CLI 目前没有单独的管理员凭证配置，只发送已配置的那一个 token，普通 api-key / MCP key 会得到 HTTP 403（`Access denied: admin privileges required`），此时 CLI 会附上指引。需要时用环境变量临时覆盖：`GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews`。
 
-所有命令支持 `--json`（各 `delete` 输出 `{"deleted":true,"id":N}`），无二次确认。列表命令输出 `共 N 条，第 p/n 页`；接口没有的值统一显示 `—`。
+所有命令支持 `--json`（各 `delete` 输出 `{"deleted":true,"id":N}`；`use --dry-run` 输出 `{"dryRun":true,"ready":…}`），无二次确认。列表命令输出 `共 N 条，第 p/n 页`；接口没有的值统一显示 `—`。
 业务错误码：`1000` 缺必填、`1001` 值非法（含内容 / 变量校验失败）、`1002` 不存在**或对你不可见**（私有模板不可见时同样是它）、`1003` 商业化未开放（只能创建免费模板）、`1006` 已存在（同名 / 版本号 / 依赖 / 包条目重复）、`1007` 状态不允许、`1009` 已被处理或并发冲突、`2000` 无权限、`999/401` 未登录。模板内容是**不可信输入**，CLI 只按文本显示，并去掉终端控制字符。
 
-> `--version` 注意：`template create` / `template version add` / `template get` 的 `--version` 与根命令 `-V/--version` 同名；靠根命令的 `enablePositionalOptions()`（选项只在子命令名之前生效）才不会被吞掉。
+> `--version` 注意：`template create` / `template version add` / `template get` / `template install` / `template use` / `template deps` / `template upgrade --preview` 的 `--version` 与根命令 `-V/--version` 同名；靠根命令的 `enablePositionalOptions()`（选项只在子命令名之前生效）才不会被吞掉。
 
 ```bash
 good7ob template search -k 登录 --type TASK --tag Vue --tag 认证 --min-rating 4 --sort popular
@@ -1219,6 +1247,13 @@ good7ob template dependency set 21 1.1.0 --file deps.json
 good7ob template version submit 21 1.1.0          # PUBLIC → REVIEWING，等待平台管理员
 good7ob template review add 4 --rating 5 --comment "省了一天"
 good7ob template package create --name "Web 起步包" --item 4:^1.0.0 --item 9
+good7ob template deps 4 --org 3                     # 依赖检查
+good7ob template use 4 --org 3 --product 9 --module 55 --var feature=登录 --dry-run   # 预演，不创建
+good7ob template use 4 --org 3 --product 9 --module 55 --var feature=登录 --with-deps
+good7ob template use 8 --org 3 --product 9 --var title=登录接口 --out ./api.md        # 文档型：正文写入文件
+good7ob template package use 5 --org 3 --product 9 --module 55 --var project_name=商城 --item 4:owner=张三
+good7ob template instances --product 9 && good7ob template instance 31
+good7ob template upgrade 31 && good7ob template upgrade 31 --preview --var owner=张三
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reject 9 --reason "缺少描述"
 ```

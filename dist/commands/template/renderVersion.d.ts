@@ -37,7 +37,7 @@ export interface VersionVo {
     dependencies?: DependencyVo[] | null;
 }
 /** `content` is untrusted user text (api-0091 §1): printed as text only, control characters are stripped by `emit`. */
-export declare function renderContent(content: unknown): string[];
+export declare function renderContent(content: unknown, label?: string): string[];
 export declare function renderVariables(variables: VariableDef[] | null | undefined): string[];
 export declare function renderDependencies(deps: DependencyVo[] | null | undefined): string[];
 export declare function renderDependencyList(result: unknown): string;

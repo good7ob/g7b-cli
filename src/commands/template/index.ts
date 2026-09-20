@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { collect, emit, guarded, parseId } from '../../utils/cliHelpers';
 import { registerAdminCommands } from './adminCommands';
+import { registerInstallCommands } from './installCommands';
 import {
   LICENSES, SORTS, STATUSES, TAG_KINDS, TEMPLATE_ERROR_CODES as CODES, TEMPLATE_TYPES, VISIBILITIES,
   buildCreateBody, buildListParams, buildSearchRequest, buildTagsParams, buildUpdateBody, oneOf, pageParams, upperOneOf,
@@ -10,6 +11,8 @@ import { registerPackageCommands } from './packageCommands';
 import { TemplateCard, TemplateDetail, renderTemplateDetail, renderTemplateList } from './render';
 import { renderCategories, renderTags } from './renderMisc';
 import { registerReviewCommands } from './reviewCommands';
+import { registerUpgradeCommands } from './upgradeCommands';
+import { registerUseCommands } from './useCommands';
 import { registerVersionCommands, withPayloadFlags } from './versionCommands';
 import { requireSemver } from './versionInput';
 import { renderVersion, VersionVo } from './renderVersion';
@@ -18,7 +21,8 @@ import { renderVersion, VersionVo } from './renderVersion';
  * Template Center commands (api-0091, backend `/templates`): browse the catalog, manage my / my org's templates
  * and their versions, publish, favorite, review, bundle templates into packages, and (platform admins only)
  * moderate submissions. Versions, dependencies and diff live in versionCommands.ts, reviews in reviewCommands.ts,
- * packages in packageCommands.ts and the admin group in adminCommands.ts.
+ * packages in packageCommands.ts, the admin group in adminCommands.ts, and (part 2) install / instances in
+ * installCommands.ts, `use` in useCommands.ts, `package use` in packageUseCommand.ts and `upgrade` in upgradeCommands.ts.
  *
  * Business errors come back as HTTP 200 + non-200 `code`; ApiClient throws on those and `guarded` maps them.
  */
@@ -198,12 +202,15 @@ function registerManage(tpl: Command): void {
 export function registerTemplateCommands(program: Command) {
   const tpl = program
     .command('template')
-    .description('Template Center — browse, create, version, publish, review and bundle templates');
+    .description('Template Center — browse, create, version, publish, review, bundle, install and instantiate templates');
 
   registerBrowse(tpl);
   registerManage(tpl);
   registerVersionCommands(tpl);
   registerReviewCommands(tpl);
   registerPackageCommands(tpl);
+  registerInstallCommands(tpl);
+  registerUseCommands(tpl);
+  registerUpgradeCommands(tpl);
   registerAdminCommands(tpl);
 }

@@ -8,6 +8,7 @@ const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const cliHelpers_1 = require("../../utils/cliHelpers");
 const input_1 = require("./input");
 const packageInput_1 = require("./packageInput");
+const packageUseCommand_1 = require("./packageUseCommand");
 const renderMisc_1 = require("./renderMisc");
 const BASE = '/templates/packages';
 const ITEM_HELP = 'Template in the package: <templateId>[:<constraint>], repeatable (max 30); constraint = * | x.y.z | ^x.y.z | ~x.y.z | >=x.y.z';
@@ -21,6 +22,7 @@ function withPackageFields(cmd) {
 /** `template package create|get|update|delete|list|publish|archive` — bundles of templates (no content of their own, no review). */
 function registerPackageCommands(tpl) {
     const pkg = tpl.command('package').description('Template packages: a named bundle of templates');
+    (0, packageUseCommand_1.registerPackageUse)(pkg);
     withPackageFields(pkg.command('create'))
         .description('Create a DRAFT package (personal, or an organization package with --org)')
         .requiredOption('--name <name>', 'Name (max 100 chars)')

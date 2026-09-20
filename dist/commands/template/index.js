@@ -7,11 +7,14 @@ exports.registerTemplateCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const cliHelpers_1 = require("../../utils/cliHelpers");
 const adminCommands_1 = require("./adminCommands");
+const installCommands_1 = require("./installCommands");
 const input_1 = require("./input");
 const packageCommands_1 = require("./packageCommands");
 const render_1 = require("./render");
 const renderMisc_1 = require("./renderMisc");
 const reviewCommands_1 = require("./reviewCommands");
+const upgradeCommands_1 = require("./upgradeCommands");
+const useCommands_1 = require("./useCommands");
 const versionCommands_1 = require("./versionCommands");
 const versionInput_1 = require("./versionInput");
 const renderVersion_1 = require("./renderVersion");
@@ -19,7 +22,8 @@ const renderVersion_1 = require("./renderVersion");
  * Template Center commands (api-0091, backend `/templates`): browse the catalog, manage my / my org's templates
  * and their versions, publish, favorite, review, bundle templates into packages, and (platform admins only)
  * moderate submissions. Versions, dependencies and diff live in versionCommands.ts, reviews in reviewCommands.ts,
- * packages in packageCommands.ts and the admin group in adminCommands.ts.
+ * packages in packageCommands.ts, the admin group in adminCommands.ts, and (part 2) install / instances in
+ * installCommands.ts, `use` in useCommands.ts, `package use` in packageUseCommand.ts and `upgrade` in upgradeCommands.ts.
  *
  * Business errors come back as HTTP 200 + non-200 `code`; ApiClient throws on those and `guarded` maps them.
  */
@@ -183,12 +187,15 @@ function registerManage(tpl) {
 function registerTemplateCommands(program) {
     const tpl = program
         .command('template')
-        .description('Template Center — browse, create, version, publish, review and bundle templates');
+        .description('Template Center — browse, create, version, publish, review, bundle, install and instantiate templates');
     registerBrowse(tpl);
     registerManage(tpl);
     (0, versionCommands_1.registerVersionCommands)(tpl);
     (0, reviewCommands_1.registerReviewCommands)(tpl);
     (0, packageCommands_1.registerPackageCommands)(tpl);
+    (0, installCommands_1.registerInstallCommands)(tpl);
+    (0, useCommands_1.registerUseCommands)(tpl);
+    (0, upgradeCommands_1.registerUpgradeCommands)(tpl);
     (0, adminCommands_1.registerAdminCommands)(tpl);
 }
 exports.registerTemplateCommands = registerTemplateCommands;

@@ -6,14 +6,14 @@ const extractRecords_1 = require("../../utils/extractRecords");
 /** Content can be up to 1 MB: show the head in a terminal, the whole thing is in `--json`. */
 const CONTENT_LINES = 60;
 /** `content` is untrusted user text (api-0091 §1): printed as text only, control characters are stripped by `emit`. */
-function renderContent(content) {
+function renderContent(content, label = '内容') {
     if (content === null || content === undefined)
-        return [`内容: ${cliHelpers_1.DASH}`];
+        return [`${label}: ${cliHelpers_1.DASH}`];
     const lines = JSON.stringify(content, null, 2).split('\n');
     const shown = lines.slice(0, CONTENT_LINES);
     if (lines.length > CONTENT_LINES)
         shown.push(`… 共 ${lines.length} 行，已省略 ${lines.length - CONTENT_LINES} 行（完整内容用 --json）`);
-    return ['内容:', ...shown];
+    return [`${label}:`, ...shown];
 }
 exports.renderContent = renderContent;
 function renderVariables(variables) {

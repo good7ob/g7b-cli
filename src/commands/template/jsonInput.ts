@@ -22,8 +22,11 @@ export const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const WS = new Set([' ', '\t', '\n', '\r']);
 const STOPS = new Set([',', ']', '}', '[', '{', ':', '"', ' ', '\t', '\n', '\r']);
 
-/** Throws InputError when `text` exceeds depth / node / per-container limits. Malformed JSON is left to JSON.parse. */
-export function scanJsonLimits(text: string, label: string): void {
+/**
+ * Throws InputError when `text` exceeds depth / node / per-container limits. Malformed JSON is left to JSON.parse.
+ * `plainNumbers` additionally refuses exponent notation (1e5): used where a number becomes a template variable.
+ */
+export function scanJsonLimits(text: string, label: string, plainNumbers = false): void {
   const elements = new Int32Array(MAX_DEPTH + 2);
   let depth = 0;
   let nodes = 0;
@@ -61,6 +64,9 @@ export function scanJsonLimits(text: string, label: string): void {
       if (/^-?[0-9]/.test(token) && !Number.isFinite(Number(token))) {
         throw new InputError(`${label}: 数字超出可表示范围: ${token.slice(0, 30)}`);
       }
+      if (plainNumbers && /^-?[0-9]/.test(token) && /[eE]/.test(token)) {
+        throw new InputError(`${label}: 数值请用普通小数写法，不支持指数: ${token.slice(0, 30)}`);
+      }
       value();
       i = j;
     }
@@ -68,9 +74,9 @@ export function scanJsonLimits(text: string, label: string): void {
 }
 
 /** Scan, then parse. Any failure is an InputError naming `label`. */
-export function parseJsonText(text: string, label: string): unknown {
+export function parseJsonText(text: string, label: string, plainNumbers = false): unknown {
   const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-  scanJsonLimits(clean, label);
+  scanJsonLimits(clean, label, plainNumbers);
   try {
     return JSON.parse(clean);
   } catch (error) {
@@ -82,15 +88,15 @@ export function parseJsonText(text: string, label: string): unknown {
  * Read a JSON file. Only a regular file is accepted (a FIFO / device / directory could hang or
  * exhaust memory); the check is made on the opened descriptor so the file cannot be swapped in between.
  */
-export function readJsonFile(path: string, flag: string): string {
+export function readJsonFile(path: string, flag: string, maxBytes = MAX_FILE_BYTES): string {
   let fd: number | undefined;
   try {
     // O_NONBLOCK: opening a FIFO must not block waiting for a writer
     fd = fs.openSync(path, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
     const stat = fs.fstatSync(fd);
     if (!stat.isFile()) throw new InputError(`${flag} 必须指向普通文件: ${path}`);
-    if (stat.size > MAX_FILE_BYTES) {
-      throw new InputError(`${flag} 文件过大（${stat.size} 字节，上限 ${MAX_FILE_BYTES}）: ${path}`);
+    if (stat.size > maxBytes) {
+      throw new InputError(`${flag} 文件过大（${stat.size} 字节，上限 ${maxBytes}）: ${path}`);
     }
     return fs.readFileSync(fd, 'utf-8');
   } catch (error) {
