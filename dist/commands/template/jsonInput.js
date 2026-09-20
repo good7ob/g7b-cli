@@ -44,8 +44,11 @@ exports.MAX_VARIABLES = 50;
 exports.MAX_FILE_BYTES = 8 * 1024 * 1024;
 const WS = new Set([' ', '\t', '\n', '\r']);
 const STOPS = new Set([',', ']', '}', '[', '{', ':', '"', ' ', '\t', '\n', '\r']);
-/** Throws InputError when `text` exceeds depth / node / per-container limits. Malformed JSON is left to JSON.parse. */
-function scanJsonLimits(text, label) {
+/**
+ * Throws InputError when `text` exceeds depth / node / per-container limits. Malformed JSON is left to JSON.parse.
+ * `plainNumbers` additionally refuses exponent notation (1e5): used where a number becomes a template variable.
+ */
+function scanJsonLimits(text, label, plainNumbers = false) {
     const elements = new Int32Array(exports.MAX_DEPTH + 2);
     let depth = 0;
     let nodes = 0;
@@ -94,6 +97,9 @@ function scanJsonLimits(text, label) {
             if (/^-?[0-9]/.test(token) && !Number.isFinite(Number(token))) {
                 throw new cliHelpers_1.InputError(`${label}: 数字超出可表示范围: ${token.slice(0, 30)}`);
             }
+            if (plainNumbers && /^-?[0-9]/.test(token) && /[eE]/.test(token)) {
+                throw new cliHelpers_1.InputError(`${label}: 数值请用普通小数写法，不支持指数: ${token.slice(0, 30)}`);
+            }
             value();
             i = j;
         }
@@ -101,9 +107,9 @@ function scanJsonLimits(text, label) {
 }
 exports.scanJsonLimits = scanJsonLimits;
 /** Scan, then parse. Any failure is an InputError naming `label`. */
-function parseJsonText(text, label) {
+function parseJsonText(text, label, plainNumbers = false) {
     const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-    scanJsonLimits(clean, label);
+    scanJsonLimits(clean, label, plainNumbers);
     try {
         return JSON.parse(clean);
     }
@@ -116,7 +122,7 @@ exports.parseJsonText = parseJsonText;
  * Read a JSON file. Only a regular file is accepted (a FIFO / device / directory could hang or
  * exhaust memory); the check is made on the opened descriptor so the file cannot be swapped in between.
  */
-function readJsonFile(path, flag) {
+function readJsonFile(path, flag, maxBytes = exports.MAX_FILE_BYTES) {
     let fd;
     try {
         // O_NONBLOCK: opening a FIFO must not block waiting for a writer
@@ -124,8 +130,8 @@ function readJsonFile(path, flag) {
         const stat = fs.fstatSync(fd);
         if (!stat.isFile())
             throw new cliHelpers_1.InputError(`${flag} 必须指向普通文件: ${path}`);
-        if (stat.size > exports.MAX_FILE_BYTES) {
-            throw new cliHelpers_1.InputError(`${flag} 文件过大（${stat.size} 字节，上限 ${exports.MAX_FILE_BYTES}）: ${path}`);
+        if (stat.size > maxBytes) {
+            throw new cliHelpers_1.InputError(`${flag} 文件过大（${stat.size} 字节，上限 ${maxBytes}）: ${path}`);
         }
         return fs.readFileSync(fd, 'utf-8');
     }

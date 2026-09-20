@@ -14,15 +14,18 @@ export declare const MAX_COMPATIBILITY_BYTES = 4096;
 export declare const MAX_VARIABLES = 50;
 /** Raw cap on what we are willing to read from disk (a pretty-printed 1 MB document is larger than 1 MB). */
 export declare const MAX_FILE_BYTES: number;
-/** Throws InputError when `text` exceeds depth / node / per-container limits. Malformed JSON is left to JSON.parse. */
-export declare function scanJsonLimits(text: string, label: string): void;
+/**
+ * Throws InputError when `text` exceeds depth / node / per-container limits. Malformed JSON is left to JSON.parse.
+ * `plainNumbers` additionally refuses exponent notation (1e5): used where a number becomes a template variable.
+ */
+export declare function scanJsonLimits(text: string, label: string, plainNumbers?: boolean): void;
 /** Scan, then parse. Any failure is an InputError naming `label`. */
-export declare function parseJsonText(text: string, label: string): unknown;
+export declare function parseJsonText(text: string, label: string, plainNumbers?: boolean): unknown;
 /**
  * Read a JSON file. Only a regular file is accepted (a FIFO / device / directory could hang or
  * exhaust memory); the check is made on the opened descriptor so the file cannot be swapped in between.
  */
-export declare function readJsonFile(path: string, flag: string): string;
+export declare function readJsonFile(path: string, flag: string, maxBytes?: number): string;
 export interface JsonSource {
     file?: string;
     inline?: string;

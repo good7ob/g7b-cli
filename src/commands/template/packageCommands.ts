@@ -5,6 +5,7 @@ import { TEMPLATE_ERROR_CODES as CODES, VISIBILITIES, oneOf } from './input';
 import {
   buildPackageCreateBody, buildPackageListRequest, buildPackageUpdateBody,
 } from './packageInput';
+import { registerPackageUse } from './packageUseCommand';
 import { PackageVo, renderPackage, renderPackageList } from './renderMisc';
 
 const BASE = '/templates/packages';
@@ -21,6 +22,7 @@ function withPackageFields(cmd: Command): Command {
 /** `template package create|get|update|delete|list|publish|archive` — bundles of templates (no content of their own, no review). */
 export function registerPackageCommands(tpl: Command): void {
   const pkg = tpl.command('package').description('Template packages: a named bundle of templates');
+  registerPackageUse(pkg);
 
   withPackageFields(pkg.command('create'))
     .description('Create a DRAFT package (personal, or an organization package with --org)')

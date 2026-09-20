@@ -1,1 +1,1 @@
-{"version":3,"file":"packageCommands.d.ts","sourceRoot":"","sources":["../../../src/commands/template/packageCommands.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAoBpC,oIAAoI;AACpI,wBAAgB,uBAAuB,CAAC,GAAG,EAAE,OAAO,GAAG,IAAI,CAiE1D"}
+{"version":3,"file":"packageCommands.d.ts","sourceRoot":"","sources":["../../../src/commands/template/packageCommands.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAqBpC,oIAAoI;AACpI,wBAAgB,uBAAuB,CAAC,GAAG,EAAE,OAAO,GAAG,IAAI,CAkE1D"}
