@@ -1,0 +1,1 @@
+{"version":3,"file":"useFlags.d.ts","sourceRoot":"","sources":["../../../src/commands/template/useFlags.ts"],"names":[],"mappings":"AAAA,4EAA4E;AAE5E,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAGpC,oEAAoE;AACpE,wBAAgB,eAAe,CAAC,GAAG,EAAE,OAAO,GAAG,OAAO,CASrD;AAED,wBAAgB,YAAY,CAAC,GAAG,EAAE,OAAO,GAAG,OAAO,CAIlD;AAED,wBAAgB,YAAY,CAAC,GAAG,EAAE,OAAO,EAAE,IAAI,EAAE,MAAM,GAAG,OAAO,CAIhE"}

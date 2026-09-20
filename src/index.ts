@@ -21,6 +21,7 @@ import { registerWorkspaceCommands } from './commands/workspace';
 import { registerReleaseCommands } from './commands/release';
 import { registerApprovalCommands } from './commands/approval';
 import { registerTraceCommands } from './commands/trace';
+import { registerTemplateCommands } from './commands/template';
 
 const program = new Command();
 
@@ -45,6 +46,7 @@ registerWorkspaceCommands(program);
 registerReleaseCommands(program);
 registerApprovalCommands(program);
 registerTraceCommands(program);
+registerTemplateCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
