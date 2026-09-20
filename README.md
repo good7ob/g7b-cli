@@ -206,6 +206,24 @@ good7ob trace list --product 12 --source-type IDEA --source-id 5
 
 Directed trace links between product objects (idea → requirement → task → test). See `FEATURES.md`.
 
+### `template`
+
+```bash
+good7ob template search -k login --type TASK --tag Vue --sort popular
+good7ob template get 4                                # published version: content, variables, dependencies
+good7ob template create --name "Login flow" --type TASK --tags vue,auth --content-file tasks.json --version 1.0.0
+good7ob template version add 21 --version 1.1.0 --content-file tasks.json --variables-file vars.json --changelog "add estimates"
+good7ob template diff 21 1.0.0 1.1.0
+good7ob template version submit 21 1.1.0              # PRIVATE/ORG publish at once, PUBLIC goes to platform review
+good7ob template dependency set 21 1.1.0 --file deps.json
+good7ob template favorite 4 && good7ob template review add 4 --rating 5 --comment "saved a day"
+good7ob template package create --name "Web starter" --item 4:^1.0.0 --item 9
+good7ob template admin reviews                        # platform admins only (see GOOD7OB_API_KEY below)
+good7ob template admin reject 9 --reason "missing description"
+```
+
+Template Center: browse the catalog, manage personal / organization templates and their `x.y.z` versions (content and variables are validated locally against the server limits before upload), publish, favorite, review, bundle templates into packages, and moderate public submissions. Admin commands need an admin-identity token: the CLI has no separate admin credential, so run them with `GOOD7OB_API_KEY=<admin token>`. See `FEATURES.md`.
+
 ### `org`
 
 ```bash
