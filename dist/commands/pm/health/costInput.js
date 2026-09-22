@@ -6,7 +6,7 @@
  * silently rounds to cents, the CLI refuses more than 2 decimals so a typo is not stored as a different amount.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildCostEntryListParams = exports.buildCostEntryBody = exports.buildBudgetBody = exports.releaseParams = exports.parseIncurredOn = exports.parseCurrency = exports.parseMoney = exports.MIN_ENTRY_DATE = exports.MAX_LABOR_RATE = exports.MAX_AMOUNT = exports.COST_CATEGORIES = exports.INTEL_ERROR_CODES = void 0;
+exports.buildCostEntryListParams = exports.buildCostEntryBody = exports.buildBudgetBody = exports.releaseParams = exports.parseIncurredOn = exports.parseCurrency = exports.parseTokenPrice = exports.parseMoney = exports.MIN_ENTRY_DATE = exports.MAX_TOKEN_PRICE = exports.MAX_LABOR_RATE = exports.MAX_AMOUNT = exports.COST_CATEGORIES = exports.INTEL_ERROR_CODES = void 0;
 const cliHelpers_1 = require("../../../utils/cliHelpers");
 const input_1 = require("./input");
 /** Business codes of every C2 endpoint (Result envelope: HTTP 200 + non-200 `code`). */
@@ -20,9 +20,11 @@ exports.INTEL_ERROR_CODES = {
 exports.COST_CATEGORIES = ['labor', 'cloud', 'ai_token', 'other'];
 exports.MAX_AMOUNT = 9999999999.99;
 exports.MAX_LABOR_RATE = 100000;
+exports.MAX_TOKEN_PRICE = 100000;
 exports.MIN_ENTRY_DATE = '2000-01-01';
 const DAY_MS = 86400000;
 const MONEY = /^[0-9]+(\.[0-9]{1,2})?$/;
+const TOKEN_PRICE = /^[0-9]+(\.[0-9]{1,4})?$/;
 /** A positive amount with at most 2 decimals, up to `max`. */
 function parseMoney(raw, label, max) {
     const text = raw?.trim();
@@ -36,6 +38,15 @@ function parseMoney(raw, label, max) {
     return value;
 }
 exports.parseMoney = parseMoney;
+/** Money per 1,000,000 tokens: 0 (a free model) to 100000, at most 4 decimals (the backend rounds to 4; the CLI refuses more). */
+function parseTokenPrice(raw, label = '--token-price-per-million') {
+    const text = raw?.trim();
+    if (text === undefined || !TOKEN_PRICE.test(text) || Number(text) > exports.MAX_TOKEN_PRICE) {
+        throw new cliHelpers_1.InputError(`${label} 必须是 0 到 ${exports.MAX_TOKEN_PRICE}、最多 4 位小数的数（0 = 免费模型），收到: ${raw ?? '(空)'}`);
+    }
+    return Number(text);
+}
+exports.parseTokenPrice = parseTokenPrice;
 /** Upper-cased 3-letter currency code. */
 function parseCurrency(raw, label = '--currency') {
     const code = raw?.trim().toUpperCase();
@@ -68,6 +79,11 @@ function buildBudgetBody(o) {
     };
     if (o.laborRate !== undefined)
         body.laborRatePerHour = parseMoney(o.laborRate, '--labor-rate', exports.MAX_LABOR_RATE);
+    if (o.tokenPricePerMillion !== undefined && o.clearTokenPrice) {
+        throw new cliHelpers_1.InputError('--token-price-per-million 与 --clear-token-price 不能同时使用');
+    }
+    if (o.tokenPricePerMillion !== undefined)
+        body.tokenPricePerMillion = parseTokenPrice(o.tokenPricePerMillion);
     return body;
 }
 exports.buildBudgetBody = buildBudgetBody;

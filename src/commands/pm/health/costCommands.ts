@@ -19,6 +19,17 @@ const P = (id: number) => `/progress/products/${id}`;
 /** `?releaseId=N` for endpoints whose HTTP client cannot carry query params (DELETE). */
 const releaseQuery = (release?: string) => (release === undefined ? '' : `?releaseId=${parseId(release, '--release')}`);
 
+/**
+ * The budget PUT replaces the whole budget, and an omitted tokenPricePerMillion clears the saved one. So unless the
+ * user passed --token-price-per-million / --clear-token-price, read the current budget of the same scope and resend its
+ * price. A failed read aborts the write (guarded): silently clearing the price is worse than not saving.
+ */
+async function keepSavedTokenPrice(productId: number, o: { release?: string; tokenPricePerMillion?: string; clearTokenPrice?: boolean }, body: Record<string, unknown>): Promise<void> {
+  if (o.tokenPricePerMillion !== undefined || o.clearTokenPrice) return;
+  const current: Budget | null = await apiClient.get(`${P(productId)}/budget`, releaseParams(o.release));
+  if (current?.configured && current.tokenPricePerMillion != null) body.tokenPricePerMillion = current.tokenPricePerMillion;
+}
+
 function registerBudget(health: Command): void {
   const budget = health.command('budget').description('Budget of a product or release (subcommands: get, set, clear)');
 
@@ -41,6 +52,8 @@ function registerBudget(health: Command): void {
     .requiredOption('--amount <n>', 'Budget, > 0, at most 2 decimals (max 9999999999.99)')
     .requiredOption('--currency <code>', '3-letter currency code, e.g. CNY')
     .option('--labor-rate <n>', 'Rate per hour that turns task actual hours into a derived labor cost (0 - 100000)')
+    .option('--token-price-per-million <n>', 'Money per 1,000,000 tokens (blended in/out, budget currency; 0 - 100000, up to 4 decimals) that turns task token usage into a derived AI token cost. Omitted = the saved price is kept')
+    .option('--clear-token-price', 'Drop the saved token price (no derived AI token cost afterwards)')
     .option('--note <text>', 'Note (max 500 chars)')
     .option('--release <id>', 'Release-level budget instead of product-level')
     .option('--json', 'Output as JSON')
@@ -48,7 +61,9 @@ function registerBudget(health: Command): void {
       guarded('设置预算失败', INTEL_ERROR_CODES, async () => {
         const o = cmd.optsWithGlobals();
         const id = parseId(productId, 'productId');
-        const saved: Budget = await apiClient.put(`${P(id)}/budget`, buildBudgetBody(o));
+        const body = buildBudgetBody(o);
+        await keepSavedTokenPrice(id, o, body);
+        const saved: Budget = await apiClient.put(`${P(id)}/budget`, body);
         emit(o.json, saved, () => renderBudget({ configured: true, ...saved }, { productId: id, releaseId: o.release && Number(o.release) }, true));
       }));
 
@@ -129,7 +144,7 @@ function registerCostEntries(health: Command): void {
 export function registerCostCommands(health: Command): void {
   health
     .command('cost <productId>')
-    .description('Cost progress next to development and time progress: budget, actuals by category, derived labor, EAC (ai_token cost is manual only)')
+    .description('Cost progress next to development and time progress: budget, actuals by category, derived labor and derived AI token cost (needs a budget token price), EAC')
     .option('--release <id>', 'Release-level cost instead of product-level')
     .option('--json', 'Output as JSON')
     .action((productId, _o, cmd: Command) =>

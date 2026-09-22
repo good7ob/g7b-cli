@@ -40,10 +40,23 @@ describe('idea review start / get / complete', () => {
     expect(r.stdout).toContain('3 周（AI 修正前 2.5 周）');
     expect(r.stdout).toContain('对账耗时 5h → 2h 小时');
     expect(r.stdout).toContain('人日: 13    周期: 3.9 周    成本: —');
+    // no claim that cost can never be derived; the labor-only basis is stated
+    expect(r.stdout).not.toContain('恒为');
+    expect(r.stdout).toContain('成本口径: 仅人力成本 = 关联任务实际工时 × 预算人力费率');
     expect(r.stdout).toContain('人日: 86.96%    进度: 70%    成本: —    效果: 50%');
     expect(r.stdout).toContain('草稿为实时计算');
     expect(r.stdout).toMatch(/NPS\s+40\s+—\s+—\s+—/);
     expect(r.stdout).toContain('复盘备注');
+  });
+
+  it('a derived actual cost is printed as a number (labor only), with its accuracy', async () => {
+    const withCost = { ...full, review: { ...full.review, actualCost: 12800 }, accuracy: { ...full.accuracy, costAccuracyPct: 57.33 } };
+    const r = await review(['get', '21'], ok(withCost));
+    expect(r.stdout).toContain('人日: 13    周期: 3.9 周    成本: 12800');
+    expect(r.stdout).toContain('人日: 86.96%    进度: 70%    成本: 57.33%    效果: 50%');
+    expect(r.stdout).toContain('仅人力成本');
+    // a real 0 stays 0 (only null is "not available")
+    expect((await review(['get', '21'], ok({ ...full, review: { ...full.review, actualCost: 0 } }))).stdout).toContain('成本: 0');
   });
 
   it('a review with nothing collected yet renders every value as "—", never 0', async () => {

@@ -30,7 +30,7 @@ export function registerReviewCommands(idea: Command): void {
 
   review
     .command('get <ideaId>')
-    .description('Show the review with metrics and accuracy')
+    .description('Show the review with metrics and accuracy (actual cost = labor only: task hours × budget labor rate; — when not available)')
     .option('--json', 'Output as JSON')
     .action(async (ideaId, o) => {
       try {
