@@ -27,7 +27,7 @@ export const MIN_ENTRY_DATE = '2000-01-01';
 
 const DAY_MS = 86_400_000;
 const MONEY = /^[0-9]+(\.[0-9]{1,2})?$/;
-const TOKEN_PRICE = /^[0-9]+(\.[0-9]{1,4})?$/;
+const TOKEN_PRICE = /^[0-9]+(\.[0-9]{1,6})?$/;
 
 /** A positive amount with at most 2 decimals, up to `max`. */
 export function parseMoney(raw: string | undefined, label: string, max: number): number {
@@ -42,11 +42,11 @@ export function parseMoney(raw: string | undefined, label: string, max: number):
   return value;
 }
 
-/** Money per 1,000,000 tokens: 0 (a free model) to 100000, at most 4 decimals (the backend rounds to 4; the CLI refuses more). */
+/** Money per 1,000,000 tokens: 0 (a free model) to 100000, at most 6 decimals (the backend rounds to 6; the CLI refuses more). */
 export function parseTokenPrice(raw: string | undefined, label = '--token-price-per-million'): number {
   const text = raw?.trim();
   if (text === undefined || !TOKEN_PRICE.test(text) || Number(text) > MAX_TOKEN_PRICE) {
-    throw new InputError(`${label} 必须是 0 到 ${MAX_TOKEN_PRICE}、最多 4 位小数的数（0 = 免费模型），收到: ${raw ?? '(空)'}`);
+    throw new InputError(`${label} 必须是 0 到 ${MAX_TOKEN_PRICE}、最多 6 位小数的数（0 = 免费模型），收到: ${raw ?? '(空)'}`);
   }
   return Number(text);
 }

@@ -201,7 +201,7 @@ describe('pm health budget', () => {
     [['--amount', '5', '--currency', 'CNY', '--labor-rate', '100000.01'], '--labor-rate'],
     [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '-1'], '--token-price-per-million'],
     [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '100000.01'], '--token-price-per-million'],
-    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '1.23456'], '--token-price-per-million'],
+    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '1.2345678'], '--token-price-per-million'],
     [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', 'abc'], '--token-price-per-million'],
     [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '7.5', '--clear-token-price'], '--clear-token-price'],
     [['--amount', '5', '--currency', 'CNY', '--note', 'x'.repeat(501)], '--note'],
@@ -212,7 +212,7 @@ describe('pm health budget', () => {
     const r = await health(['budget', 'set', '12', '--amount', '9999999999.99', '--currency', 'CNY', '--labor-rate', '100000', '--note', 'x'.repeat(500)], ok(budget));
     expect(r.exitCode).toBeUndefined();
     expect((await health(['budget', 'set', '12', '--amount', '0.01', '--currency', 'CNY'], ok(budget))).exitCode).toBeUndefined();
-    for (const price of ['0', '100000', '0.0001', '7.1234']) {
+    for (const price of ['0', '100000', '0.0001', '7.1234', '0.000004']) {
       const r = await health(['budget', 'set', '12', '--amount', '1', '--currency', 'CNY', '--token-price-per-million', price], ok(budget));
       expect(r.http.put.mock.calls[0][1].tokenPricePerMillion).toBe(Number(price));
     }
@@ -363,12 +363,14 @@ describe('cost input helpers', () => {
     expect(() => parseMoney('1,5', '--amount', 100)).toThrow();
   });
 
-  it('parseTokenPrice: 0 to 100000, up to 4 decimals', () => {
+  it('parseTokenPrice: 0 to 100000, up to 6 decimals', () => {
     expect(parseTokenPrice(' 7.5 ')).toBe(7.5);
     expect(parseTokenPrice('0')).toBe(0);
     expect(parseTokenPrice('100000')).toBe(100000);
+    // g7b #1061: a very cheap per-token price must not need to round away to fit
+    expect(parseTokenPrice('0.000004')).toBe(0.000004);
     expect(() => parseTokenPrice('100000.0001')).toThrow('0 到 100000');
-    expect(() => parseTokenPrice('0.00001')).toThrow('4 位小数');
+    expect(() => parseTokenPrice('0.0000001')).toThrow('6 位小数');
     expect(() => parseTokenPrice('-1')).toThrow();
     expect(() => parseTokenPrice(undefined)).toThrow('(空)');
   });
