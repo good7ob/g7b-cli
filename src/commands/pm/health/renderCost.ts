@@ -12,6 +12,7 @@ export interface Budget {
   amount?: number | null;
   currency?: string | null;
   laborRatePerHour?: number | null;
+  tokenPricePerMillion?: number | null;
   note?: string | null;
   updatedBy?: number | null;
   updatedAt?: ApiDate;
@@ -46,6 +47,13 @@ export interface DerivedLabor {
   amount?: number | null;
 }
 
+export interface DerivedAiToken {
+  derived?: boolean | null;
+  tokens?: number | null;
+  pricePerMillion?: number | null;
+  amount?: number | null;
+}
+
 /** `GET …/cost`. status OK | NO_BUDGET | INSUFFICIENT_DATA (then `actual` may be null and nothing is summed). */
 export interface CostSummary {
   productId?: number | null;
@@ -55,7 +63,9 @@ export interface CostSummary {
   message?: string | null;
   currency?: string | null;
   budget?: Budget | null;
-  actual?: { byCategory?: Record<string, number | null> | null; manualTotal?: number | null; derivedLabor?: DerivedLabor | null; total?: number | null } | null;
+  actual?: {
+    byCategory?: Record<string, number | null> | null; manualTotal?: number | null; derivedLabor?: DerivedLabor | null; derivedAiToken?: DerivedAiToken | null; total?: number | null;
+  } | null;
   remainingBudget?: number | null;
   costProgressPct?: number | null;
   developmentProgressPct?: number | null;
@@ -84,6 +94,7 @@ export function renderBudget(b: Budget, scope: { productId: number; releaseId?: 
     block([
       ['金额', `${money(b.amount)} ${dash(b.currency)}`],
       ['人力费率', b.laborRatePerHour == null ? `${DASH}（未设置：不推导人力成本）` : `${money(b.laborRatePerHour)} ${dash(b.currency)} /小时`],
+      ['token 单价', b.tokenPricePerMillion == null ? `${DASH}（未设置：不推导 AI token 成本）` : `${fmtNum(b.tokenPricePerMillion, '', 4)} ${dash(b.currency)} /百万 token`],
       ['备注', dash(b.note)],
       ['更新', b.updatedAt ? `${fmtDateTime(b.updatedAt)} by ${dash(b.updatedBy)}` : DASH],
     ]),
@@ -98,6 +109,10 @@ function renderActual(a: NonNullable<CostSummary['actual']>): string[] {
   const d = a.derivedLabor;
   if (d) {
     lines.push(`推导人力（非手工录入）  ${fmtNum(d.hours)} 小时 × ${money(d.ratePerHour)} /小时 = ${money(d.amount)}`);
+  }
+  const ai = a.derivedAiToken;
+  if (ai) {
+    lines.push(`推导 AI token（非手工录入）  ${fmtNum(ai.tokens, '', 0)} token × ${fmtNum(ai.pricePerMillion, '', 4)} /百万 token = ${money(ai.amount)}`);
   }
   return lines;
 }
@@ -131,7 +146,11 @@ export function renderCost(c: CostSummary): string {
       ['完工估算 (EAC)', money(c.estimateAtCompletion)],
       ['EAC 相对预算', money(c.estimateVariance)],
     ]),
-    `AI token 消耗量 ${dash(c.aiTokensConsumed)}（token 数量，不是金额；ai_token 成本只能手工录入）`,
+    `AI token 消耗量 ${dash(c.aiTokensConsumed)}（token 数量，不是金额；${
+      c.actual?.derivedAiToken
+        ? '金额见上方「推导 AI token」，手工 ai_token 条目另计'
+        : '预算未设 token 单价或没有用量时不推导 AI token 成本，ai_token 条目仅手工录入'
+    }）`,
   );
   (c.warnings ?? []).forEach((w) => lines.push(`⚠ ${w}`));
   return lines.join('\n');

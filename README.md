@@ -119,7 +119,7 @@ good7ob pm health burnup 10 --from 2026-09-01           # table + text chart
 good7ob pm health snapshots rebuild 10 --days 14
 good7ob pm health forecast 10                          # P50/P80 completion dates ("数据不足" when history is too short)
 good7ob pm health cost 10                              # budget vs actual vs progress, EAC
-good7ob pm health budget set 10 --amount 10000000 --currency CNY --labor-rate 200
+good7ob pm health budget set 10 --amount 10000000 --currency CNY --labor-rate 200 --token-price-per-million 7.5
 good7ob pm health cost-entry add 10 --category cloud --amount 1200.50 --currency CNY --date 2026-09-01
 good7ob pm health what-if 10 --add-scope 100 --deadline 2026-12-01   # simulation only, nothing is saved
 good7ob pm health diagnosis 10                         # deterministic findings; `explain` adds AI commentary

@@ -784,9 +784,9 @@ good7ob pm health snapshots rebuild 10 --days 14
 | 命令 | 说明 |
 |------|------|
 | `pm health forecast <productId> [--release <id>]` | P50/P80 完成预测（按历史周速度蒙特卡洛，同一份数据结果固定）：预计完成日期、还需周数、相对计划的偏差（晚 / 早 N 天）、周完成量走势。**历史不足（`INSUFFICIENT_DATA`）时显示 `数据不足`，绝不给日期**；某分位 520 周内无法完成显示 `不收敛` |
-| `pm health cost <productId> [--release <id>]` | 成本进度：预算、实际（按类别 + 推导人力，推导的会标明「非手工录入」）、剩余预算、开发 / 时间 / 成本三条进度线、成本偏差（正 = 成本消耗快于交付）、完工估算 EAC。`NO_BUDGET`（无预算）仍列出实际成本；`INSUFFICIENT_DATA`（含同范围多币种）不求和。`aiTokensConsumed` 是 token **数量**不是金额，`ai_token` 成本只能手工录入 |
+| `pm health cost <productId> [--release <id>]` | 成本进度：预算、实际（按类别 + 推导人力 + 推导 AI token 成本，推导的会标明「非手工录入」）、剩余预算、开发 / 时间 / 成本三条进度线、成本偏差（正 = 成本消耗快于交付）、完工估算 EAC。`NO_BUDGET`（无预算）仍列出实际成本；`INSUFFICIENT_DATA`（含同范围多币种）不求和。`aiTokensConsumed` 是 token **数量**不是金额；预算设置了 token 单价时，AI token 成本会按任务 token 用量另行推导（手工 `ai_token` 条目仍单独计），否则仍只能手工录入 |
 | `pm health budget get <productId> [--release <id>]` | 读预算（未设置会明确提示） |
-| `pm health budget set <productId> --amount <n> --currency <C> [--labor-rate <n>] [--note <text>] [--release <id>]` | 设置 / 替换预算（owner/admin，幂等）。`--amount` > 0、最多 2 位小数、≤ 9999999999.99；`--currency` 3 位字母（自动大写；**一个产品只能用一种币种**，首次写入决定）；`--labor-rate` (0, 100000]，用于把任务实际工时推导成人力成本；`--note` ≤500 字符；`--release` 设 Release 级预算 |
+| `pm health budget set <productId> --amount <n> --currency <C> [--labor-rate <n>] [--token-price-per-million <n>｜--clear-token-price] [--note <text>] [--release <id>]` | 设置 / 替换预算（owner/admin，幂等）。`--amount` > 0、最多 2 位小数、≤ 9999999999.99；`--currency` 3 位字母（自动大写；**一个产品只能用一种币种**，首次写入决定）；`--labor-rate` (0, 100000]，用于把任务实际工时推导成人力成本；`--token-price-per-million` [0, 100000]、最多 6 位小数（0 = 免费模型），用于把任务 token 用量推导成 AI token 成本；`--note` ≤500 字符；`--release` 设 Release 级预算。**该接口整体替换预算**：省略 `--token-price-per-million` 时 CLI 会先读同范围现有预算并把已保存的单价带上重发，不会被静默清空；要清空用 `--clear-token-price` |
 | `pm health budget clear <productId> [--release <id>]` | 删除预算（owner/admin；之后可重设） |
 | `pm health cost-entry list <productId> [--category c] [--release <id>] [--from d] [--to d] [-p n] [--page-size n]` | 成本条目，发生日新的在前；`--category` `labor｜cloud｜ai_token｜other`；`--from/--to`（`yyyy-MM-dd`，闭区间，`--from ≤ --to`）；`--page-size` ≤100（默认 20）。`source=auto` 的条目只读 |
 | `pm health cost-entry add <productId> --category c --amount n --currency C --date yyyy-MM-dd [--release <id>] [--note <text>]` | 记录一笔实际成本（owner/admin）。`--date` 为 2000-01-01 ~ 明天（UTC）；币种须与该产品已有币种一致（否则 `1001`） |
@@ -922,7 +922,7 @@ AI 错误码（调用失败时**无写入、不扣 token**）：`7101` 模型调
 | 命令 | 说明 |
 |------|------|
 | `idea review start <ideaId>` | 创建 / 刷新草稿：快照选定方案的预期，重新收集实际值（Idea 须 planning / developing / released；已完成的复盘不可刷新） |
-| `idea review get <ideaId>` | 预期（AI 方案同时显示修正前原值）、实际、准确度（草稿实时计算，完成后冻结）、手工指标。实际值 `—` = 不可得（不是 0）；成本暂无可推导口径，恒为 `—` |
+| `idea review get <ideaId>` | 预期（AI 方案同时显示修正前原值）、实际、准确度（草稿实时计算，完成后冻结）、手工指标。实际值 `—` = 不可得（不是 0）；成本仅含人力成本（关联任务实际工时 × 预算人力费率），没有费率 / 关联任务 / 已记录工时时为 `—` |
 | `idea review metrics <ideaId> [--metric "name:expected:actual:unit"]... [--clear-metrics] [--notes <n>]` | 填手工指标（**整体替换**，可重复，≤20）与备注（≤2000，`--notes ""` 清空）；至少给一项。`--metric`：只有 name 必填（≤100）；expected / actual 留空 = 不可得（如 `NPS:40::pts`），可为负数、≤4 位小数；unit ≤20；各段内不能含冒号；仅草稿可改 |
 | `idea review complete <ideaId>` | 完成：冻结准确度，Idea released → validated，重算该产品的估算修正系数（Idea 须 released） |
 

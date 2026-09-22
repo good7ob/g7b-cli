@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 import { registerHealthCommands } from '../index';
-import { parseCurrency, parseIncurredOn, parseMoney } from '../costInput';
+import { parseCurrency, parseIncurredOn, parseMoney, parseTokenPrice } from '../costInput';
 import { bizError, noHttpCalls, ok, runCli } from '../../../../utils/__tests__/cliHarness';
 
 const register = (program: Command) => registerHealthCommands(program.command('pm'));
@@ -47,7 +47,34 @@ describe('pm health cost <productId>', () => {
     expect(r.stdout).toMatch(/成本偏差\s+9\.2 个百分点（正 = 成本消耗快于交付）/);
     expect(r.stdout).toMatch(/完工估算 \(EAC\)\s+11607142\.86/);
     expect(r.stdout).toContain('AI token 消耗量 123456（token 数量，不是金额');
+    // no derived AI row without a price; the note must not claim ai_token cost is manual-only
+    expect(r.stdout).not.toContain('推导 AI token（非手工录入）');
+    expect(r.stdout).toContain('预算未设 token 单价或没有用量时不推导 AI token 成本');
+    expect(r.stdout).not.toContain('只能手工录入');
     expect(r.stdout).toContain('⚠ 手工 labor 条目与推导人力并存');
+  });
+
+  it('renders the derived AI token line next to derived labor, and the double-count warning', async () => {
+    const warning = '同时存在手工 ai_token 条目与由任务 token 用量推导的 AI token 成本，请确认没有重复计入';
+    const out = (await health(['cost', '12'], ok({
+      ...cost,
+      actual: {
+        ...cost.actual,
+        byCategory: { labor: 0, cloud: 10, ai_token: 5, other: 0 },
+        derivedAiToken: { derived: true, tokens: 2000000, pricePerMillion: 7.5, amount: 15 },
+        total: 6524015,
+      },
+      aiTokensConsumed: 2000000,
+      warnings: [warning],
+    }))).stdout;
+    expect(out).toContain('推导 AI token（非手工录入）  2000000 token × 7.5 /百万 token = 15.00');
+    expect(out).toContain('金额见上方「推导 AI token」');
+    expect(out).not.toContain('预算未设 token 单价');
+    expect(out).not.toContain('只能手工录入');
+    // manual ai_token entries stay in their own row, separate from the derived amount
+    expect(out).toMatch(/ai_token AI token\s+5\.00/);
+    expect(out).toContain(`⚠ ${warning}`);
+    expect(out.indexOf('推导人力')).toBeLessThan(out.indexOf('推导 AI token'));
   });
 
   it('NO_BUDGET keeps the actuals, shows — for the ratios and explains how to set a budget', async () => {
@@ -86,7 +113,7 @@ describe('pm health cost <productId>', () => {
 });
 
 describe('pm health budget', () => {
-  const budget = { configured: true, id: 3, productId: 12, releaseId: null, amount: 10000, currency: 'CNY', laborRatePerHour: 200, note: '2026 H2', updatedBy: 11, updatedAt: '2026-09-19T10:00:00' };
+  const budget = { configured: true, id: 3, productId: 12, releaseId: null, amount: 10000, currency: 'CNY', laborRatePerHour: 200, tokenPricePerMillion: 7.5, note: '2026 H2', updatedBy: 11, updatedAt: '2026-09-19T10:00:00' };
 
   it('get: GET with / without --release; unset renders a hint, set renders the fields', async () => {
     expect((await health(['budget', 'get', '12'], ok(budget))).http.get).toHaveBeenCalledWith('/progress/products/12/budget', { params: {} });
@@ -96,18 +123,61 @@ describe('pm health budget', () => {
     const out = (await health(['budget', 'get', '12'], ok(budget))).stdout;
     expect(out).toMatch(/金额\s+10000\.00 CNY/);
     expect(out).toMatch(/人力费率\s+200\.00 CNY \/小时/);
+    expect(out).toMatch(/token 单价\s+7\.5 CNY \/百万 token/);
+    expect((await health(['budget', 'get', '12'], ok({ ...budget, tokenPricePerMillion: null }))).stdout).toMatch(/token 单价\s+—（未设置：不推导 AI token 成本）/);
+    expect((await health(['budget', 'get', '12'], ok({ ...budget, tokenPricePerMillion: 0 }))).stdout).toMatch(/token 单价\s+0 CNY \/百万 token/);
     expect(out).toMatch(/备注\s+2026 H2/);
     expect((await health(['budget', 'get', '12'], ok(null))).stdout).toContain('没有设置预算');
   });
 
-  it('set: PUTs amount / upper-cased currency / labor rate / note / release', async () => {
-    const r = await health(['budget', 'set', '12', '--amount', '10000.5', '--currency', 'cny', '--labor-rate', '200', '--note', ' 2026 H2 ', '--release', '5'], ok(budget));
-    expect(r.http.put).toHaveBeenCalledWith('/progress/products/12/budget', { amount: 10000.5, currency: 'CNY', laborRatePerHour: 200, note: '2026 H2', releaseId: 5 });
+  it('set: PUTs amount / upper-cased currency / labor rate / token price / note / release (explicit price: no read first)', async () => {
+    const r = await health(['budget', 'set', '12', '--amount', '10000.5', '--currency', 'cny', '--labor-rate', '200', '--token-price-per-million', '7.5', '--note', ' 2026 H2 ', '--release', '5'], ok(budget));
+    expect(r.http.put).toHaveBeenCalledWith('/progress/products/12/budget', { amount: 10000.5, currency: 'CNY', laborRatePerHour: 200, tokenPricePerMillion: 7.5, note: '2026 H2', releaseId: 5 });
+    expect(r.http.get).not.toHaveBeenCalled();
     expect(r.stdout).toContain('✓ 已保存');
+    expect(r.stdout).toMatch(/token 单价\s+7\.5 CNY/);
+  });
+
+  describe('set: the PUT replaces the whole budget, so the saved token price is resent unless told otherwise', () => {
+    const args = ['budget', 'set', '12', '--amount', '20000', '--currency', 'CNY'];
+    const respond = (current: unknown) => (method: string) => (method === 'get' ? ok(current) : ok(budget));
+
+    it('reads the current budget (same scope) and resends its price', async () => {
+      const r = await health([...args, '--release', '5'], respond({ ...budget, releaseId: 5, tokenPricePerMillion: 0.0123 }) as never);
+      expect(r.http.get).toHaveBeenCalledWith('/progress/products/12/budget', { params: { releaseId: 5 } });
+      expect(r.http.put).toHaveBeenCalledWith('/progress/products/12/budget', { amount: 20000, currency: 'CNY', releaseId: 5, tokenPricePerMillion: 0.0123 });
+    });
+
+    it('a saved price of 0 (free model) is resent too', async () => {
+      const r = await health(args, respond({ ...budget, tokenPricePerMillion: 0 }) as never);
+      expect(r.http.put.mock.calls[0][1].tokenPricePerMillion).toBe(0);
+    });
+
+    it.each([[{ configured: false }], [{ ...budget, tokenPricePerMillion: null }], [null]])('nothing to resend for %j', async (current) => {
+      const r = await health(args, respond(current) as never);
+      expect(r.http.put).toHaveBeenCalledWith('/progress/products/12/budget', { amount: 20000, currency: 'CNY' });
+    });
+
+    it('--clear-token-price drops it without reading; a new price replaces it without reading', async () => {
+      const cleared = await health([...args, '--clear-token-price'], respond({ ...budget }) as never);
+      expect(cleared.http.get).not.toHaveBeenCalled();
+      expect(cleared.http.put).toHaveBeenCalledWith('/progress/products/12/budget', { amount: 20000, currency: 'CNY' });
+      const replaced = await health([...args, '--token-price-per-million', '9'], respond({ ...budget }) as never);
+      expect(replaced.http.get).not.toHaveBeenCalled();
+      expect(replaced.http.put.mock.calls[0][1].tokenPricePerMillion).toBe(9);
+    });
+
+    it('a failed read aborts the write instead of silently clearing the price', async () => {
+      const r = await health(args, ((method: string) => (method === 'get' ? bizError(2000, 'no') : ok(budget))) as never);
+      expect(r.exitCode).toBe(1);
+      expect(r.stderr).toContain('设置预算失败');
+      expect(r.http.put).not.toHaveBeenCalled();
+    });
   });
 
   it('set: only amount + currency are sent when nothing else is given (blank note dropped)', async () => {
-    const r = await health(['budget', 'set', '12', '--amount', '1', '--currency', 'USD', '--note', '  '], ok(budget));
+    // the saved budget has no token price, so there is nothing to carry over
+    const r = await health(['budget', 'set', '12', '--amount', '1', '--currency', 'USD', '--note', '  '], ok({ ...budget, tokenPricePerMillion: null }));
     expect(r.http.put).toHaveBeenCalledWith('/progress/products/12/budget', { amount: 1, currency: 'USD' });
   });
 
@@ -129,6 +199,11 @@ describe('pm health budget', () => {
     [['--amount', '5', '--currency', 'C1Y'], '--currency'],
     [['--amount', '5', '--currency', 'CNY', '--labor-rate', '0'], '--labor-rate'],
     [['--amount', '5', '--currency', 'CNY', '--labor-rate', '100000.01'], '--labor-rate'],
+    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '-1'], '--token-price-per-million'],
+    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '100000.01'], '--token-price-per-million'],
+    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '1.2345678'], '--token-price-per-million'],
+    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', 'abc'], '--token-price-per-million'],
+    [['--amount', '5', '--currency', 'CNY', '--token-price-per-million', '7.5', '--clear-token-price'], '--clear-token-price'],
     [['--amount', '5', '--currency', 'CNY', '--note', 'x'.repeat(501)], '--note'],
     [['--amount', '5', '--currency', 'CNY', '--release', 'x'], '--release'],
   ])('set: rejects %j locally', (flags, needle) => expectRejected(['budget', 'set', '12', ...flags], needle));
@@ -137,6 +212,10 @@ describe('pm health budget', () => {
     const r = await health(['budget', 'set', '12', '--amount', '9999999999.99', '--currency', 'CNY', '--labor-rate', '100000', '--note', 'x'.repeat(500)], ok(budget));
     expect(r.exitCode).toBeUndefined();
     expect((await health(['budget', 'set', '12', '--amount', '0.01', '--currency', 'CNY'], ok(budget))).exitCode).toBeUndefined();
+    for (const price of ['0', '100000', '0.0001', '7.1234', '0.000004']) {
+      const r = await health(['budget', 'set', '12', '--amount', '1', '--currency', 'CNY', '--token-price-per-million', price], ok(budget));
+      expect(r.http.put.mock.calls[0][1].tokenPricePerMillion).toBe(Number(price));
+    }
   });
 
   it('clear: DELETEs (release as a query string) without any confirmation', async () => {
@@ -282,6 +361,18 @@ describe('cost input helpers', () => {
     expect(() => parseMoney('0.00', '--amount', 100)).toThrow('大于 0');
     expect(() => parseMoney(undefined, '--amount', 100)).toThrow('(空)');
     expect(() => parseMoney('1,5', '--amount', 100)).toThrow();
+  });
+
+  it('parseTokenPrice: 0 to 100000, up to 6 decimals', () => {
+    expect(parseTokenPrice(' 7.5 ')).toBe(7.5);
+    expect(parseTokenPrice('0')).toBe(0);
+    expect(parseTokenPrice('100000')).toBe(100000);
+    // g7b #1061: a very cheap per-token price must not need to round away to fit
+    expect(parseTokenPrice('0.000004')).toBe(0.000004);
+    expect(() => parseTokenPrice('100000.0001')).toThrow('0 到 100000');
+    expect(() => parseTokenPrice('0.0000001')).toThrow('6 位小数');
+    expect(() => parseTokenPrice('-1')).toThrow();
+    expect(() => parseTokenPrice(undefined)).toThrow('(空)');
   });
 
   it('parseCurrency', () => {
