@@ -20,12 +20,15 @@
 - [pm report — 进度报告](#pm-report--进度报告)
 - [pm tag — 标签管理](#pm-tag--标签管理)
 - [pm health — 产品健康度](#pm-health--产品健康度)
+- [pm activity — 任务 / 项目动态](#pm-activity--任务--项目动态)
 - [idea — Idea 池](#idea--idea-池)
 - [workspace — 我的工作台](#workspace--我的工作台)
 - [release — 发布管理](#release--发布管理)
 - [approval — 审批](#approval--审批)
 - [trace — 追溯关系](#trace--追溯关系)
 - [template — 模板中心](#template--模板中心)
+- [whoami — 当前身份](#whoami--当前身份)
+- [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -76,13 +79,17 @@ good7ob
 │   ├── workflow             # 工作流模板与阶段管理
 │   ├── report               # AI 进度报告
 │   ├── tag                  # 标签管理
-│   └── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建；P50/P80 预测、成本/预算、What-if、诊断、AI 解读、管理报告
+│   ├── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建；P50/P80 预测、成本/预算、What-if、诊断、AI 解读、管理报告
+│   └── activity             # 任务 / 项目动态：分页 / 游标增量拉取、类型与来源过滤、写 NOTE / REPORT_UPLOADED
+├── org                      # 组织管理
+│   └── ai-employee          # AI 员工：CLI/MCP Key 签发 / 重生成 / 停用 / 启用、档案（昵称 / 角色 / 能力范围）、能力目录
 ├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复、AI 生成方案与估算修正、变更集、效果复盘
 ├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略/按优先分排序）、总览、我的任务/产品/组织、我的 AI 团队、AI 日报、下一步推荐
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 ├── trace                    # 追溯关系：对象之间的有向关联
-└── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
+├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
+└── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
 ```
 
 ---
@@ -1268,6 +1275,73 @@ good7ob template instances --product 9 && good7ob template instance 31
 good7ob template upgrade 31 && good7ob template upgrade 31 --preview --var owner=张三
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reject 9 --reason "缺少描述"
+```
+
+---
+
+## pm activity — 任务 / 项目动态
+
+API 端点：`GET /progress/tasks/{id}/activities`、`GET /progress/projects/{id}/activities`、`POST /progress/tasks/{id}/activities`（prd-0092 FP-6，`api-0092`）。动态是 append-only：没有删除 / 编辑接口，写错的 NOTE 只能再写一条 NOTE 说明。
+
+| 命令 | 说明 |
+|------|------|
+| `pm activity --project <id>` \| `--task <id>` | 项目 / 任务动态（新的在前）。**两者必须且只能指定一个**。分页模式：`-p/--page`（默认 1）、`--page-size`（1–200，默认 20） |
+| `pm activity ... --since <id> [--limit n]` | **游标模式**：只取 `id > since` 的动态（`--since 0` 从头开始），`--limit` 1–200（默认 50）；不能与 `--page/--page-size` 同用，`--limit` 也只在游标模式有效 |
+| `pm activity --project <id> [--type a,b] [--actor USER\|AGENT\|SYSTEM]` | 只支持 `--project` 的过滤：`--type` 逗号分隔的动态类型（不区分大小写，CLI 转大写去重后作 `types` 发送）；`--actor` 来源类型 |
+| `pm activity post --task <id> --summary <text> [--type NOTE\|REPORT_UPLOADED] [--url <https-url>]` | 写一条手动动态：`--summary` 必填 ≤500 字符；`--type` 默认 `NOTE`；`--url` 必须 `https://` 开头，存入 `metadata.url` |
+
+文本输出为表格（ID、时间、来源、渠道、类型、任务、摘要）+ 表尾 `nextSinceId=… hasMore=…`（下一次 `--since` 直接用 `nextSinceId`）；来源列显示 `actorName`，没有名字时显示 `actorType:actorId`。摘要 / 来源 / 任务名等用户文本经 `stripControl` 剥离控制字符；`--json` 原样输出响应（`{items, nextSinceId, hasMore}` / 新建的 ActivityVo）。
+业务错误码：`1000` 缺参、`1001` 参数不合法（类型 / actorType 未知、sinceId / limit 越界、summary 超长、url 非 https）、`1002` 任务 / 项目不存在或不属于你所在的组织、`2000` 无权限（AI 员工能力范围不含 `task_read` / `comment`，或任务在其产品范围之外）、`999/401` 未登录。所有参数在调用 API 前于 CLI 端校验，错误不发请求。
+
+```bash
+good7ob pm activity --project 1
+good7ob pm activity --project 1 --since 0 --limit 100 --type HANDOFF,NOTE --actor AGENT
+good7ob pm activity --task 7 -p 2 --page-size 50
+good7ob pm activity --project 1 --since 120 --json
+good7ob pm activity post --task 7 --summary "已联调完成，等待验收"
+good7ob pm activity post --task 7 --type REPORT_UPLOADED --summary "测试报告" --url https://files.example.com/r.pdf
+```
+
+---
+
+## whoami — 当前身份
+
+API 端点：`GET /api/v1/me/actor`（prd-0092 rp-org-ai-emp-0069）。显示配置的 Key 以谁的身份行事：人类用户（`USER`）或 AI 员工（`AGENT`）。
+
+| 命令 | 说明 |
+|------|------|
+| `whoami` | 身份（actorType）、用户 ID（员工 Key 时为签发人，数据权限沿用其组织身份）、渠道；员工 Key 另显示员工 ID、昵称、组织、MCP 角色、能力列表、产品范围（空 = 不限） |
+
+`--json` 原样输出。
+
+```bash
+good7ob whoami
+GOOD7OB_API_KEY=g7b_sk_... good7ob whoami --json
+```
+
+---
+
+## org ai-employee — AI 员工 Key 与档案
+
+API 端点前缀：`/api/v1/orgs/{orgId}/ai-employees/{id}`（prd-0092 FP-8 / FP-9；签发 / 重生成 / 停用 / 启用 Key 与改档案仅组织 owner/admin）。员工列表 / 状态等见 `org` 其它命令与 `workspace ai-team`。
+
+| 命令 | 说明 |
+|------|------|
+| `org ai-employee key issue <orgId> <employeeId>` | 签发该员工的 CLI/MCP Key（`POST .../key`）。**完整 Key 只在响应里返回一次**：CLI 打印一次并附 `good7ob config set api-key <key>` 提示，之后只能看到前缀。一个员工同时最多一把 active Key，再次签发使旧 Key `revoked` |
+| `org ai-employee key regenerate <orgId> <employeeId>` | 重新生成（`POST .../key/regenerate`），旧 Key 立即失效；输出同上 |
+| `org ai-employee key disable\|enable <orgId> <employeeId>` | `PATCH .../key/status {status: disabled\|active}`。员工被停用时其 Key 自动停用，重新启用员工**不**自动恢复 Key |
+| `org ai-employee profile <orgId> <employeeId> [--nickname s] [--role VIEWER\|DEVELOPER\|MANAGER] [--tools a,b] [--products 1,2]` | `PATCH .../{id}`，只发送给出的字段（至少一项）。`--nickname` ≤50 字符；`--role` 不区分大小写；`--tools` 能力代码（见 `capabilities`），`--products` 产品 id（去重），两者任一给出即发送 `capabilityScope`；`--tools ""` / `--products ""` 清空（产品为空 = 不限） |
+| `org ai-employee capabilities <orgId>` | 能力目录（代码、名称、是否仅 MANAGER、说明），供 `--tools` 取值 |
+
+所有命令支持 `--json`（`key issue/regenerate` 输出 `{rawKey, keyPrefix, status, createdAt}`，同样只此一次）。
+业务错误码：`1000` 缺参、`1001` 参数不合法（角色 / 能力项未知、产品不属于该组织、昵称超长）、`1002` 组织或 AI 员工不存在或不属于你、`1007` 当前状态不允许（员工已停用 / Key 已吊销）、`2000` 该 AI 员工无权执行此操作或你不是组织 owner/admin、`999/401` 未登录。
+
+```bash
+good7ob org ai-employee capabilities 58
+good7ob org ai-employee profile 58 7 --nickname "Cursor Agent" --role DEVELOPER --tools task_read,task_write,comment --products 10,11
+good7ob org ai-employee key issue 58 7          # prints the raw key once
+good7ob org ai-employee key regenerate 58 7
+good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 58 7
 ```
 
 ---

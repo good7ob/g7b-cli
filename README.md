@@ -107,9 +107,12 @@ good7ob pm workflow --help
 good7ob pm report --help
 good7ob pm tag --help
 good7ob pm health --help
+good7ob pm activity --project 1 --since 0 --limit 100     # activity feed, cursor mode (footer gives nextSinceId)
+good7ob pm activity --task 7                              # page mode
+good7ob pm activity post --task 7 --summary "done, please review"
 ```
 
-Project management commands for projects, tasks, workflows, reports, tags, and product health.
+Project management commands for projects, tasks, workflows, reports, tags, product health and the task / project activity feed.
 
 ```bash
 good7ob pm health 10                                   # KPIs: progress, scope vs baseline, velocity, ETA
@@ -236,9 +239,21 @@ Template Center: browse the catalog, manage personal / organization templates an
 
 ```bash
 good7ob org --help
+good7ob org ai-employee capabilities 58
+good7ob org ai-employee profile 58 7 --role DEVELOPER --tools task_read,comment --products 10
+good7ob org ai-employee key issue 58 7                    # raw key printed once; then `good7ob config set api-key <key>`
+good7ob org ai-employee key disable 58 7                  # or: enable, regenerate
 ```
 
-Organization management commands for members, invitations, products, and subscriptions.
+Organization management commands for members, invitations, products, subscriptions and AI employees (CLI/MCP key, profile, capability catalogue).
+
+### `whoami`
+
+```bash
+good7ob whoami
+```
+
+Who the configured API key acts as: a user, or an AI employee (id, nickname, org, role, capabilities, product scope). See `FEATURES.md`.
 
 ### `qc`
 

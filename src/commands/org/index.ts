@@ -5,11 +5,12 @@ import { registerMemberCommands } from './members';
 import { registerInvitationCommands } from './invitations';
 import { registerProductCommands } from './products';
 import { registerPlanCommands } from './plans';
+import { registerAiEmployeeCommands } from './aiEmployee';
 
 export function registerOrgCommands(program: Command) {
   const orgCommand = program
     .command('org')
-    .description('Organization management — members, invitations, products, subscriptions');
+    .description('Organization management — members, invitations, products, subscriptions, AI employees');
 
   // ── Core Org CRUD ──────────────────────────────────────────────
 
@@ -221,6 +222,7 @@ export function registerOrgCommands(program: Command) {
   registerInvitationCommands(orgCommand);
   registerProductCommands(orgCommand);
   registerPlanCommands(orgCommand);
+  registerAiEmployeeCommands(orgCommand);
 
   return orgCommand;
 }

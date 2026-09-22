@@ -47,7 +47,7 @@ function registerBudget(health) {
         .requiredOption('--amount <n>', 'Budget, > 0, at most 2 decimals (max 9999999999.99)')
         .requiredOption('--currency <code>', '3-letter currency code, e.g. CNY')
         .option('--labor-rate <n>', 'Rate per hour that turns task actual hours into a derived labor cost (0 - 100000)')
-        .option('--token-price-per-million <n>', 'Money per 1,000,000 tokens (blended in/out, budget currency; 0 - 100000, up to 4 decimals) that turns task token usage into a derived AI token cost. Omitted = the saved price is kept')
+        .option('--token-price-per-million <n>', 'Money per 1,000,000 tokens (blended in/out, budget currency; 0 - 100000, up to 6 decimals) that turns task token usage into a derived AI token cost. Omitted = the saved price is kept')
         .option('--clear-token-price', 'Drop the saved token price (no derived AI token cost afterwards)')
         .option('--note <text>', 'Note (max 500 chars)')
         .option('--release <id>', 'Release-level budget instead of product-level')

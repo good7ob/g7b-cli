@@ -10,10 +10,11 @@ const members_1 = require("./members");
 const invitations_1 = require("./invitations");
 const products_1 = require("./products");
 const plans_1 = require("./plans");
+const aiEmployee_1 = require("./aiEmployee");
 function registerOrgCommands(program) {
     const orgCommand = program
         .command('org')
-        .description('Organization management — members, invitations, products, subscriptions');
+        .description('Organization management — members, invitations, products, subscriptions, AI employees');
     // ── Core Org CRUD ──────────────────────────────────────────────
     orgCommand
         .command('list')
@@ -217,6 +218,7 @@ function registerOrgCommands(program) {
     (0, invitations_1.registerInvitationCommands)(orgCommand);
     (0, products_1.registerProductCommands)(orgCommand);
     (0, plans_1.registerPlanCommands)(orgCommand);
+    (0, aiEmployee_1.registerAiEmployeeCommands)(orgCommand);
     return orgCommand;
 }
 exports.registerOrgCommands = registerOrgCommands;
