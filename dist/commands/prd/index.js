@@ -5,8 +5,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerPrdCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
+const cliHelpers_1 = require("../../utils/cliHelpers");
 const extractRecords_1 = require("../../utils/extractRecords");
 const importStructure_1 = require("./importStructure");
+/**
+ * PRD approval (g7b #1061-D, good7ob/backend#282). `<document-id>` is a forge_prd_documents.id,
+ * the same id `prd get`/`prd lock` use. Deciding (approve/reject/cancel) stays on the generic
+ * `good7ob approval` commands — `approval get <approvalId>` after submitting shows the outcome.
+ */
+const PRD_APPROVAL_ERROR_CODES = {
+    1001: '申请说明超过 2000 字',
+    1002: '文档不存在，或不属于你（只有会话所有者可以提交审批）',
+    1006: '该版本已有待处理的审批申请',
+    1007: '当前无法提交审批：会话未归档、该版本须是最新且未锁定、没有未解决的补充问题，且会话已关联产品（项目或需求）',
+    2000: '你不是该产品所属组织的有效成员',
+};
+const PRD_APPROVAL_VIEW_ERROR_CODES = {
+    1002: '找不到该审批对应的 PRD（审批不存在、不是 PRD 审批，或文档已被删除）',
+    2000: '只有申请人或该组织的所有者/管理员可以查看这份 PRD',
+};
 function registerPrdCommands(program) {
     const prdCommand = program
         .command('prd')
@@ -438,6 +455,80 @@ function registerPrdCommands(program) {
         catch (error) {
             console.error('✗ 版本对比失败:', error instanceof Error ? error.message : String(error));
             process.exit(1);
+        }
+    });
+    // ── Approval (g7b #1061-D) ────────────────────────────────────
+    prdCommand
+        .command('request-approval <document-id>')
+        .description('Submit a PRD document for approval (session owner only)')
+        .option('--description <text>', 'Note for the approver (max 2000 chars)')
+        .option('--json', 'Output as JSON')
+        .action(async (documentId, o) => {
+        try {
+            const id = (0, cliHelpers_1.parseId)(documentId, 'document-id');
+            const description = o.description !== undefined
+                ? (0, cliHelpers_1.checkMaxLength)(o.description, 2000, '--description')
+                : undefined;
+            const body = description === undefined ? {} : { description };
+            const approval = await ApiClient_1.default.post(`/forge/prd/${id}/request-approval`, body);
+            (0, cliHelpers_1.emit)(o.json, approval, () => `✓ 文档 #${id} 已提交审批` +
+                (approval?.id ? `，审批 #${approval.id}（good7ob approval get ${approval.id}）` : ''));
+        }
+        catch (error) {
+            (0, cliHelpers_1.fail)('提交 PRD 审批失败', error, PRD_APPROVAL_ERROR_CODES);
+        }
+    });
+    prdCommand
+        .command('approval-status <document-id>')
+        .description('Show the latest approval state of a PRD document (owner only)')
+        .option('--json', 'Output as JSON')
+        .action(async (documentId, o) => {
+        try {
+            const id = (0, cliHelpers_1.parseId)(documentId, 'document-id');
+            const state = await ApiClient_1.default.get(`/forge/prd/${id}/approval`);
+            (0, cliHelpers_1.emit)(o.json, state, () => {
+                if (!state || state.status === 'none')
+                    return `文档 #${id} 尚未提交审批`;
+                return `文档 #${id} 审批状态: ${state.status}` +
+                    (state.approvalId ? `（审批 #${state.approvalId}）` : '');
+            });
+        }
+        catch (error) {
+            (0, cliHelpers_1.fail)('获取 PRD 审批状态失败', error, PRD_APPROVAL_ERROR_CODES);
+        }
+    });
+    prdCommand
+        .command('approval-document <approval-id>')
+        .description('Read a PRD document through an approval id (approver/requester read path)')
+        .option('--json', 'Output as JSON')
+        .action(async (approvalId, o) => {
+        try {
+            const id = (0, cliHelpers_1.parseId)(approvalId, 'approval-id');
+            const doc = await ApiClient_1.default.get(`/forge/prd/approvals/${id}/document`);
+            if (o.json) {
+                console.log(JSON.stringify(doc, null, 2));
+                return;
+            }
+            console.log('\nPRD 审批文档');
+            console.log('─'.repeat(55));
+            console.log(`审批 ID:  ${doc.approvalId}`);
+            console.log(`文档 ID:  ${doc.documentId}`);
+            console.log(`会话 ID:  ${doc.sessionId}`);
+            console.log(`标题:     ${doc.title || '-'}`);
+            console.log(`版本:     ${doc.version || '-'}`);
+            console.log(`类型:     ${doc.docType || '-'}`);
+            console.log(`语言:     ${doc.language || '-'}`);
+            console.log(`已锁定:   ${doc.locked ? '是' : '否'}`);
+            if (doc.isLatest === false)
+                console.log('⚠ 这不是最新版本');
+            console.log('─'.repeat(55));
+            if (doc.contentMd) {
+                console.log('\n内容:');
+                console.log(doc.contentMd);
+            }
+        }
+        catch (error) {
+            (0, cliHelpers_1.fail)('获取 PRD 审批文档失败', error, PRD_APPROVAL_VIEW_ERROR_CODES);
         }
     });
     (0, importStructure_1.registerImportStructureCommand)(prdCommand);

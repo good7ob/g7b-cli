@@ -25,7 +25,7 @@ function registerApprovalCommands(program) {
         .command('list')
         .description('List approvals of my organizations, newest first (--mine: only those I can decide)')
         .option('--status <status>', `Filter by status (${input_1.STATUSES.join('|')})`)
-        .option('--target-type <type>', 'Filter by target type, e.g. RELEASE (case-insensitive)')
+        .option('--target-type <type>', 'Filter by target type, e.g. RELEASE, PRD (case-insensitive)')
         .option('--target-id <id>', 'Filter by target id (with --target-type)')
         .option('--product <id>', 'Filter by product id')
         .option('--mine', 'Only pending requests I can decide (implies --status pending)')
