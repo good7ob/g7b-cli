@@ -15,7 +15,7 @@ import {
 export const QUEUE_STATUSES = ['active', 'snoozed', 'dismissed', 'done', 'all', 'new', 'in_progress', 'waiting'] as const;
 export const ACTION_TYPES = [
   'PLAN_APPROVAL', 'COMPLETION_APPROVAL', 'INFO_REQUEST', 'BLOCKED', 'PAUSED', 'SYSTEM_ALERT',
-  'REQUIREMENT_TRIAGE', 'APPROVAL', 'RISK_ALERT',
+  'REQUIREMENT_TRIAGE', 'APPROVAL', 'RISK_ALERT', 'BUG_FIX',
 ] as const;
 export const QUEUE_SORTS = ['newest', 'score'] as const;
 export type Decision = 'approve' | 'reject';

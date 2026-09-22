@@ -951,8 +951,8 @@ API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在�
 
 ### 待办队列（等待我处理的事项）
 
-来源：我负责的等待态任务、未读消息、我创建的 inbox 需求、我能决定的审批、我所在组织的高风险产品。
-动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊 / `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警。
+来源：我负责的等待态任务、未读消息、我创建的 inbox 需求、我能决定的审批、我所在组织的高风险产品、指派给我且未解决的缺陷（open / in_progress / reopen；缺陷被解决 / 关闭 / 转派后自动置 done）。
+动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊 / `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警 / `BUG_FIX` 缺陷修复（来源类型 `BUG`；`来源ID` 是缺陷 id，项目列即缺陷所属项目；优先级取严重度与优先级中更紧急者，两者都无法识别时为 —；无截止时间）。
 状态：new / in_progress / waiting / snoozed / dismissed / done（到期的 snooze 读作 new）。
 
 | 命令 | 说明 |
@@ -967,7 +967,7 @@ API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在�
 | `workspace queue reject <id> --comment <text>` | 就地驳回；`--comment` 必填（不能为空白） |
 
 `<id>` 是列表第一列 **ID（队列项 id）**，不是来源对象的 id（`来源ID` 列）。列表先显示各动作类型计数（总数与计数不受 `--limit` 影响，也不受 `--action-type` 影响），再列出事项表；已稍后的项在“到期/稍后”列显示 `稍后至 … UTC`，任务显示截止时间。
-`approve` / `reject` 只对活跃项、且类型有就地审批（审批申请 / 计划审批 / 完成审批）；其他类型（阻塞、信息请求、风险预警等）返回 `1007`，需到来源对象处理。成功后该项自动置 done。
+`approve` / `reject` 只对活跃项、且类型有就地审批（审批申请 / 计划审批 / 完成审批）；其他类型（阻塞、信息请求、风险预警、缺陷修复等）返回 `1007`，需到来源对象处理。成功后该项自动置 done。
 `approve` 若客户端超时（默认 30 秒，Agent 执行可能更久），CLI 会提示服务端可能仍在处理，先用 `queue --status all` 核对，不要盲目重试。
 
 ### 总览与“我的”视图

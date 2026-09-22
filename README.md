@@ -155,6 +155,7 @@ Idea pool: capture ideas, compare solutions with structured estimates, pick one 
 
 ```bash
 good7ob workspace queue --limit 50 --status active --action-type PLAN_APPROVAL
+good7ob workspace queue --action-type BUG_FIX          # bugs assigned to me
 good7ob workspace queue counts
 good7ob workspace queue snooze 501 --until +2h        # or an ISO time (no offset = UTC)
 good7ob workspace queue approve 501 --comment "LGTM"   # decide in place: approval / task plan / task completion

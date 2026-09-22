@@ -50,6 +50,7 @@ export const ACTION_LABELS: Record<string, string> = {
   REQUIREMENT_TRIAGE: '需求分诊',
   APPROVAL: '审批申请',
   RISK_ALERT: '风险预警',
+  BUG_FIX: '缺陷修复',
 };
 
 const STATUS_HEADINGS: Record<string, string> = {
