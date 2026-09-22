@@ -58,6 +58,13 @@ describe('approval list', () => {
     });
   });
 
+  it('--target-type PRD passes through unchanged (case-insensitive, g7b #1061-D)', async () => {
+    const r = await approval(['list', '--target-type', 'prd'], page);
+    expect(r.http.get).toHaveBeenCalledWith('/approvals', {
+      params: { pageNum: 1, pageSize: 20, targetType: 'PRD' },
+    });
+  });
+
   it('--mine sends mine=true (and tolerates --status pending)', async () => {
     const r = await approval(['list', '--mine'], page);
     expect(r.http.get).toHaveBeenCalledWith('/approvals', { params: { pageNum: 1, pageSize: 20, mine: true } });

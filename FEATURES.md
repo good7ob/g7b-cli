@@ -1071,12 +1071,12 @@ good7ob release get 7
 
 ## approval — 审批
 
-API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审批"命令：申请由拥有目标对象的功能发起（发布用 `release request-approval`）。
+API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审批"命令：申请由拥有目标对象的功能发起（发布用 `release request-approval`，PRD 用 `prd request-approval`）。
 状态：pending / approved / rejected / cancelled。
 
 | 命令 | 说明 |
 |------|------|
-| `approval list` | 我所在组织的审批（新的在前，分页）；`--status` `--target-type`（如 RELEASE，不区分大小写）`--target-id` `--product` `--mine` `-p/--page` `--page-size`（≤100，默认 20） |
+| `approval list` | 我所在组织的审批（新的在前，分页）；`--status` `--target-type`（如 RELEASE、PRD，不区分大小写）`--target-id` `--product` `--mine` `-p/--page` `--page-size`（≤100，默认 20） |
 | `approval get <id>` | 详情；显示我能否决定 / 撤销、决定人与意见、是否自批 |
 | `approval approve <id>` | 批准；`--comment` 可选 |
 | `approval reject <id> --comment <text>` | 驳回；`--comment` 必填 |
@@ -1086,6 +1086,18 @@ API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审
 `--product` 只是过滤条件，**不**读 `GOOD7OB_PRODUCT_ID`（否则会悄悄缩小"待我决定"的范围）。
 决定权限：仅组织 owner/admin；申请人不能批准/驳回自己的申请，唯一例外是组织里没有其他审批人，此时批准会标记 `selfApproved`（CLI 会提示）。
 业务错误码：`1000` 缺参（驳回没写意见）、`1001` 值非法、`1002` 不存在、`1009` 已被处理（含并发的第二个决定者，用 `approval get` 看结果）、`2000` 无权限、`999/401` 未登录。所有命令支持 `--json`，无二次确认。
+
+### PRD 审批（g7b #1061-D）
+
+`{document-id}` 是 `forge_prd_documents.id`（与 `prd get`/`prd lock` 同一个 id）。批准/驳回/撤销走上面的通用 `approval approve|reject|cancel`——提交后用 `approval get <approvalId>` 看结果。
+
+| 命令 | 说明 |
+|------|------|
+| `prd request-approval <document-id> [--description <text>]` | 提交该文档审批（仅会话所有者）；`--description` ≤2000 字 |
+| `prd approval-status <document-id>` | 该文档最新一次审批状态（`none｜pending｜approved｜rejected｜cancelled`，仅所有者可查） |
+| `prd approval-document <approval-id>` | 通过审批 id 只读查看 PRD 内容（申请人 / 该组织 owner-admin），显示 `⚠ 这不是最新版本`（当后端返回 `isLatest: false` 时） |
+
+业务错误码：`request-approval` — `1001` 说明超 2000 字、`1002` 文档不存在或不属于你、`1006` 已有待处理审批、`1007` 当前状态不允许（会话已归档 / 非最新版本 / 已锁定 / 有未解决的补充问题 / 会话未关联产品）、`2000` 非组织成员；`approval-document` — `1002` 审批不存在或不是 PRD 审批、`2000` 无权查看。
 
 ```bash
 good7ob approval list --mine

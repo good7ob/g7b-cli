@@ -195,7 +195,7 @@ good7ob approval approve 31 --comment "LGTM"
 good7ob approval reject 31 --comment "scope unclear"   # --comment is required
 ```
 
-Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`).
+Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`, `prd request-approval`).
 
 ### `trace`
 
