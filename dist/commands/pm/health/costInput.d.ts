@@ -14,7 +14,7 @@ export declare const MAX_TOKEN_PRICE = 100000;
 export declare const MIN_ENTRY_DATE = "2000-01-01";
 /** A positive amount with at most 2 decimals, up to `max`. */
 export declare function parseMoney(raw: string | undefined, label: string, max: number): number;
-/** Money per 1,000,000 tokens: 0 (a free model) to 100000, at most 4 decimals (the backend rounds to 4; the CLI refuses more). */
+/** Money per 1,000,000 tokens: 0 (a free model) to 100000, at most 6 decimals (the backend rounds to 6; the CLI refuses more). */
 export declare function parseTokenPrice(raw: string | undefined, label?: string): number;
 /** Upper-cased 3-letter currency code. */
 export declare function parseCurrency(raw: string | undefined, label?: string): string;
