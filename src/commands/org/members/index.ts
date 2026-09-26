@@ -104,6 +104,25 @@ export function registerMemberCommands(orgCommand: Command) {
       }
     });
 
+  // add-member (direct, no invitation acceptance)
+  orgCommand
+    .command('add-member <org-id>')
+    .description('Add an existing user to the organization directly by email, skipping the invitation accept step')
+    .requiredOption('--email <email>', 'Email of an existing good7ob account')
+    .option('--role <role>', 'Role for the new member (admin|member)', 'member')
+    .action(async (orgId, options) => {
+      try {
+        await apiClient.post(`/api/v1/orgs/${orgId}/members/add`, {
+          email: options.email,
+          role: options.role,
+        });
+        console.log(`✓ 已直接加入组织: ${options.email} (角色: ${options.role})`);
+      } catch (error) {
+        console.error('✗ 直接添加成员失败:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+    });
+
   // batch-invite
   orgCommand
     .command('batch-invite <org-id>')
