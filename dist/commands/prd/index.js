@@ -7,6 +7,7 @@ exports.registerPrdCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const extractRecords_1 = require("../../utils/extractRecords");
 const importStructure_1 = require("./importStructure");
+const importFile_1 = require("./importFile");
 function registerPrdCommands(program) {
     const prdCommand = program
         .command('prd')
@@ -441,6 +442,7 @@ function registerPrdCommands(program) {
         }
     });
     (0, importStructure_1.registerImportStructureCommand)(prdCommand);
+    (0, importFile_1.registerImportFileCommand)(prdCommand);
     return prdCommand;
 }
 exports.registerPrdCommands = registerPrdCommands;

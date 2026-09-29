@@ -91,7 +91,7 @@ function listMarkdown(dir) {
         return e.name.endsWith('.md') && e.name !== '三层结构改造方案.md' ? [p] : [];
     });
 }
-function loadStructure(prdDir) {
+function loadStructure(prdDir, onlyFiles) {
     const indexPath = path_1.default.join(prdDir, exports.INDEX_FILE);
     if (!fs_1.default.existsSync(indexPath))
         throw new Error(`找不到需求索引: ${indexPath}`);
@@ -99,10 +99,12 @@ function loadStructure(prdDir) {
     const prdFps = [];
     const seen = new Map();
     for (const file of listMarkdown(prdDir).sort()) {
+        const rel = path_1.default.relative(prdDir, file);
+        if (onlyFiles && !onlyFiles.has(rel) && !onlyFiles.has(path_1.default.basename(rel)))
+            continue;
         const md = fs_1.default.readFileSync(file, 'utf8');
         if (!/^## FP-/m.test(md))
             continue;
-        const rel = path_1.default.relative(prdDir, file);
         let fps;
         try {
             fps = parsePrd(md);

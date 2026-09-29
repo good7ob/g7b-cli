@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
 import { registerImportStructureCommand } from './importStructure';
+import { registerImportFileCommand } from './importFile';
 
 export function registerPrdCommands(program: Command) {
   const prdCommand = program
@@ -455,6 +456,7 @@ export function registerPrdCommands(program: Command) {
     });
 
   registerImportStructureCommand(prdCommand);
+  registerImportFileCommand(prdCommand);
 
   return prdCommand;
 }
