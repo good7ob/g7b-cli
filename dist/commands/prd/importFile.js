@@ -20,6 +20,7 @@ function registerImportFileCommand(prdCommand) {
         .argument('<file>', '本地 .md 文件路径')
         .option('--title <title>', '会话标题（默认从文件第一个 # 标题提取）')
         .option('--lang <language>', '文档语言（zh/en/ja）', 'zh')
+        .option('--product-id <id>', '关联到的产品 ID（在 /forge/prd 用产品筛选器可查到）')
         .option('--json', '输出 JSON')
         .action(async (file, o) => {
         const filePath = path_1.default.resolve(file);
@@ -34,6 +35,7 @@ function registerImportFileCommand(prdCommand) {
                 title,
                 content,
                 language: o.lang,
+                productId: o.productId ? Number(o.productId) : undefined,
             });
             if (o.json) {
                 console.log(JSON.stringify(result, null, 2));
