@@ -60,8 +60,8 @@ describe('idea create', () => {
 describe('idea list', () => {
   const page = ok({
     records: [
-      { id: 1, title: '导出', status: 'approved', priority: 'high', source: 'customer', requirementId: 77, createdAt: '2026-09-19' },
-      { id: 2, title: '草稿', status: 'draft', priority: null, source: 'pm', requirementId: null, createdAt: '2026-09-19' },
+      { id: 1, title: '导出', status: 'approved', priority: 'high', source: 'customer', prdSessionId: 77, createdAt: '2026-09-19' },
+      { id: 2, title: '草稿', status: 'draft', priority: null, source: 'pm', prdSessionId: null, createdAt: '2026-09-19' },
     ],
     total: 41, size: 20, current: 2, pages: 3,
   });
@@ -110,17 +110,17 @@ describe('idea list', () => {
 
 describe('idea get', () => {
   const detail = ok({
-    idea: { id: 1, productId: 3, title: '做个导出', status: 'approved', priority: 'high', source: 'customer', requirementId: 77, expectedValue: null },
+    idea: { id: 1, productId: 3, title: '做个导出', status: 'approved', priority: 'high', source: 'customer', prdSessionId: 77, expectedValue: null },
     solutions: [
       { id: 2, name: '方案A', costNote: '2 人天', cycleNote: '1 周', expectedEffectNote: '覆盖 80%', isSelected: true, decisionReason: '最快', decidedBy: 5, decidedAt: '2026-09-19' },
       { id: 3, name: '方案B', costNote: null, cycleNote: '3 周', expectedEffectNote: null, isSelected: false },
     ],
   });
 
-  it('GETs /{id} and shows solutions side by side with the linked requirement', async () => {
+  it('GETs /{id} and shows solutions side by side with the linked PRD session', async () => {
     const r = await idea(['get', '1'], detail);
     expect(r.http.get).toHaveBeenCalledWith('/forge/ideas/1', { params: undefined });
-    expect(r.stdout).toContain('关联需求: #77');
+    expect(r.stdout).toContain('PRD 会话: #77');
     expect(r.stdout).toMatch(/ID\s+方案\s+成本\s+周期\s+预期效果\s+选中/);
     expect(r.stdout).toMatch(/2\s+方案A\s+2 人天\s+1 周\s+覆盖 80%\s+✓/);
     expect(r.stdout).toMatch(/3\s+方案B\s+—\s+3 周\s+—/);
@@ -128,10 +128,10 @@ describe('idea get', () => {
     expect(r.stdout).toContain('决策: 选定 #2 方案A — 最快');
   });
 
-  it('says so when there are no solutions and no requirement', async () => {
+  it('says so when there are no solutions and no PRD session', async () => {
     const r = await idea(['get', '1'], ok({ idea: { id: 1, title: 't', status: 'draft' }, solutions: [] }));
     expect(r.stdout).toContain('暂无方案');
-    expect(r.stdout).not.toContain('关联需求');
+    expect(r.stdout).not.toContain('PRD 会话');
   });
 
   it('shows the reject reason of a rejected idea', async () => {
@@ -224,13 +224,12 @@ describe('idea solution', () => {
 });
 
 describe('idea select', () => {
-  const approved = ok({ idea: { id: 5, status: 'approved', requirementId: 77 }, solutions: [] });
+  const approved = ok({ idea: { id: 5, status: 'approved', prdSessionId: 77 }, solutions: [] });
 
-  it('POSTs decisionReason and announces the requirement created in the inbox', async () => {
+  it('POSTs decisionReason and announces the generated PRD session', async () => {
     const r = await idea(['select', '5', '8', '--reason', '成本最低'], approved);
     expect(r.http.post).toHaveBeenCalledWith('/forge/ideas/5/solutions/8/select', { decisionReason: '成本最低' });
-    expect(r.stdout).toContain('需求 #77');
-    expect(r.stdout).toContain('需求收件箱');
+    expect(r.stdout).toContain('PRD 会话 #77');
   });
 
   it('requires --reason and validates ids', async () => {

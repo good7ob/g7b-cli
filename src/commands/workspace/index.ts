@@ -5,9 +5,8 @@ import { registerViewCommands } from './viewCommands';
 
 /**
  * Personal workspace. `queue` lists what is waiting on *me* (plan/completion approvals, approval
- * requests, info requests, blocked/paused tasks, alerts, requirements to triage, risks) and acts
- * on those items; `overview / tasks / products / orgs` are the "mine" views. Deliberately not
- * called "inbox": in this CLI that word is the requirement-inbox status (`good7ob req`).
+ * requests, info requests, blocked/paused tasks, alerts, risks) and acts
+ * on those items; `overview / tasks / products / orgs` are the "mine" views.
  * Queue lives in queueCommands.ts, the other views in viewCommands.ts, the AI team / daily report /
  * next actions (B2) in aiTeamCommands.ts.
  */
