@@ -138,6 +138,10 @@ export function duplicateNotes(names: string[]): Map<string, string> {
 
 const joinNote = (...parts: (string | null | undefined)[]) => parts.filter((p) => p && p.trim()).join('；');
 
+/** Column widths from backend V165; anything longer makes the insert 500, so clip at the boundary. */
+export const LIMITS = { prefix: 16, description: 512, dataType: 64, defaultVal: 255 };
+export const clip = (v: string, max: number) => (v.length > max ? v.slice(0, max) : v);
+
 export function buildDesired(doc: SchemaExport): DesiredModule[] {
   const notes = duplicateNotes(doc.tables.map((t) => t.name));
   const byModule = new Map<string, DesiredModule>();
@@ -148,7 +152,7 @@ export function buildDesired(doc: SchemaExport): DesiredModule[] {
     if (!byModule.has(m.name)) {
       byModule.set(m.name, {
         name: m.name,
-        prefix: m.key ? `${m.key}_` : '',
+        prefix: clip(m.key ? `${m.key}_` : '', LIMITS.prefix),
         description: `从 ${doc.schema} 实库导入，按表名前缀${m.key ? ` ${m.key}_` : '（无匹配）'}归类`,
         sortOrder: order.indexOf(m.name),
         tables: [],
@@ -157,19 +161,19 @@ export function buildDesired(doc: SchemaExport): DesiredModule[] {
     const mod = byModule.get(m.name)!;
     mod.tables.push({
       tableName: t.name,
-      description: joinNote(t.comment, notes.get(t.name)),
+      description: clip(joinNote(t.comment, notes.get(t.name)), LIMITS.description),
       status: 'published',
       sortOrder: mod.tables.length,
       columns: t.columns.map((c, i) => ({
         columnName: c.name,
-        dataType: c.type || 'unknown',
+        dataType: clip(c.type || 'unknown', LIMITS.dataType),
         nullable: c.nullable !== false,
-        defaultVal: c.default ?? null,
+        defaultVal: c.default == null ? null : clip(c.default, LIMITS.defaultVal),
         isPk: c.pk === true,
         isFk: !!c.fkTable,
         fkRefTable: c.fkTable ?? null,
         fkRefColumn: c.fkColumn ?? null,
-        description: c.comment ?? '',
+        description: clip(c.comment ?? '', LIMITS.description),
         sortOrder: i,
       })),
     });

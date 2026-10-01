@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  buildDesired, changedFields, duplicateNotes, exportSql, moduleFor, OTHER_MODULE, parseExport,
+  buildDesired, changedFields, duplicateNotes, exportSql, LIMITS, moduleFor, OTHER_MODULE, parseExport,
   SchemaExport, syncSchema,
 } from '../schemaImport';
 
@@ -136,6 +136,15 @@ describe('buildDesired', () => {
       isFk: true, fkRefTable: 'pm_project', fkRefColumn: 'id', description: '项目', sortOrder: 1,
     });
     expect(modules[2].prefix).toBe('');
+  });
+
+  it('clips values to the backend column widths', () => {
+    const [mod] = buildDesired(parseExport({ schema: 's', tables: [
+      { name: 'personal_secretary_todos', comment: 'x'.repeat(600), columns: [col('a', { default: 'd'.repeat(300) })] },
+    ] }));
+    expect(mod.prefix).toHaveLength(LIMITS.prefix);
+    expect(mod.tables[0].description).toHaveLength(LIMITS.description);
+    expect(mod.tables[0].columns[0].defaultVal).toHaveLength(LIMITS.defaultVal);
   });
 });
 
