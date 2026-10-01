@@ -263,6 +263,22 @@ good7ob qc --help
 
 Quality-control commands for bug tracking and QA reporting.
 
+### `schema`
+
+Load a live PostgreSQL schema into Forge DB Schema Design (`/forge/schema/*`: module → table → column). Tables are grouped into modules by name prefix (`forge_`, `pm_`, …; unmatched → `其他`). Table/column DB comments become descriptions, and singular/plural pairs such as `pm_task`/`pm_tasks` are flagged `疑似重复`. The import is idempotent: it creates what is missing and updates what changed, and it never deletes. Writes need the `owner`/`admin` role in the org.
+
+```bash
+# 1. Export (no DB driver in the CLI; psql runs the query)
+good7ob schema export-sql --db-schema good7ob_dev | psql "$DATABASE_URL" -At > schema.json
+
+# 2. Preview grouping, then plan against the org, then write
+good7ob schema import --file schema.json --parse-only
+good7ob schema import --org 58 --file schema.json --dry-run
+good7ob schema import --org 58 --file schema.json
+```
+
+A table already registered under a different module is skipped and listed: table names are unique per org, and the API can't move a table between modules.
+
 ## Quick examples
 
 ### Project management
