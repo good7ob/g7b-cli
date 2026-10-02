@@ -57,7 +57,7 @@ export interface DesiredFeature {
 export declare function parseIndex(md: string): IndexRow[];
 /** One PRD file → its FP sections (FP ID line + Rule Points rows), fpType from the FP summary table. */
 export declare function parsePrd(md: string): PrdFp[];
-export declare function loadStructure(prdDir: string): ParsedStructure;
+export declare function loadStructure(prdDir: string, onlyFiles?: Set<string>): ParsedStructure;
 export declare function parseVerified(raw: unknown): Verified;
 export declare const mapFpType: (t?: string) => string;
 export declare const mapRpType: (t?: string) => string;

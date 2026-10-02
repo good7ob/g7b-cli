@@ -89,16 +89,17 @@ function listMarkdown(dir: string): string[] {
   });
 }
 
-export function loadStructure(prdDir: string): ParsedStructure {
+export function loadStructure(prdDir: string, onlyFiles?: Set<string>): ParsedStructure {
   const indexPath = path.join(prdDir, INDEX_FILE);
   if (!fs.existsSync(indexPath)) throw new Error(`找不到需求索引: ${indexPath}`);
   const rows = parseIndex(fs.readFileSync(indexPath, 'utf8'));
   const prdFps: PrdFp[] = [];
   const seen = new Map<string, string>();
   for (const file of listMarkdown(prdDir).sort()) {
+    const rel = path.relative(prdDir, file);
+    if (onlyFiles && !onlyFiles.has(rel) && !onlyFiles.has(path.basename(rel))) continue;
     const md = fs.readFileSync(file, 'utf8');
     if (!/^## FP-/m.test(md)) continue;
-    const rel = path.relative(prdDir, file);
     let fps: PrdFp[];
     try { fps = parsePrd(md); } catch (e) { throw new Error(`${rel}: ${e instanceof Error ? e.message : e}`); }
     for (const fp of fps) {
