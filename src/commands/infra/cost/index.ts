@@ -16,6 +16,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { dash } from '../../../utils/cliHelpers';
 
 export function registerCostCommands(infraCommand: Command) {
   const costCommand = infraCommand
@@ -97,7 +98,7 @@ export function registerCostCommands(infraCommand: Command) {
             data.apps.forEach((app: any) => {
               const percentage = data.totalCost > 0 ? ((app.cost / data.totalCost) * 100).toFixed(1) : '0';
               console.log(
-                app.name.padEnd(25) +
+                dash(app.name).padEnd(25) +
                   `$${app.cost.toFixed(2)}`.padEnd(15) +
                   (app.resourceCount || 0).toString().padEnd(10) +
                   percentage + '%'
@@ -144,7 +145,7 @@ export function registerCostCommands(infraCommand: Command) {
             data.environments.forEach((env: any) => {
               const percentage = data.totalCost > 0 ? ((env.cost / data.totalCost) * 100).toFixed(1) : '0';
               console.log(
-                env.name.padEnd(15) +
+                dash(env.name).padEnd(15) +
                   `$${env.cost.toFixed(2)}`.padEnd(20) +
                   percentage + '%'
               );
@@ -194,7 +195,7 @@ export function registerCostCommands(infraCommand: Command) {
             data.types.forEach((type: any) => {
               const percentage = data.totalCost > 0 ? ((type.cost / data.totalCost) * 100).toFixed(1) : '0';
               console.log(
-                type.name.padEnd(25) +
+                dash(type.name).padEnd(25) +
                   `$${type.cost.toFixed(2)}`.padEnd(15) +
                   (type.resourceCount || 0).toString().padEnd(10) +
                   percentage + '%'
@@ -239,7 +240,7 @@ export function registerCostCommands(infraCommand: Command) {
             data.providers.forEach((provider: any) => {
               const percentage = data.totalCost > 0 ? ((provider.cost / data.totalCost) * 100).toFixed(1) : '0';
               console.log(
-                provider.name.padEnd(15) +
+                dash(provider.name).padEnd(15) +
                   `$${provider.cost.toFixed(2)}`.padEnd(20) +
                   percentage + '%'
               );

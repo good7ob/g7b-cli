@@ -5,7 +5,7 @@
  */
 import { ErrorCodeMap } from '../../utils/cliHelpers';
 export declare const QUEUE_STATUSES: readonly ["active", "snoozed", "dismissed", "done", "all", "new", "in_progress", "waiting"];
-export declare const ACTION_TYPES: readonly ["PLAN_APPROVAL", "COMPLETION_APPROVAL", "INFO_REQUEST", "BLOCKED", "PAUSED", "SYSTEM_ALERT", "REQUIREMENT_TRIAGE", "APPROVAL", "RISK_ALERT"];
+export declare const ACTION_TYPES: readonly ["PLAN_APPROVAL", "COMPLETION_APPROVAL", "INFO_REQUEST", "BLOCKED", "PAUSED", "SYSTEM_ALERT", "REQUIREMENT_TRIAGE", "APPROVAL", "RISK_ALERT", "BUG_FIX"];
 export declare const QUEUE_SORTS: readonly ["newest", "score"];
 export type Decision = 'approve' | 'reject';
 export declare const MAX_QUEUE_LIMIT = 200;

@@ -10,8 +10,8 @@ import { AxiosResponse } from 'axios';
 import { SpyInstance, vi } from 'vitest';
 import apiClient from '../../services/ApiClient';
 
-type Method = 'get' | 'post' | 'put' | 'delete';
-const METHODS: Method[] = ['get', 'post', 'put', 'delete'];
+type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
+const METHODS: Method[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 export interface Envelope {
   code: number;

@@ -6,6 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { rateLimitRetry, runPool } from '../../utils/pool';
 
 export const INDEX_FILE = 'prd-0000-good7ob-requirement-index.md';
 /** forge_feature.name / forge_function_point.name are VARCHAR(100). */
@@ -206,18 +207,6 @@ export interface SyncResult { counts: Record<Layer, { create: number; update: nu
 const byLeadingId = (rows: any[], field: string) =>
   new Map<string, any>((rows ?? []).map((r) => [String(r[field] ?? '').trim().split(/\s+/)[0], r]));
 
-async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
-  let next = 0;
-  let failed = false;
-  const lane = async () => {
-    while (!failed && next < items.length) {
-      const item = items[next++];
-      try { await worker(item); } catch (e) { failed = true; throw e; }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane));
-}
-
 /**
  * Create missing nodes, update FP status / RP implStatus only when different, never delete.
  * dryRun reads existing data and records the plan without writing.
@@ -232,24 +221,7 @@ export async function syncStructure(
     result.counts[layer][op] += 1;
     if (op !== 'unchanged') result.actions.push({ layer, op, id, ...change });
   };
-  // 一次完整导入是上千次写请求，后端按用户维度限流，撞上 429 就退避重试；
-  // 其它错误仍然立刻中止（幂等，重跑即可续上）。
-  const RETRY_DELAYS_MS = opts.retryDelaysMs ?? [2000, 4000, 8000, 16000, 30000];
-  const isRateLimited = (m: string) => /Too many requests|429|请求过于频繁/i.test(m);
-  const at = async <T>(id: string, call: () => Promise<T>): Promise<T> => {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await call();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (isRateLimited(msg) && attempt < RETRY_DELAYS_MS.length) {
-          await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-          continue;
-        }
-        throw new Error(`${id}: ${msg}`);
-      }
-    }
-  };
+  const at = rateLimitRetry(opts.retryDelaysMs);
 
   const syncRp = async (fpRow: any, existing: Map<string, any>, rp: DesiredRp) => {
     const row = existing.get(rp.key);

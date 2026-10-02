@@ -18,6 +18,7 @@ function renderBudget(b, scope, saved = false) {
         (0, kpi_1.block)([
             ['金额', `${money(b.amount)} ${(0, cliHelpers_1.dash)(b.currency)}`],
             ['人力费率', b.laborRatePerHour == null ? `${cliHelpers_1.DASH}（未设置：不推导人力成本）` : `${money(b.laborRatePerHour)} ${(0, cliHelpers_1.dash)(b.currency)} /小时`],
+            ['token 单价', b.tokenPricePerMillion == null ? `${cliHelpers_1.DASH}（未设置：不推导 AI token 成本）` : `${(0, cliHelpers_1.fmtNum)(b.tokenPricePerMillion, '', 4)} ${(0, cliHelpers_1.dash)(b.currency)} /百万 token`],
             ['备注', (0, cliHelpers_1.dash)(b.note)],
             ['更新', b.updatedAt ? `${(0, cliHelpers_1.fmtDateTime)(b.updatedAt)} by ${(0, cliHelpers_1.dash)(b.updatedBy)}` : cliHelpers_1.DASH],
         ]),
@@ -32,6 +33,10 @@ function renderActual(a) {
     const d = a.derivedLabor;
     if (d) {
         lines.push(`推导人力（非手工录入）  ${(0, cliHelpers_1.fmtNum)(d.hours)} 小时 × ${money(d.ratePerHour)} /小时 = ${money(d.amount)}`);
+    }
+    const ai = a.derivedAiToken;
+    if (ai) {
+        lines.push(`推导 AI token（非手工录入）  ${(0, cliHelpers_1.fmtNum)(ai.tokens, '', 0)} token × ${(0, cliHelpers_1.fmtNum)(ai.pricePerMillion, '', 4)} /百万 token = ${money(ai.amount)}`);
     }
     return lines;
 }
@@ -60,7 +65,9 @@ function renderCost(c) {
         ['单位范围成本', money(c.costPerScopeUnit)],
         ['完工估算 (EAC)', money(c.estimateAtCompletion)],
         ['EAC 相对预算', money(c.estimateVariance)],
-    ]), `AI token 消耗量 ${(0, cliHelpers_1.dash)(c.aiTokensConsumed)}（token 数量，不是金额；ai_token 成本只能手工录入）`);
+    ]), `AI token 消耗量 ${(0, cliHelpers_1.dash)(c.aiTokensConsumed)}（token 数量，不是金额；${c.actual?.derivedAiToken
+        ? '金额见上方「推导 AI token」，手工 ai_token 条目另计'
+        : '预算未设 token 单价或没有用量时不推导 AI token 成本，ai_token 条目仅手工录入'}）`);
     (c.warnings ?? []).forEach((w) => lines.push(`⚠ ${w}`));
     return lines.join('\n');
 }

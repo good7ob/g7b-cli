@@ -20,12 +20,15 @@
 - [pm report — 进度报告](#pm-report--进度报告)
 - [pm tag — 标签管理](#pm-tag--标签管理)
 - [pm health — 产品健康度](#pm-health--产品健康度)
+- [pm activity — 任务 / 项目动态](#pm-activity--任务--项目动态)
 - [idea — Idea 池](#idea--idea-池)
 - [workspace — 我的工作台](#workspace--我的工作台)
 - [release — 发布管理](#release--发布管理)
 - [approval — 审批](#approval--审批)
 - [trace — 追溯关系](#trace--追溯关系)
 - [template — 模板中心](#template--模板中心)
+- [whoami — 当前身份](#whoami--当前身份)
+- [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -76,13 +79,17 @@ good7ob
 │   ├── workflow             # 工作流模板与阶段管理
 │   ├── report               # AI 进度报告
 │   ├── tag                  # 标签管理
-│   └── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建；P50/P80 预测、成本/预算、What-if、诊断、AI 解读、管理报告
+│   ├── health               # 产品健康度、模块进度、范围基线、进度配置、范围变更、Burnup、快照重建；P50/P80 预测、成本/预算、What-if、诊断、AI 解读、管理报告
+│   └── activity             # 任务 / 项目动态：分页 / 游标增量拉取、类型与来源过滤、写 NOTE / REPORT_UPLOADED
+├── org                      # 组织管理
+│   └── ai-employee          # AI 员工：CLI/MCP Key 签发 / 重生成 / 停用 / 启用、档案（昵称 / 角色 / 能力范围）、能力目录
 ├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复、AI 生成方案与估算修正、变更集、效果复盘
 ├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略/按优先分排序）、总览、我的任务/产品/组织、我的 AI 团队、AI 日报、下一步推荐
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 ├── trace                    # 追溯关系：对象之间的有向关联
-└── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
+├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
+└── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
 ```
 
 ---
@@ -784,9 +791,9 @@ good7ob pm health snapshots rebuild 10 --days 14
 | 命令 | 说明 |
 |------|------|
 | `pm health forecast <productId> [--release <id>]` | P50/P80 完成预测（按历史周速度蒙特卡洛，同一份数据结果固定）：预计完成日期、还需周数、相对计划的偏差（晚 / 早 N 天）、周完成量走势。**历史不足（`INSUFFICIENT_DATA`）时显示 `数据不足`，绝不给日期**；某分位 520 周内无法完成显示 `不收敛` |
-| `pm health cost <productId> [--release <id>]` | 成本进度：预算、实际（按类别 + 推导人力，推导的会标明「非手工录入」）、剩余预算、开发 / 时间 / 成本三条进度线、成本偏差（正 = 成本消耗快于交付）、完工估算 EAC。`NO_BUDGET`（无预算）仍列出实际成本；`INSUFFICIENT_DATA`（含同范围多币种）不求和。`aiTokensConsumed` 是 token **数量**不是金额，`ai_token` 成本只能手工录入 |
+| `pm health cost <productId> [--release <id>]` | 成本进度：预算、实际（按类别 + 推导人力 + 推导 AI token 成本，推导的会标明「非手工录入」）、剩余预算、开发 / 时间 / 成本三条进度线、成本偏差（正 = 成本消耗快于交付）、完工估算 EAC。`NO_BUDGET`（无预算）仍列出实际成本；`INSUFFICIENT_DATA`（含同范围多币种）不求和。`aiTokensConsumed` 是 token **数量**不是金额；预算设置了 token 单价时，AI token 成本会按任务 token 用量另行推导（手工 `ai_token` 条目仍单独计），否则仍只能手工录入 |
 | `pm health budget get <productId> [--release <id>]` | 读预算（未设置会明确提示） |
-| `pm health budget set <productId> --amount <n> --currency <C> [--labor-rate <n>] [--note <text>] [--release <id>]` | 设置 / 替换预算（owner/admin，幂等）。`--amount` > 0、最多 2 位小数、≤ 9999999999.99；`--currency` 3 位字母（自动大写；**一个产品只能用一种币种**，首次写入决定）；`--labor-rate` (0, 100000]，用于把任务实际工时推导成人力成本；`--note` ≤500 字符；`--release` 设 Release 级预算 |
+| `pm health budget set <productId> --amount <n> --currency <C> [--labor-rate <n>] [--token-price-per-million <n>｜--clear-token-price] [--note <text>] [--release <id>]` | 设置 / 替换预算（owner/admin，幂等）。`--amount` > 0、最多 2 位小数、≤ 9999999999.99；`--currency` 3 位字母（自动大写；**一个产品只能用一种币种**，首次写入决定）；`--labor-rate` (0, 100000]，用于把任务实际工时推导成人力成本；`--token-price-per-million` [0, 100000]、最多 6 位小数（0 = 免费模型），用于把任务 token 用量推导成 AI token 成本；`--note` ≤500 字符；`--release` 设 Release 级预算。**该接口整体替换预算**：省略 `--token-price-per-million` 时 CLI 会先读同范围现有预算并把已保存的单价带上重发，不会被静默清空；要清空用 `--clear-token-price` |
 | `pm health budget clear <productId> [--release <id>]` | 删除预算（owner/admin；之后可重设） |
 | `pm health cost-entry list <productId> [--category c] [--release <id>] [--from d] [--to d] [-p n] [--page-size n]` | 成本条目，发生日新的在前；`--category` `labor｜cloud｜ai_token｜other`；`--from/--to`（`yyyy-MM-dd`，闭区间，`--from ≤ --to`）；`--page-size` ≤100（默认 20）。`source=auto` 的条目只读 |
 | `pm health cost-entry add <productId> --category c --amount n --currency C --date yyyy-MM-dd [--release <id>] [--note <text>]` | 记录一笔实际成本（owner/admin）。`--date` 为 2000-01-01 ~ 明天（UTC）；币种须与该产品已有币种一致（否则 `1001`） |
@@ -922,7 +929,7 @@ AI 错误码（调用失败时**无写入、不扣 token**）：`7101` 模型调
 | 命令 | 说明 |
 |------|------|
 | `idea review start <ideaId>` | 创建 / 刷新草稿：快照选定方案的预期，重新收集实际值（Idea 须 planning / developing / released；已完成的复盘不可刷新） |
-| `idea review get <ideaId>` | 预期（AI 方案同时显示修正前原值）、实际、准确度（草稿实时计算，完成后冻结）、手工指标。实际值 `—` = 不可得（不是 0）；成本暂无可推导口径，恒为 `—` |
+| `idea review get <ideaId>` | 预期（AI 方案同时显示修正前原值）、实际、准确度（草稿实时计算，完成后冻结）、手工指标。实际值 `—` = 不可得（不是 0）；成本仅含人力成本（关联任务实际工时 × 预算人力费率），没有费率 / 关联任务 / 已记录工时时为 `—` |
 | `idea review metrics <ideaId> [--metric "name:expected:actual:unit"]... [--clear-metrics] [--notes <n>]` | 填手工指标（**整体替换**，可重复，≤20）与备注（≤2000，`--notes ""` 清空）；至少给一项。`--metric`：只有 name 必填（≤100）；expected / actual 留空 = 不可得（如 `NPS:40::pts`），可为负数、≤4 位小数；unit ≤20；各段内不能含冒号；仅草稿可改 |
 | `idea review complete <ideaId>` | 完成：冻结准确度，Idea released → validated，重算该产品的估算修正系数（Idea 须 released） |
 
@@ -951,8 +958,8 @@ API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在�
 
 ### 待办队列（等待我处理的事项）
 
-来源：我负责的等待态任务、未读消息、我创建的 inbox 需求、我能决定的审批、我所在组织的高风险产品。
-动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊 / `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警。
+来源：我负责的等待态任务、未读消息、我创建的 inbox 需求、我能决定的审批、我所在组织的高风险产品、指派给我且未解决的缺陷（open / in_progress / reopen；缺陷被解决 / 关闭 / 转派后自动置 done）。
+动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊 / `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警 / `BUG_FIX` 缺陷修复（来源类型 `BUG`；`来源ID` 是缺陷 id，项目列即缺陷所属项目；优先级取严重度与优先级中更紧急者，两者都无法识别时为 —；无截止时间）。
 状态：new / in_progress / waiting / snoozed / dismissed / done（到期的 snooze 读作 new）。
 
 | 命令 | 说明 |
@@ -967,7 +974,7 @@ API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在�
 | `workspace queue reject <id> --comment <text>` | 就地驳回；`--comment` 必填（不能为空白） |
 
 `<id>` 是列表第一列 **ID（队列项 id）**，不是来源对象的 id（`来源ID` 列）。列表先显示各动作类型计数（总数与计数不受 `--limit` 影响，也不受 `--action-type` 影响），再列出事项表；已稍后的项在“到期/稍后”列显示 `稍后至 … UTC`，任务显示截止时间。
-`approve` / `reject` 只对活跃项、且类型有就地审批（审批申请 / 计划审批 / 完成审批）；其他类型（阻塞、信息请求、风险预警等）返回 `1007`，需到来源对象处理。成功后该项自动置 done。
+`approve` / `reject` 只对活跃项、且类型有就地审批（审批申请 / 计划审批 / 完成审批）；其他类型（阻塞、信息请求、风险预警、缺陷修复等）返回 `1007`，需到来源对象处理。成功后该项自动置 done。
 `approve` 若客户端超时（默认 30 秒，Agent 执行可能更久），CLI 会提示服务端可能仍在处理，先用 `queue --status all` 核对，不要盲目重试。
 
 ### 总览与“我的”视图
@@ -1071,12 +1078,12 @@ good7ob release get 7
 
 ## approval — 审批
 
-API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审批"命令：申请由拥有目标对象的功能发起（发布用 `release request-approval`）。
+API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审批"命令：申请由拥有目标对象的功能发起（发布用 `release request-approval`，PRD 用 `prd request-approval`）。
 状态：pending / approved / rejected / cancelled。
 
 | 命令 | 说明 |
 |------|------|
-| `approval list` | 我所在组织的审批（新的在前，分页）；`--status` `--target-type`（如 RELEASE，不区分大小写）`--target-id` `--product` `--mine` `-p/--page` `--page-size`（≤100，默认 20） |
+| `approval list` | 我所在组织的审批（新的在前，分页）；`--status` `--target-type`（如 RELEASE、PRD，不区分大小写）`--target-id` `--product` `--mine` `-p/--page` `--page-size`（≤100，默认 20） |
 | `approval get <id>` | 详情；显示我能否决定 / 撤销、决定人与意见、是否自批 |
 | `approval approve <id>` | 批准；`--comment` 可选 |
 | `approval reject <id> --comment <text>` | 驳回；`--comment` 必填 |
@@ -1086,6 +1093,18 @@ API 端点前缀：`/approvals`（需登录 + 组织成员）。没有"创建审
 `--product` 只是过滤条件，**不**读 `GOOD7OB_PRODUCT_ID`（否则会悄悄缩小"待我决定"的范围）。
 决定权限：仅组织 owner/admin；申请人不能批准/驳回自己的申请，唯一例外是组织里没有其他审批人，此时批准会标记 `selfApproved`（CLI 会提示）。
 业务错误码：`1000` 缺参（驳回没写意见）、`1001` 值非法、`1002` 不存在、`1009` 已被处理（含并发的第二个决定者，用 `approval get` 看结果）、`2000` 无权限、`999/401` 未登录。所有命令支持 `--json`，无二次确认。
+
+### PRD 审批（g7b #1061-D）
+
+`{document-id}` 是 `forge_prd_documents.id`（与 `prd get`/`prd lock` 同一个 id）。批准/驳回/撤销走上面的通用 `approval approve|reject|cancel`——提交后用 `approval get <approvalId>` 看结果。
+
+| 命令 | 说明 |
+|------|------|
+| `prd request-approval <document-id> [--description <text>]` | 提交该文档审批（仅会话所有者）；`--description` ≤2000 字 |
+| `prd approval-status <document-id>` | 该文档最新一次审批状态（`none｜pending｜approved｜rejected｜cancelled`，仅所有者可查） |
+| `prd approval-document <approval-id>` | 通过审批 id 只读查看 PRD 内容（申请人 / 该组织 owner-admin），显示 `⚠ 这不是最新版本`（当后端返回 `isLatest: false` 时） |
+
+业务错误码：`request-approval` — `1001` 说明超 2000 字、`1002` 文档不存在或不属于你、`1006` 已有待处理审批、`1007` 当前状态不允许（会话已归档 / 非最新版本 / 已锁定 / 有未解决的补充问题 / 会话未关联产品）、`2000` 非组织成员；`approval-document` — `1002` 审批不存在或不是 PRD 审批、`2000` 无权查看。
 
 ```bash
 good7ob approval list --mine
@@ -1256,6 +1275,73 @@ good7ob template instances --product 9 && good7ob template instance 31
 good7ob template upgrade 31 && good7ob template upgrade 31 --preview --var owner=张三
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reject 9 --reason "缺少描述"
+```
+
+---
+
+## pm activity — 任务 / 项目动态
+
+API 端点：`GET /progress/tasks/{id}/activities`、`GET /progress/projects/{id}/activities`、`POST /progress/tasks/{id}/activities`（prd-0092 FP-6，`api-0092`）。动态是 append-only：没有删除 / 编辑接口，写错的 NOTE 只能再写一条 NOTE 说明。
+
+| 命令 | 说明 |
+|------|------|
+| `pm activity --project <id>` \| `--task <id>` | 项目 / 任务动态（新的在前）。**两者必须且只能指定一个**。分页模式：`-p/--page`（默认 1）、`--page-size`（1–200，默认 20） |
+| `pm activity ... --since <id> [--limit n]` | **游标模式**：只取 `id > since` 的动态（`--since 0` 从头开始），`--limit` 1–200（默认 50）；不能与 `--page/--page-size` 同用，`--limit` 也只在游标模式有效 |
+| `pm activity --project <id> [--type a,b] [--actor USER\|AGENT\|SYSTEM]` | 只支持 `--project` 的过滤：`--type` 逗号分隔的动态类型（不区分大小写，CLI 转大写去重后作 `types` 发送）；`--actor` 来源类型 |
+| `pm activity post --task <id> --summary <text> [--type NOTE\|REPORT_UPLOADED] [--url <https-url>]` | 写一条手动动态：`--summary` 必填 ≤500 字符；`--type` 默认 `NOTE`；`--url` 必须 `https://` 开头，存入 `metadata.url` |
+
+文本输出为表格（ID、时间、来源、渠道、类型、任务、摘要）+ 表尾 `nextSinceId=… hasMore=…`（下一次 `--since` 直接用 `nextSinceId`）；来源列显示 `actorName`，没有名字时显示 `actorType:actorId`。摘要 / 来源 / 任务名等用户文本经 `stripControl` 剥离控制字符；`--json` 原样输出响应（`{items, nextSinceId, hasMore}` / 新建的 ActivityVo）。
+业务错误码：`1000` 缺参、`1001` 参数不合法（类型 / actorType 未知、sinceId / limit 越界、summary 超长、url 非 https）、`1002` 任务 / 项目不存在或不属于你所在的组织、`2000` 无权限（AI 员工能力范围不含 `task_read` / `comment`，或任务在其产品范围之外）、`999/401` 未登录。所有参数在调用 API 前于 CLI 端校验，错误不发请求。
+
+```bash
+good7ob pm activity --project 1
+good7ob pm activity --project 1 --since 0 --limit 100 --type HANDOFF,NOTE --actor AGENT
+good7ob pm activity --task 7 -p 2 --page-size 50
+good7ob pm activity --project 1 --since 120 --json
+good7ob pm activity post --task 7 --summary "已联调完成，等待验收"
+good7ob pm activity post --task 7 --type REPORT_UPLOADED --summary "测试报告" --url https://files.example.com/r.pdf
+```
+
+---
+
+## whoami — 当前身份
+
+API 端点：`GET /api/v1/me/actor`（prd-0092 rp-org-ai-emp-0069）。显示配置的 Key 以谁的身份行事：人类用户（`USER`）或 AI 员工（`AGENT`）。
+
+| 命令 | 说明 |
+|------|------|
+| `whoami` | 身份（actorType）、用户 ID（员工 Key 时为签发人，数据权限沿用其组织身份）、渠道；员工 Key 另显示员工 ID、昵称、组织、MCP 角色、能力列表、产品范围（空 = 不限） |
+
+`--json` 原样输出。
+
+```bash
+good7ob whoami
+GOOD7OB_API_KEY=g7b_sk_... good7ob whoami --json
+```
+
+---
+
+## org ai-employee — AI 员工 Key 与档案
+
+API 端点前缀：`/api/v1/orgs/{orgId}/ai-employees/{id}`（prd-0092 FP-8 / FP-9；签发 / 重生成 / 停用 / 启用 Key 与改档案仅组织 owner/admin）。员工列表 / 状态等见 `org` 其它命令与 `workspace ai-team`。
+
+| 命令 | 说明 |
+|------|------|
+| `org ai-employee key issue <orgId> <employeeId>` | 签发该员工的 CLI/MCP Key（`POST .../key`）。**完整 Key 只在响应里返回一次**：CLI 打印一次并附 `good7ob config set api-key <key>` 提示，之后只能看到前缀。一个员工同时最多一把 active Key，再次签发使旧 Key `revoked` |
+| `org ai-employee key regenerate <orgId> <employeeId>` | 重新生成（`POST .../key/regenerate`），旧 Key 立即失效；输出同上 |
+| `org ai-employee key disable\|enable <orgId> <employeeId>` | `PATCH .../key/status {status: disabled\|active}`。员工被停用时其 Key 自动停用，重新启用员工**不**自动恢复 Key |
+| `org ai-employee profile <orgId> <employeeId> [--nickname s] [--role VIEWER\|DEVELOPER\|MANAGER] [--tools a,b] [--products 1,2]` | `PATCH .../{id}`，只发送给出的字段（至少一项）。`--nickname` ≤50 字符；`--role` 不区分大小写；`--tools` 能力代码（见 `capabilities`），`--products` 产品 id（去重），两者任一给出即发送 `capabilityScope`；`--tools ""` / `--products ""` 清空（产品为空 = 不限） |
+| `org ai-employee capabilities <orgId>` | 能力目录（代码、名称、是否仅 MANAGER、说明），供 `--tools` 取值 |
+
+所有命令支持 `--json`（`key issue/regenerate` 输出 `{rawKey, keyPrefix, status, createdAt}`，同样只此一次）。
+业务错误码：`1000` 缺参、`1001` 参数不合法（角色 / 能力项未知、产品不属于该组织、昵称超长）、`1002` 组织或 AI 员工不存在或不属于你、`1007` 当前状态不允许（员工已停用 / Key 已吊销）、`2000` 该 AI 员工无权执行此操作或你不是组织 owner/admin、`999/401` 未登录。
+
+```bash
+good7ob org ai-employee capabilities 58
+good7ob org ai-employee profile 58 7 --nickname "Cursor Agent" --role DEVELOPER --tools task_read,task_write,comment --products 10,11
+good7ob org ai-employee key issue 58 7          # prints the raw key once
+good7ob org ai-employee key regenerate 58 7
+good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 58 7
 ```
 
 ---

@@ -66,6 +66,25 @@ describe('workspace queue: filters and rendering', () => {
     expect(r.stdout).toMatch(/503\s+snoozed\s+RISK\s+12\s+风险预警.*稍后至 2026-09-20 09:00:00 UTC/);
   });
 
+  it('--action-type bug_fix is sent as BUG_FIX; a BUG item shows 缺陷修复, the project, and — for a null priority / due date', async () => {
+    const r = await q(['--action-type', 'bug_fix'], ok({
+      total: 1,
+      counts: { APPROVAL: 0, BUG_FIX: 1 },
+      items: [item({
+        id: 4012, sourceType: 'BUG', sourceId: 1893021784650, actionType: 'BUG_FIX', title: '结算按钮空购物车崩溃',
+        priority: null, projectId: 5, projectName: '结算模块', productId: 11, orgId: 3, dueAt: null,
+      })],
+    }));
+    expect(r.http.get).toHaveBeenCalledWith('/workspace/my-queue', { params: { limit: 50, actionType: 'BUG_FIX' } });
+    expect(r.stdout).toContain('缺陷修复 1');
+    expect(r.stdout).toMatch(/4012\s+new\s+BUG\s+1893021784650\s+缺陷修复\s+—\s+结算模块\s+结算按钮空购物车崩溃\s+—/);
+  });
+
+  it('the counts line lists 缺陷修复 — when an older backend sends no BUG_FIX key', async () => {
+    const r = await q([], ok({ total: 0, counts: { APPROVAL: 1 }, items: [] }));
+    expect(r.stdout).toContain('缺陷修复 —');
+  });
+
   it('headline follows the status filter', async () => {
     const r = await q(['--status', 'done'], ok({ total: 2, counts: {}, items: [] }));
     expect(r.stdout).toContain('已完成: 2');
@@ -265,6 +284,13 @@ describe('workspace queue approve / reject', () => {
     expect(r.stderr).toContain(text);
     expect(r.stderr).toContain(`${code}`);
     expect(r.stderr).toContain('srv-msg');
+  });
+
+  it('approving a BUG_FIX item answers 1007: mapped to the in-place hint with the server message', async () => {
+    const r = await q(['approve', '4012'], bizError(1007, '该类型待办不支持就地审批: BUG_FIX'));
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('不能就地决定');
+    expect(r.stderr).toContain('BUG_FIX');
   });
 
   it('adds a "do not blindly retry" hint on a client timeout (the plan approval runs the Agent synchronously)', async () => {

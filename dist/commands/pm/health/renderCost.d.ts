@@ -8,6 +8,7 @@ export interface Budget {
     amount?: number | null;
     currency?: string | null;
     laborRatePerHour?: number | null;
+    tokenPricePerMillion?: number | null;
     note?: string | null;
     updatedBy?: number | null;
     updatedAt?: ApiDate;
@@ -38,6 +39,12 @@ export interface DerivedLabor {
     ratePerHour?: number | null;
     amount?: number | null;
 }
+export interface DerivedAiToken {
+    derived?: boolean | null;
+    tokens?: number | null;
+    pricePerMillion?: number | null;
+    amount?: number | null;
+}
 /** `GET …/cost`. status OK | NO_BUDGET | INSUFFICIENT_DATA (then `actual` may be null and nothing is summed). */
 export interface CostSummary {
     productId?: number | null;
@@ -51,6 +58,7 @@ export interface CostSummary {
         byCategory?: Record<string, number | null> | null;
         manualTotal?: number | null;
         derivedLabor?: DerivedLabor | null;
+        derivedAiToken?: DerivedAiToken | null;
         total?: number | null;
     } | null;
     remainingBudget?: number | null;

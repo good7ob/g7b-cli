@@ -20,6 +20,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerCostCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const cliHelpers_1 = require("../../../utils/cliHelpers");
 function registerCostCommands(infraCommand) {
     const costCommand = infraCommand
         .command('cost')
@@ -93,7 +94,7 @@ function registerCostCommands(infraCommand) {
                 if (data.apps && data.apps.length > 0) {
                     data.apps.forEach((app) => {
                         const percentage = data.totalCost > 0 ? ((app.cost / data.totalCost) * 100).toFixed(1) : '0';
-                        console.log(app.name.padEnd(25) +
+                        console.log((0, cliHelpers_1.dash)(app.name).padEnd(25) +
                             `$${app.cost.toFixed(2)}`.padEnd(15) +
                             (app.resourceCount || 0).toString().padEnd(10) +
                             percentage + '%');
@@ -134,7 +135,7 @@ function registerCostCommands(infraCommand) {
                 if (data.environments && data.environments.length > 0) {
                     data.environments.forEach((env) => {
                         const percentage = data.totalCost > 0 ? ((env.cost / data.totalCost) * 100).toFixed(1) : '0';
-                        console.log(env.name.padEnd(15) +
+                        console.log((0, cliHelpers_1.dash)(env.name).padEnd(15) +
                             `$${env.cost.toFixed(2)}`.padEnd(20) +
                             percentage + '%');
                     });
@@ -178,7 +179,7 @@ function registerCostCommands(infraCommand) {
                 if (data.types && data.types.length > 0) {
                     data.types.forEach((type) => {
                         const percentage = data.totalCost > 0 ? ((type.cost / data.totalCost) * 100).toFixed(1) : '0';
-                        console.log(type.name.padEnd(25) +
+                        console.log((0, cliHelpers_1.dash)(type.name).padEnd(25) +
                             `$${type.cost.toFixed(2)}`.padEnd(15) +
                             (type.resourceCount || 0).toString().padEnd(10) +
                             percentage + '%');
@@ -217,7 +218,7 @@ function registerCostCommands(infraCommand) {
                 if (data.providers && data.providers.length > 0) {
                     data.providers.forEach((provider) => {
                         const percentage = data.totalCost > 0 ? ((provider.cost / data.totalCost) * 100).toFixed(1) : '0';
-                        console.log(provider.name.padEnd(15) +
+                        console.log((0, cliHelpers_1.dash)(provider.name).padEnd(15) +
                             `$${provider.cost.toFixed(2)}`.padEnd(20) +
                             percentage + '%');
                     });

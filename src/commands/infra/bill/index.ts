@@ -11,6 +11,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { dash } from '../../../utils/cliHelpers';
 
 export function registerBillCommands(infraCommand: Command) {
   const billCommand = infraCommand
@@ -145,18 +146,19 @@ export function registerBillCommands(infraCommand: Command) {
 
           result.records?.forEach((bill: any) => {
             console.log(
-              bill.id.toString().padEnd(10) +
-              (bill.month || '-').padEnd(12) +
-              bill.cloudProvider.padEnd(12) +
-              bill.status.padEnd(10) +
+              dash(bill.id).padEnd(10) +
+              dash(bill.month).padEnd(12) +
+              dash(bill.cloudProvider).padEnd(12) +
+              dash(bill.status).padEnd(10) +
               (bill.recordCount || 0).toString().padEnd(8) +
               `$${(bill.totalCost || 0).toFixed(2)}`.padEnd(15) +
-              (bill.createdAt || '-')
+              dash(bill.createdAt)
             );
           });
         }
 
-        if (result.total > params.pageSize) {
+        // 分页提示只在人读的输出里打印（同 infra resource list）。
+        if (!options.json && !options.csv && result.total > params.pageSize) {
           console.log(`\n显示第 ${params.pageNo} 页，共 ${Math.ceil(result.total / params.pageSize)} 页`);
         }
       } catch (error) {
@@ -266,11 +268,11 @@ export function registerBillCommands(infraCommand: Command) {
 
             schedules.forEach((schedule: any) => {
               console.log(
-                (schedule.id || '-').toString().padEnd(10) +
-                schedule.cloudProvider.padEnd(12) +
-                schedule.frequency.padEnd(10) +
+                dash(schedule.id).padEnd(10) +
+                dash(schedule.cloudProvider).padEnd(12) +
+                dash(schedule.frequency).padEnd(10) +
                 (schedule.enabled ? '已启用' : '已禁用').padEnd(10) +
-                (schedule.nextRun || '-').padEnd(20) +
+                dash(schedule.nextRun).padEnd(20) +
                 (schedule.createdAt || '-')
               );
             });

@@ -80,10 +80,15 @@ describe('buildQueueParams', () => {
       .toEqual({ limit: 200, status: 'in_progress', actionType: 'PLAN_APPROVAL', productId: 12 });
   });
 
+  it('accepts BUG_FIX (any case) as an action type', () => {
+    expect(buildQueueParams({ actionType: 'bug_fix' })).toEqual({ limit: 50, actionType: 'BUG_FIX' });
+  });
+
   it.each([
     [{ status: 'pending' }, '--status'],
     [{ status: '' }, '--status'],
     [{ actionType: 'TASK' }, '--action-type'],
+    [{ actionType: 'BUG' }, '--action-type'],
     [{ product: '0' }, '--product'],
     [{ product: 'abc' }, '--product'],
     [{ limit: '201' }, '--limit'],

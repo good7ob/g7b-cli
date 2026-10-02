@@ -1,1 +1,1 @@
-{"version":3,"file":"costCommands.d.ts","sourceRoot":"","sources":["../../../../src/commands/pm/health/costCommands.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAgIpC,wBAAgB,oBAAoB,CAAC,MAAM,EAAE,OAAO,GAAG,IAAI,CAe1D"}
+{"version":3,"file":"costCommands.d.ts","sourceRoot":"","sources":["../../../../src/commands/pm/health/costCommands.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AA+IpC,wBAAgB,oBAAoB,CAAC,MAAM,EAAE,OAAO,GAAG,IAAI,CAe1D"}

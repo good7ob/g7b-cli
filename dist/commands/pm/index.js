@@ -8,10 +8,11 @@ const workflow_1 = require("./workflow");
 const report_1 = require("./report");
 const tag_1 = require("./tag");
 const health_1 = require("./health");
+const activity_1 = require("./activity");
 function registerPmCommands(program) {
     const pmCommand = program
         .command('pm')
-        .description('Project management — projects, tasks, workflows, reports, tags, product health');
+        .description('Project management — projects, tasks, workflows, reports, tags, product health, activity feed');
     (0, project_1.registerProjectCommands)(pmCommand);
     (0, task_1.registerTaskCommands)(pmCommand);
     (0, plan_1.registerPlanCommands)(pmCommand);
@@ -19,6 +20,7 @@ function registerPmCommands(program) {
     (0, report_1.registerReportCommands)(pmCommand);
     (0, tag_1.registerTagCommands)(pmCommand);
     (0, health_1.registerHealthCommands)(pmCommand);
+    (0, activity_1.registerActivityCommands)(pmCommand);
     return pmCommand;
 }
 exports.registerPmCommands = registerPmCommands;

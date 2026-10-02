@@ -107,9 +107,12 @@ good7ob pm workflow --help
 good7ob pm report --help
 good7ob pm tag --help
 good7ob pm health --help
+good7ob pm activity --project 1 --since 0 --limit 100     # activity feed, cursor mode (footer gives nextSinceId)
+good7ob pm activity --task 7                              # page mode
+good7ob pm activity post --task 7 --summary "done, please review"
 ```
 
-Project management commands for projects, tasks, workflows, reports, tags, and product health.
+Project management commands for projects, tasks, workflows, reports, tags, product health and the task / project activity feed.
 
 ```bash
 good7ob pm health 10                                   # KPIs: progress, scope vs baseline, velocity, ETA
@@ -119,7 +122,7 @@ good7ob pm health burnup 10 --from 2026-09-01           # table + text chart
 good7ob pm health snapshots rebuild 10 --days 14
 good7ob pm health forecast 10                          # P50/P80 completion dates ("数据不足" when history is too short)
 good7ob pm health cost 10                              # budget vs actual vs progress, EAC
-good7ob pm health budget set 10 --amount 10000000 --currency CNY --labor-rate 200
+good7ob pm health budget set 10 --amount 10000000 --currency CNY --labor-rate 200 --token-price-per-million 7.5
 good7ob pm health cost-entry add 10 --category cloud --amount 1200.50 --currency CNY --date 2026-09-01
 good7ob pm health what-if 10 --add-scope 100 --deadline 2026-12-01   # simulation only, nothing is saved
 good7ob pm health diagnosis 10                         # deterministic findings; `explain` adds AI commentary
@@ -155,6 +158,7 @@ Idea pool: capture ideas, compare solutions with structured estimates, pick one 
 
 ```bash
 good7ob workspace queue --limit 50 --status active --action-type PLAN_APPROVAL
+good7ob workspace queue --action-type BUG_FIX          # bugs assigned to me
 good7ob workspace queue counts
 good7ob workspace queue snooze 501 --until +2h        # or an ISO time (no offset = UTC)
 good7ob workspace queue approve 501 --comment "LGTM"   # decide in place: approval / task plan / task completion
@@ -195,7 +199,7 @@ good7ob approval approve 31 --comment "LGTM"
 good7ob approval reject 31 --comment "scope unclear"   # --comment is required
 ```
 
-Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`).
+Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`, `prd request-approval`).
 
 ### `trace`
 
@@ -235,9 +239,21 @@ Template Center: browse the catalog, manage personal / organization templates an
 
 ```bash
 good7ob org --help
+good7ob org ai-employee capabilities 58
+good7ob org ai-employee profile 58 7 --role DEVELOPER --tools task_read,comment --products 10
+good7ob org ai-employee key issue 58 7                    # raw key printed once; then `good7ob config set api-key <key>`
+good7ob org ai-employee key disable 58 7                  # or: enable, regenerate
 ```
 
-Organization management commands for members, invitations, products, and subscriptions.
+Organization management commands for members, invitations, products, subscriptions and AI employees (CLI/MCP key, profile, capability catalogue).
+
+### `whoami`
+
+```bash
+good7ob whoami
+```
+
+Who the configured API key acts as: a user, or an AI employee (id, nickname, org, role, capabilities, product scope). See `FEATURES.md`.
 
 ### `qc`
 
@@ -246,6 +262,22 @@ good7ob qc --help
 ```
 
 Quality-control commands for bug tracking and QA reporting.
+
+### `schema`
+
+Load a live PostgreSQL schema into Forge DB Schema Design (`/forge/schema/*`: module → table → column). Tables are grouped into modules by name prefix (`forge_`, `pm_`, …; unmatched → `其他`). Table/column DB comments become descriptions, and singular/plural pairs such as `pm_task`/`pm_tasks` are flagged `疑似重复`. The import is idempotent: it creates what is missing and updates what changed, and it never deletes. Writes need the `owner`/`admin` role in the org.
+
+```bash
+# 1. Export (no DB driver in the CLI; psql runs the query)
+good7ob schema export-sql --db-schema good7ob_dev | psql "$DATABASE_URL" -At > schema.json
+
+# 2. Preview grouping, then plan against the org, then write
+good7ob schema import --file schema.json --parse-only
+good7ob schema import --org 58 --file schema.json --dry-run
+good7ob schema import --org 58 --file schema.json
+```
+
+A table already registered under a different module is skipped and listed: table names are unique per org, and the API can't move a table between modules.
 
 ## Quick examples
 

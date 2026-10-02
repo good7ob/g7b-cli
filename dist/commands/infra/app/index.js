@@ -22,6 +22,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerAppCommands = void 0;
 const ApiClient_1 = __importDefault(require("../../../services/ApiClient"));
+const cliHelpers_1 = require("../../../utils/cliHelpers");
 const extractRecords_1 = require("../../../utils/extractRecords");
 /** Page size used when walking the full application list. */
 const FETCH_ALL_PAGE_SIZE = 200;
@@ -269,7 +270,7 @@ function registerAppCommands(infraCommand) {
                 console.log(`Applications (${result.total}):`);
                 console.log('─'.repeat(80));
                 result.records.forEach((app) => {
-                    console.log(`${app.id.toString().padEnd(5)} ${app.name.padEnd(20)} ${app.environment.padEnd(12)} ${app.status.padEnd(10)} Owner: ${app.ownerId}`);
+                    console.log(`${(0, cliHelpers_1.dash)(app.id).padEnd(5)} ${(0, cliHelpers_1.dash)(app.name).padEnd(20)} ${(0, cliHelpers_1.dash)(app.environment).padEnd(12)} ${(0, cliHelpers_1.dash)(app.status).padEnd(10)} Owner: ${(0, cliHelpers_1.dash)(app.ownerId)}`);
                 });
             }
             if (result.total > params.pageSize) {

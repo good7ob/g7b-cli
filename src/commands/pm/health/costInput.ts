@@ -22,10 +22,12 @@ export const INTEL_ERROR_CODES: ErrorCodeMap = {
 export const COST_CATEGORIES = ['labor', 'cloud', 'ai_token', 'other'] as const;
 export const MAX_AMOUNT = 9_999_999_999.99;
 export const MAX_LABOR_RATE = 100_000;
+export const MAX_TOKEN_PRICE = 100_000;
 export const MIN_ENTRY_DATE = '2000-01-01';
 
 const DAY_MS = 86_400_000;
 const MONEY = /^[0-9]+(\.[0-9]{1,2})?$/;
+const TOKEN_PRICE = /^[0-9]+(\.[0-9]{1,6})?$/;
 
 /** A positive amount with at most 2 decimals, up to `max`. */
 export function parseMoney(raw: string | undefined, label: string, max: number): number {
@@ -38,6 +40,15 @@ export function parseMoney(raw: string | undefined, label: string, max: number):
     throw new InputError(`${label} 必须大于 0 且不超过 ${max}，收到: ${raw}`);
   }
   return value;
+}
+
+/** Money per 1,000,000 tokens: 0 (a free model) to 100000, at most 6 decimals (the backend rounds to 6; the CLI refuses more). */
+export function parseTokenPrice(raw: string | undefined, label = '--token-price-per-million'): number {
+  const text = raw?.trim();
+  if (text === undefined || !TOKEN_PRICE.test(text) || Number(text) > MAX_TOKEN_PRICE) {
+    throw new InputError(`${label} 必须是 0 到 ${MAX_TOKEN_PRICE}、最多 6 位小数的数（0 = 免费模型），收到: ${raw ?? '(空)'}`);
+  }
+  return Number(text);
 }
 
 /** Upper-cased 3-letter currency code. */
@@ -63,7 +74,9 @@ export function parseIncurredOn(raw: string | undefined, now: Date = new Date())
 export const releaseParams = (release?: string): Record<string, number> =>
   release === undefined ? {} : { releaseId: parseId(release, '--release') };
 
-export interface BudgetOptions { amount?: string; currency?: string; laborRate?: string; note?: string; release?: string }
+export interface BudgetOptions {
+  amount?: string; currency?: string; laborRate?: string; tokenPricePerMillion?: string; clearTokenPrice?: boolean; note?: string; release?: string;
+}
 
 export function buildBudgetBody(o: BudgetOptions) {
   const body: Record<string, unknown> = {
@@ -73,6 +86,10 @@ export function buildBudgetBody(o: BudgetOptions) {
     ...releaseParams(o.release),
   };
   if (o.laborRate !== undefined) body.laborRatePerHour = parseMoney(o.laborRate, '--labor-rate', MAX_LABOR_RATE);
+  if (o.tokenPricePerMillion !== undefined && o.clearTokenPrice) {
+    throw new InputError('--token-price-per-million 与 --clear-token-price 不能同时使用');
+  }
+  if (o.tokenPricePerMillion !== undefined) body.tokenPricePerMillion = parseTokenPrice(o.tokenPricePerMillion);
   return body;
 }
 

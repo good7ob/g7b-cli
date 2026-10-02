@@ -10,7 +10,7 @@ const cliHelpers_1 = require("../../utils/cliHelpers");
 exports.QUEUE_STATUSES = ['active', 'snoozed', 'dismissed', 'done', 'all', 'new', 'in_progress', 'waiting'];
 exports.ACTION_TYPES = [
     'PLAN_APPROVAL', 'COMPLETION_APPROVAL', 'INFO_REQUEST', 'BLOCKED', 'PAUSED', 'SYSTEM_ALERT',
-    'REQUIREMENT_TRIAGE', 'APPROVAL', 'RISK_ALERT',
+    'REQUIREMENT_TRIAGE', 'APPROVAL', 'RISK_ALERT', 'BUG_FIX',
 ];
 exports.QUEUE_SORTS = ['newest', 'score'];
 exports.MAX_QUEUE_LIMIT = 200;

@@ -12,6 +12,7 @@ exports.ACTION_LABELS = {
     REQUIREMENT_TRIAGE: '需求分诊',
     APPROVAL: '审批申请',
     RISK_ALERT: '风险预警',
+    BUG_FIX: '缺陷修复',
 };
 const STATUS_HEADINGS = {
     active: '待我处理', snoozed: '已稍后', dismissed: '已忽略', done: '已完成', all: '全部',

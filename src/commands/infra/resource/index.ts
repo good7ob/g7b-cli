@@ -10,6 +10,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { dash } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerResourceCommands(infraCommand: Command) {
@@ -64,12 +65,13 @@ export function registerResourceCommands(infraCommand: Command) {
           console.log('─'.repeat(100));
           result.records?.forEach((res: any) => {
             console.log(
-              `${res.id.toString().padEnd(5)} ${res.resourceName.padEnd(25)} ${res.resourceType.padEnd(15)} ${res.cloudProvider.padEnd(10)} ${res.environment.padEnd(12)} ${res.status}`
+              `${dash(res.id).padEnd(5)} ${dash(res.resourceName).padEnd(25)} ${dash(res.resourceType).padEnd(15)} ${dash(res.cloudProvider).padEnd(10)} ${dash(res.environment).padEnd(12)} ${dash(res.status)}`
             );
           });
         }
 
-        if (result.total > params.pageSize) {
+        // 分页提示只在人读的输出里打印：追加到 --json / --csv 后面会让输出无法被解析。
+        if (!options.json && !options.csv && result.total > params.pageSize) {
           console.log(`\n显示第 ${params.pageNo} 页，共 ${Math.ceil(result.total / params.pageSize)} 页`);
         }
       } catch (error) {

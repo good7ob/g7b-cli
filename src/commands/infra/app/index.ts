@@ -18,6 +18,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { dash } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
 
 /** Page size used when walking the full application list. */
@@ -263,7 +264,7 @@ export function registerAppCommands(infraCommand: Command) {
           console.log(`Applications (${result.total}):`);
           console.log('─'.repeat(80));
           result.records.forEach((app: any) => {
-            console.log(`${app.id.toString().padEnd(5)} ${app.name.padEnd(20)} ${app.environment.padEnd(12)} ${app.status.padEnd(10)} Owner: ${app.ownerId}`);
+            console.log(`${dash(app.id).padEnd(5)} ${dash(app.name).padEnd(20)} ${dash(app.environment).padEnd(12)} ${dash(app.status).padEnd(10)} Owner: ${dash(app.ownerId)}`);
           });
         }
 
