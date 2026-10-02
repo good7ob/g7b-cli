@@ -66,9 +66,9 @@ export class ApiClient {
   /**
    * Make GET request
    */
-  async get<T = any>(url: string, params?: Record<string, any>): Promise<any> {
+  async get<T = any>(url: string, params?: Record<string, any>, config?: AxiosRequestConfig): Promise<any> {
     try {
-      const response = await this.instance.get<ApiResponse<T>>(url, { params });
+      const response = await this.instance.get<ApiResponse<T>>(url, { ...config, params });
       return this.unwrap(response.data);
     } catch (error) {
       throw this.handleError(error);
