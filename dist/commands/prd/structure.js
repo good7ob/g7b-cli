@@ -11,6 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.syncStructure = exports.summarize = exports.buildDesired = exports.clip = exports.rpImplStatusFor = exports.fpStatusFor = exports.mapRpType = exports.mapFpType = exports.parseVerified = exports.loadStructure = exports.parsePrd = exports.parseIndex = exports.RP_TYPES = exports.FP_TYPES = exports.NAME_MAX = exports.INDEX_FILE = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const pool_1 = require("../../utils/pool");
 exports.INDEX_FILE = 'prd-0000-good7ob-requirement-index.md';
 /** forge_feature.name / forge_function_point.name are VARCHAR(100). */
 exports.NAME_MAX = 100;
@@ -209,23 +210,6 @@ function summarize(features) {
 exports.summarize = summarize;
 /** Existing rows keyed by the leading id token of name/statement (MOD-xx-SUB-yy / fun-… / rp-…). */
 const byLeadingId = (rows, field) => new Map((rows ?? []).map((r) => [String(r[field] ?? '').trim().split(/\s+/)[0], r]));
-async function runPool(items, limit, worker) {
-    let next = 0;
-    let failed = false;
-    const lane = async () => {
-        while (!failed && next < items.length) {
-            const item = items[next++];
-            try {
-                await worker(item);
-            }
-            catch (e) {
-                failed = true;
-                throw e;
-            }
-        }
-    };
-    await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane));
-}
 /**
  * Create missing nodes, update FP status / RP implStatus only when different, never delete.
  * dryRun reads existing data and records the plan without writing.
@@ -238,25 +222,7 @@ async function syncStructure(client, productId, features, opts) {
         if (op !== 'unchanged')
             result.actions.push({ layer, op, id, ...change });
     };
-    // 一次完整导入是上千次写请求，后端按用户维度限流，撞上 429 就退避重试；
-    // 其它错误仍然立刻中止（幂等，重跑即可续上）。
-    const RETRY_DELAYS_MS = opts.retryDelaysMs ?? [2000, 4000, 8000, 16000, 30000];
-    const isRateLimited = (m) => /Too many requests|429|请求过于频繁/i.test(m);
-    const at = async (id, call) => {
-        for (let attempt = 0;; attempt++) {
-            try {
-                return await call();
-            }
-            catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                if (isRateLimited(msg) && attempt < RETRY_DELAYS_MS.length) {
-                    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-                    continue;
-                }
-                throw new Error(`${id}: ${msg}`);
-            }
-        }
-    };
+    const at = (0, pool_1.rateLimitRetry)(opts.retryDelaysMs);
     const syncRp = async (fpRow, existing, rp) => {
         const row = existing.get(rp.key);
         if (!row) {
@@ -305,7 +271,7 @@ async function syncStructure(client, productId, features, opts) {
     try {
         const existing = byLeadingId(await at(`product ${productId}`, () => client.get('/forge/features', { productId })), 'name');
         // ponytail: parallel across Features only, FPs/RPs inside one Feature go sequentially; fan out deeper if imports get slow.
-        await runPool(features, opts.concurrency, async (feature) => {
+        await (0, pool_1.runPool)(features, opts.concurrency, async (feature) => {
             let row = existing.get(feature.key);
             let fps = new Map();
             if (row) {

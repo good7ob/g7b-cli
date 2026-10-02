@@ -23,4 +23,24 @@ export declare function collectFeatureFiles(inputs: string[]): string[];
  * `basePathOverride` puts every file under one explicit prefix instead.
  */
 export declare function planBatches(files: string[], root: string, basePathOverride?: string): UploadBatch[];
+export interface SuiteRef {
+    id: number;
+    parentId: number | null;
+    name: string;
+}
+export interface BatchCase {
+    /** Suite path like "组织管理/成员管理"; missing levels are created. */
+    suite?: string;
+    title: string;
+    steps: TestStepInput[];
+    [field: string]: unknown;
+}
+/** Read a create-batch file: a JSON array (or { "cases": [...] }) of cases with title + steps. */
+export declare function readBatchFile(file: string): BatchCase[];
+/**
+ * Resolve "一级/二级" to a suite id, creating missing levels through `create`.
+ * `suites` is the caller's cache of the product's suites and gains every created suite,
+ * so later cases in the same batch reuse them instead of creating duplicates.
+ */
+export declare function ensureSuitePath(suitePath: string, suites: SuiteRef[], create: (name: string, parentId: number | null) => Promise<SuiteRef>): Promise<number>;
 //# sourceMappingURL=testcaseFiles.d.ts.map

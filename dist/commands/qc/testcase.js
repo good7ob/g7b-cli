@@ -209,6 +209,49 @@ function registerTestCaseCommands(qcCommand) {
             fail('导入失败', e);
         }
     });
+    // ── create-batch ──────────────────────────────────────────────────────
+    tc.command('create-batch <file>')
+        .description('按 JSON 文件批量创建用例；suite 写目录路径（"一级/二级"），不存在的目录自动创建')
+        .requiredOption('--product-id <id>', '产品 ID')
+        .option('--skip <n>', '跳过前 n 条（上次中途失败后从断点继续，避免重复创建）', '0')
+        .option('--dry-run', '只校验文件并按目录统计，不创建')
+        .option('--json', '输出 JSON')
+        .action(async (file, o) => {
+        const productId = Number(o.productId);
+        const skip = Number(o.skip);
+        const created = [];
+        try {
+            const cases = (0, testcaseFiles_1.readBatchFile)(file).slice(skip);
+            if (o.dryRun) {
+                const bySuite = new Map();
+                cases.forEach((c) => bySuite.set(c.suite ?? '(无目录)', (bySuite.get(c.suite ?? '(无目录)') ?? 0) + 1));
+                bySuite.forEach((n, suite) => console.log(`  ${String(n).padStart(4)}  ${suite}`));
+                console.log(`\n共 ${cases.length} 条（跳过前 ${skip} 条），校验通过，未创建（--dry-run）`);
+                return;
+            }
+            const suites = (await ApiClient_1.default.get('/qc/test/suites', { productId })) ?? [];
+            const createSuite = (name, parentId) => ApiClient_1.default.post('/qc/test/suites', { productId, parentId, name });
+            for (const c of cases) {
+                const { suite, ...fields } = c;
+                const suiteId = suite ? await (0, testcaseFiles_1.ensureSuitePath)(suite, suites, createSuite) : undefined;
+                const r = await ApiClient_1.default.post('/qc/test/cases', { ...fields, productId, suiteId });
+                created.push({ caseNo: r.caseNo, id: r.id, suite: suite ?? null, title: r.title });
+                if (!o.json)
+                    console.log(`  ＋ ${String(r.caseNo).padEnd(8)} ${suite ?? '-'} › ${r.title}`);
+            }
+            if (o.json) {
+                console.log(JSON.stringify({ created: created.length, cases: created }, null, 2));
+                return;
+            }
+            console.log(`\n✓ 批量创建完成  新建 ${created.length} 条`);
+        }
+        catch (e) {
+            if (created.length > 0 || skip > 0) {
+                console.error(`已创建 ${created.length} 条；修正后用 --skip ${skip + created.length} 从下一条继续`);
+            }
+            fail('批量创建失败', e);
+        }
+    });
     // ── coverage ──────────────────────────────────────────────────────────
     tc.command('coverage <product-id>')
         .description('产品 RP 覆盖率（至少关联 1 条生效用例的 RP ÷ 未归档 RP）')

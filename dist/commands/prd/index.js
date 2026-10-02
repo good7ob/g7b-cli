@@ -8,6 +8,7 @@ const ApiClient_1 = __importDefault(require("../../services/ApiClient"));
 const cliHelpers_1 = require("../../utils/cliHelpers");
 const extractRecords_1 = require("../../utils/extractRecords");
 const importStructure_1 = require("./importStructure");
+const importFile_1 = require("./importFile");
 /**
  * PRD approval (g7b #1061-D, good7ob/backend#282). `<document-id>` is a forge_prd_documents.id,
  * the same id `prd get`/`prd lock` use. Deciding (approve/reject/cancel) stays on the generic
@@ -532,6 +533,7 @@ function registerPrdCommands(program) {
         }
     });
     (0, importStructure_1.registerImportStructureCommand)(prdCommand);
+    (0, importFile_1.registerImportFileCommand)(prdCommand);
     return prdCommand;
 }
 exports.registerPrdCommands = registerPrdCommands;

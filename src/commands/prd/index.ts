@@ -3,6 +3,7 @@ import apiClient from '../../services/ApiClient';
 import { checkMaxLength, emit, fail, parseId } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
 import { registerImportStructureCommand } from './importStructure';
+import { registerImportFileCommand } from './importFile';
 
 /**
  * PRD approval (g7b #1061-D, good7ob/backend#282). `<document-id>` is a forge_prd_documents.id,
@@ -546,6 +547,7 @@ export function registerPrdCommands(program: Command) {
     });
 
   registerImportStructureCommand(prdCommand);
+  registerImportFileCommand(prdCommand);
 
   return prdCommand;
 }

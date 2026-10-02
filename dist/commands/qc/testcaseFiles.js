@@ -7,7 +7,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.planBatches = exports.collectFeatureFiles = exports.parseStep = exports.MAX_FILES_PER_REQUEST = void 0;
+exports.ensureSuitePath = exports.readBatchFile = exports.planBatches = exports.collectFeatureFiles = exports.parseStep = exports.MAX_FILES_PER_REQUEST = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 /** Backend limit per import request (api-0082 §5). */
@@ -69,6 +69,42 @@ function planBatches(files, root, basePathOverride) {
     return batches;
 }
 exports.planBatches = planBatches;
+/** Read a create-batch file: a JSON array (or { "cases": [...] }) of cases with title + steps. */
+function readBatchFile(file) {
+    const parsed = JSON.parse(fs_1.default.readFileSync(file, 'utf-8'));
+    const cases = Array.isArray(parsed) ? parsed : parsed?.cases;
+    if (!Array.isArray(cases) || cases.length === 0) {
+        throw new Error('文件须为非空 JSON 数组，或 { "cases": [...] }');
+    }
+    cases.forEach((c, i) => {
+        if (!c || typeof c.title !== 'string' || !c.title.trim())
+            throw new Error(`第 ${i + 1} 条缺少 title`);
+        if (!Array.isArray(c.steps) || c.steps.length === 0)
+            throw new Error(`第 ${i + 1} 条缺少 steps: ${c.title}`);
+    });
+    return cases;
+}
+exports.readBatchFile = readBatchFile;
+/**
+ * Resolve "一级/二级" to a suite id, creating missing levels through `create`.
+ * `suites` is the caller's cache of the product's suites and gains every created suite,
+ * so later cases in the same batch reuse them instead of creating duplicates.
+ */
+async function ensureSuitePath(suitePath, suites, create) {
+    let parentId = null;
+    for (const name of suitePath.split('/').map((s) => s.trim()).filter(Boolean)) {
+        let found = suites.find((s) => (s.parentId ?? null) === parentId && s.name === name);
+        if (!found) {
+            found = await create(name, parentId);
+            suites.push(found);
+        }
+        parentId = found.id;
+    }
+    if (parentId === null)
+        throw new Error(`目录路径为空: "${suitePath}"`);
+    return parentId;
+}
+exports.ensureSuitePath = ensureSuitePath;
 function normalizeBasePath(dir) {
     const posix = dir.replace(/\\/g, '/').replace(/^\.(\/|$)/, '').replace(/^\/+/, '');
     return posix === '' || posix.endsWith('/') ? posix : `${posix}/`;
