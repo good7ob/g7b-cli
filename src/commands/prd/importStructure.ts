@@ -45,13 +45,15 @@ export function registerImportStructureCommand(prdCommand: Command) {
     .option('--tenant <id>', '租户 ID，与组织 ID 同源；新建 Feature 必填（后端 tenant_id 非空）')
     .option('--verified <json>', '代码核实结果 JSON：{ fpStatus: {funId: DONE|PARTIAL|TODO}, rpImplStatus: {rpId: TODO|UNVERIFIED} }')
     .option('--dry-run', '读取现有数据并打印计划，不写入')
+    .option('--only-files <files>', '只处理指定文件（逗号分隔，支持相对路径或文件名，如 prd-0088-good7ob-forge-idea-management.md）')
     .option('--parse-only', '只解析本地文件并打印统计，不调用 API')
     .option('--concurrency <n>', '并发处理的 Feature 数', '4')
     .option('--json', '输出 JSON')
     .action(async (o) => {
       try {
         const verified = o.verified ? parseVerified(readJson(o.verified)) : undefined;
-        const { features, warnings } = buildDesired(loadStructure(path.resolve(o.prdDir)), verified);
+        const onlyFiles = o.onlyFiles ? new Set<string>(o.onlyFiles.split(',').map((f: string) => f.trim())) : undefined;
+        const { features, warnings } = buildDesired(loadStructure(path.resolve(o.prdDir), onlyFiles), verified);
         const parsed = summarize(features);
         if (!o.json) warnings.forEach((w) => console.error(`⚠ ${w}`));
 
