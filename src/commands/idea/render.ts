@@ -13,7 +13,7 @@ export interface Idea {
   status?: string | null;
   priority?: string | null;
   expectedValue?: string | null;
-  requirementId?: number | null;
+  prdSessionId?: number | null;
   releaseId?: number | null;
   rejectReason?: string | null;
   createdBy?: number | null;
@@ -32,10 +32,10 @@ export function renderIdeaList(result: unknown, pageNum: number, pageSize: numbe
   const records = extractRecords<Idea>(result);
   if (!records.length) return '没有符合条件的 Idea。';
 
-  const rows = [['ID', '状态', '优先级', '来源', '需求', '标题', '创建时间']].concat(
+  const rows = [['ID', '状态', '优先级', '来源', 'PRD', '标题', '创建时间']].concat(
     records.map((i) => [
       String(i.id), dash(i.status), dash(i.priority), dash(i.source),
-      i.requirementId ? `#${i.requirementId}` : DASH, dash(i.title), fmtDate(i.createdAt),
+      i.prdSessionId ? `#${i.prdSessionId}` : DASH, dash(i.title), fmtDate(i.createdAt),
     ])
   );
   const total = extractTotal(result, records);
@@ -53,10 +53,10 @@ export function renderIdeaDetail(detail: IdeaDetail): string {
     `预期价值: ${dash(i.expectedValue)}`,
   ];
   if (i.status === 'rejected' || i.rejectReason) lines.push(`驳回原因: ${dash(i.rejectReason)}`);
-  if (i.requirementId) {
-    lines.push(`关联需求: #${i.requirementId}（需求收件箱，good7ob req show ${i.requirementId}）`);
+  if (i.prdSessionId) {
+    lines.push(`PRD 会话: #${i.prdSessionId}`);
   } else if (i.status === 'approved') {
-    lines.push(`关联需求: ${dash(i.requirementId)}`);
+    lines.push(`PRD 会话: ${dash(i.prdSessionId)}`);
   }
   lines.push(`创建:     ${fmtDate(i.createdAt)} by ${dash(i.createdBy)}    更新: ${fmtDate(i.updatedAt)}`);
   if (i.description) lines.push('', '描述:', i.description);

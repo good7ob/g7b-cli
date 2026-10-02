@@ -222,13 +222,13 @@ describe('idea select (A1)', () => {
     expect(r.stdout).not.toContain('已批准');
   });
 
-  it('with rejected reasons only, still announces the approved idea and requirement', async () => {
+  it('with rejected reasons only, still announces the approved idea and PRD session', async () => {
     const r = await idea(['select', '5', '8', '--reason', 'r', '--rejected-reason', '9:x'],
-      ok({ idea: { id: 5, status: 'approved', requirementId: 77 }, solutions: [], decision: { approvalStatus: 'not_required' } }));
+      ok({ idea: { id: 5, status: 'approved', prdSessionId: 77 }, solutions: [], decision: { approvalStatus: 'not_required' } }));
     expect(r.http.post).toHaveBeenCalledWith('/forge/ideas/5/solutions/8/select', {
       decisionReason: 'r', rejectedReasons: [{ solutionId: 9, reason: 'x' }],
     });
-    expect(r.stdout).toContain('需求 #77');
+    expect(r.stdout).toContain('PRD 会话 #77');
   });
 
   it.each([

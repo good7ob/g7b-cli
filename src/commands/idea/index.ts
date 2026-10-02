@@ -14,8 +14,8 @@ import { registerSolutionCommands } from './solutionCommands';
 
 /**
  * Idea pool commands (forge/ideas): capture an idea, attach candidate
- * solutions, then pick one — which approves the idea and drops a requirement
- * into the requirement inbox (see `good7ob req`). Solutions live in solutionCommands.ts,
+ * solutions, then pick one — which approves the idea and generates a PRD session
+ * from it. `good7ob req add` is a title-only alias of `idea create`. Solutions live in solutionCommands.ts,
  * restore/merge/comment/attachment/tag/relation in collabCommands.ts, and the A2 groups (generate/correction,
  * change-set, review) in aiCommands.ts / changeSetCommands.ts / reviewCommands.ts.
  *
@@ -30,25 +30,35 @@ function renderSelectOutcome(id: number, sid: number, detail: IdeaDetail): strin
   const decision = detail?.decision;
   if (decision?.approvalStatus === 'pending') {
     const approval = decision.approvalId ? `审批单 #${decision.approvalId}（good7ob approval get ${decision.approvalId}）` : '审批单已创建';
-    return `✓ 已提交审批: 方案 #${sid} 待审批，Idea #${id} 仍为 evaluating，${approval}；批准后才会批准 Idea 并创建需求`;
+    return `✓ 已提交审批: 方案 #${sid} 待审批，Idea #${id} 仍为 evaluating，${approval}；批准后才会批准 Idea 并生成 PRD 会话`;
   }
-  const reqId = detail?.idea?.requirementId;
+  const sessionId = detail?.idea?.prdSessionId;
   return `✓ 已选定方案 #${sid}，Idea #${id} 已批准` +
-    (reqId ? `，已在需求收件箱创建需求 #${reqId}（good7ob req show ${reqId}）` : '');
+    (sessionId ? `，已生成 PRD 会话 #${sessionId}` : '');
 }
 
 /** Add the shared idea field flags (create requires some of them; update none). */
-function withIdeaFields(cmd: Command): Command {
+export function withIdeaFields(cmd: Command): Command {
   return cmd
     .option('--description <text>', 'Description')
     .option('--priority <p>', `Priority (${oneOf(PRIORITIES)})`)
     .option('--expected-value <text>', 'Expected value (max 500 chars)');
 }
 
+/** Shared by `idea create` and its `req add` alias. */
+export async function createIdea(o: Parameters<typeof buildCreateBody>[0] & { json?: boolean }): Promise<void> {
+  try {
+    const created = await apiClient.post(BASE, buildCreateBody(o));
+    emit(o.json, created, () => `✓ Idea 已创建 (draft): #${created?.id ?? '-'} ${created?.title ?? o.title}`);
+  } catch (error) {
+    fail('创建 Idea 失败', error, IDEA_ERROR_CODES);
+  }
+}
+
 export function registerIdeaCommands(program: Command) {
   const idea = program
     .command('idea')
-    .description('Idea pool — capture, evaluate, compare solutions, approve into a requirement');
+    .description('Idea pool — capture, evaluate, compare solutions, approve into a PRD session');
 
   idea
     .command('list')
@@ -90,14 +100,7 @@ export function registerIdeaCommands(program: Command) {
     .requiredOption('--title <title>', 'Title (max 200 chars)')
     .requiredOption('--source <source>', `Source (${oneOf(SOURCES)})`)
     .option('--json', 'Output as JSON')
-    .action(async (o) => {
-      try {
-        const created = await apiClient.post(BASE, buildCreateBody(o));
-        emit(o.json, created, () => `✓ Idea 已创建 (draft): #${created?.id ?? '-'} ${created?.title ?? o.title}`);
-      } catch (error) {
-        fail('创建 Idea 失败', error, IDEA_ERROR_CODES);
-      }
-    });
+    .action(createIdea);
 
   withIdeaFields(idea.command('update <id>'))
     .description('Update an idea (omitted flags stay unchanged; locked once approved/archived; only --release stays editable through developing)')
@@ -163,7 +166,7 @@ export function registerIdeaCommands(program: Command) {
 
   idea
     .command('select <ideaId> <solutionId>')
-    .description('Pick the winning solution: approves the idea and creates a requirement in the inbox (or files an approval with --require-approval)')
+    .description('Pick the winning solution: approves the idea and generates a PRD session (or files an approval with --require-approval)')
     .requiredOption('--reason <text>', 'Decision reason (max 1000 chars)')
     .option('--rejected-reason <solutionId:text>', 'Why another solution lost, repeatable (text max 1000 chars)', collect)
     .option('--require-approval', 'Ask the org owner/admins to approve first; the idea stays evaluating until they do')

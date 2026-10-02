@@ -25,7 +25,7 @@ describe('idea restore', () => {
     await expectRejected(['restore', 'abc'], 'id');
     const json = await idea(['restore', '5', '--json'], ok({ id: 5, status: 'draft' }));
     expect(JSON.parse(json.stdout).status).toBe('draft');
-    expect((await idea(['restore', '5'], bizError(1007, 'has requirement'))).stderr).toContain('当前状态不允许');
+    expect((await idea(['restore', '5'], bizError(1007, 'has PRD session'))).stderr).toContain('当前状态不允许');
     expect((await idea(['restore', '5'], bizError(1009, 'race'))).stderr).toContain('请重试');
   });
 });

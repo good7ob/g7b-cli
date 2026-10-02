@@ -134,10 +134,11 @@ good7ob pm health report generate 10 --period week     # then: report list 10 / 
 ### `idea`
 
 ```bash
+good7ob req add make orders exportable           # alias of idea create: title only, source pm, product from GOOD7OB_PRODUCT_ID
 good7ob idea list --product 3
 good7ob idea get 12
 good7ob idea solution add 12 --name "async export" --effort-backend 5 --cost 30000 --confidence medium --kpi "time:5h:2h:hours"
-good7ob idea select 12 34 --reason "lowest cost"   # approves the idea, creates a requirement in the inbox
+good7ob idea select 12 34 --reason "lowest cost"   # approves the idea, generates a PRD session
 good7ob idea select 12 34 --reason "lowest cost" --require-approval   # files an approval instead; idea stays evaluating
 good7ob idea comment add 12 --text "go with the backend option"
 good7ob idea tag set 12 --tags backend,ai
@@ -176,7 +177,7 @@ good7ob workspace daily-report generate --ai          # or: daily-report [--date
 good7ob workspace next-actions --limit 10             # what to do first, with scores and reasons
 ```
 
-What is waiting on you (approvals, info requests, blocked/paused tasks, alerts, requirements to triage, risks) with snooze / dismiss / done / reopen and in-place approve / reject, plus overview and your tasks, products and organizations, your AI team (state, work log), the AI daily report and ranked next actions. See `FEATURES.md`.
+What is waiting on you (approvals, info requests, blocked/paused tasks, alerts, risks) with snooze / dismiss / done / reopen and in-place approve / reject, plus overview and your tasks, products and organizations, your AI team (state, work log), the AI daily report and ranked next actions. See `FEATURES.md`.
 
 ### `release`
 
@@ -208,7 +209,7 @@ good7ob trace create --product 12 --source-type IDEA --source-id 5 --target-type
 good7ob trace list --product 12 --source-type IDEA --source-id 5
 ```
 
-Directed trace links between product objects (idea → requirement → task → test). See `FEATURES.md`.
+Directed trace links between product objects (idea → PRD → task → test). See `FEATURES.md`.
 
 ### `template`
 

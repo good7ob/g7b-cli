@@ -22,7 +22,7 @@ const BASE = '/forge/ideas';
 function registerRestoreMergeDuplicates(idea: Command): void {
   idea
     .command('restore <id>')
-    .description('Restore a soft-deleted idea, or an archived one (back to draft) that never produced a requirement')
+    .description('Restore a soft-deleted idea, or an archived one (back to draft) that never produced a PRD session')
     .option('--json', 'Output as JSON')
     .action(async (id, o) => {
       try {

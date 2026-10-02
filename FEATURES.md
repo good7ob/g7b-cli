@@ -83,7 +83,8 @@ good7ob
 │   └── activity             # 任务 / 项目动态：分页 / 游标增量拉取、类型与来源过滤、写 NOTE / REPORT_UPLOADED
 ├── org                      # 组织管理
 │   └── ai-employee          # AI 员工：CLI/MCP Key 签发 / 重生成 / 停用 / 启用、档案（昵称 / 角色 / 能力范围）、能力目录
-├── idea                     # Idea 池：估算对比、审批/选定生成需求、评论/附件/标签/关联、合并/恢复、AI 生成方案与估算修正、变更集、效果复盘
+├── idea                     # Idea 池：估算对比、审批/选定生成 PRD 会话、评论/附件/标签/关联、合并/恢复、AI 生成方案与估算修正、变更集、效果复盘
+├── req                      # 仅标题快速记录想法（`idea create` 的别名）
 ├── workspace                # 个人工作台：待办队列（就地审批/稍后/忽略/按优先分排序）、总览、我的任务/产品/组织、我的 AI 团队、AI 日报、下一步推荐
 ├── release                  # 发布管理：计划、关联任务、开始、申请审批、Release 健康度与基线
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
@@ -834,17 +835,18 @@ API 端点前缀：`/forge/ideas`（需登录 + 该 Idea 所属产品的组织�
 | 命令 | 说明 |
 |------|------|
 | `idea list --product <id>` | 列表；`--status` `-k/--keyword` `--tag <标签>`（精确、不区分大小写）`--release <发布ID>` `-p/--page` `--page-size`（≤100） |
-| `idea get <id>` | 详情：发布、标签；方案并排对比（成本/周期/预期效果/是否选中）；有结构化估算时另出「估算对比」表（总人日及各角色人日、预计成本、月度成本、周期、技术/产品风险、可信度 + `[AI 估算]` 标记、预期效果、KPI、落选原因）；决策行（选定方案、理由、审批状态/审批单）；已批准时显示关联需求 ID |
+| `idea get <id>` | 详情：发布、标签；方案并排对比（成本/周期/预期效果/是否选中）；有结构化估算时另出「估算对比」表（总人日及各角色人日、预计成本、月度成本、周期、技术/产品风险、可信度 + `[AI 估算]` 标记、预期效果、KPI、落选原因）；决策行（选定方案、理由、审批状态/审批单）；已批准时显示生成的 PRD 会话 ID |
 | `idea create --product <id> --title <t> --source <s>` | 创建（始终 draft）；`--priority` `--description` `--expected-value` |
+| `req add <标题...>` | `idea create` 的别名：只需标题（可不加引号），产品取 `GOOD7OB_PRODUCT_ID`（或 `--product`），来源默认 `pm`（`-s/--source` 可改）；同样支持 `--priority` `--description` `--expected-value` `--json`。需求池已下线，原 `req ls/show/active/inbox/close/edit/rm/history` 已移除，调用时提示改用 `good7ob idea` |
 | `idea update <id>` | 修改（未给的字段保持不变）；`--release <发布ID>` 关联发布（须同产品且 planned / in_progress / awaiting_approval），`--clear-release` 解除（两者互斥） |
 | `idea delete <id>` | 软删除（可用 `idea restore` 恢复） |
-| `idea restore <id>` | 恢复：已删除 → 取消删除；已归档且未生成需求 → draft |
+| `idea restore <id>` | 恢复：已删除 → 取消删除；已归档且未生成 PRD 会话 → draft |
 | `idea status <id> <evaluating\|archived\|planning\|developing\|released\|validated>` | 状态流转（合法路径 draft→evaluating→approved→planning→developing→released→validated，任意态可→archived；released 通常由 Release 发布自动同步） |
 | `idea reject <id> --reason <text>` | 驳回（evaluating → rejected） |
 | `idea solution add <ideaId> --name <n>` | 添加方案；备注类 `--description` `--cost-note` `--cycle-note` `--effect-note`；结构化估算见下 |
 | `idea solution update <ideaId> <solutionId>` | 修改方案（未给的字段不变；`--kpi` 整体替换 KPI 列表，`--clear-kpi` 清空） |
 | `idea solution delete <ideaId> <solutionId>` | 删除方案 |
-| `idea select <ideaId> <solutionId> --reason <text>` | 选定方案：Idea 变 approved，并在需求收件箱创建需求；`--rejected-reason <方案ID>:<原因>`（可重复，写入落选方案的 rejectionReason）；`--require-approval` 改为发起 `IDEA_DECISION` 审批，Idea 保持 evaluating，批准后才生成需求 |
+| `idea select <ideaId> <solutionId> --reason <text>` | 选定方案：Idea 变 approved，并在同一事务内生成 PRD 会话（想法 / 方案 / 决定理由作为首轮上下文）；`--rejected-reason <方案ID>:<原因>`（可重复，写入落选方案的 rejectionReason）；`--require-approval` 改为发起 `IDEA_DECISION` 审批，Idea 保持 evaluating，批准后才生成 PRD 会话 |
 | `idea merge <id> --into <目标ID>` | 把本 Idea（源）并入目标：迁移方案/评论/附件/标签，源归档，并建立 duplicate_of 关联；要求同产品、双方 draft/evaluating、均无待审批决策 |
 | `idea duplicates <id> [--limit N]` | 同产品内标题相似的 Idea（相似度 0–1）；`--limit` 1–20，默认 5 |
 | `idea comment add <id> --text <t>` | 发表评论；`--parent <评论ID>` 回复同一 Idea 的评论；≤2000 字符 |
@@ -885,7 +887,7 @@ good7ob idea solution add 12 --name "后端异步导出" --effort-frontend 2 --e
   --cost 30000 --cloud-cost 120 --cycle-weeks 3 --technical-risk medium --confidence medium \
   --expected-effect "对账耗时下降 60%" --kpi "对账耗时:5h:2h:小时"
 good7ob idea get 12                                    # 方案并排 + 估算对比 + 决策
-good7ob idea select 12 34 --reason "成本最低" --rejected-reason 35:周期过长   # → 需求收件箱出现新需求
+good7ob idea select 12 34 --reason "成本最低" --rejected-reason 35:周期过长   # → 生成 PRD 会话
 good7ob idea select 12 34 --reason "成本最低" --require-approval             # → 待审批，Idea 仍是 evaluating
 good7ob idea tag set 12 --tags backend,ai
 good7ob idea duplicates 12 && good7ob idea merge 13 --into 12
@@ -954,12 +956,12 @@ good7ob idea review complete 21                         # released → validated
 
 ## workspace — 我的工作台
 
-API 端点前缀：`/workspace`（需登录）。这里不叫 inbox —— 在本 CLI 里 inbox 指需求收件箱状态（`good7ob req`）。
+API 端点前缀：`/workspace`（需登录）。
 
 ### 待办队列（等待我处理的事项）
 
-来源：我负责的等待态任务、未读消息、我创建的 inbox 需求、我能决定的审批、我所在组织的高风险产品、指派给我且未解决的缺陷（open / in_progress / reopen；缺陷被解决 / 关闭 / 转派后自动置 done）。
-动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊 / `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警 / `BUG_FIX` 缺陷修复（来源类型 `BUG`；`来源ID` 是缺陷 id，项目列即缺陷所属项目；优先级取严重度与优先级中更紧急者，两者都无法识别时为 —；无截止时间）。
+来源：我负责的等待态任务、未读消息、我能决定的审批、我所在组织的高风险产品、指派给我且未解决的缺陷（open / in_progress / reopen；缺陷被解决 / 关闭 / 转派后自动置 done）。
+动作类型：`PLAN_APPROVAL` 计划审批 / `COMPLETION_APPROVAL` 完成审批 / `INFO_REQUEST` 信息请求 / `BLOCKED` 已阻塞 / `PAUSED` 已暂停 / `SYSTEM_ALERT` 系统提醒 / `REQUIREMENT_TRIAGE` 需求分诊（需求池已下线，不再产生新条目）/ `APPROVAL` 审批申请 / `RISK_ALERT` 风险预警 / `BUG_FIX` 缺陷修复（来源类型 `BUG`；`来源ID` 是缺陷 id，项目列即缺陷所属项目；优先级取严重度与优先级中更紧急者，两者都无法识别时为 —；无截止时间）。
 状态：new / in_progress / waiting / snoozed / dismissed / done（到期的 snooze 读作 new）。
 
 | 命令 | 说明 |
