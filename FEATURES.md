@@ -29,6 +29,7 @@
 - [template — 模板中心](#template--模板中心)
 - [whoami — 当前身份](#whoami--当前身份)
 - [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
+- [worktree — 本机 worktree 占用登记](#worktree--本机-worktree-占用登记)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -90,7 +91,8 @@ good7ob
 ├── approval                 # 通用审批：列表、批准、驳回、撤销
 ├── trace                    # 追溯关系：对象之间的有向关联
 ├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
-└── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
+├── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
+└── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
 ```
 
 ---
@@ -1345,6 +1347,20 @@ good7ob org ai-employee key issue 58 7          # prints the raw key once
 good7ob org ai-employee key regenerate 58 7
 good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 58 7
 ```
+
+---
+
+## worktree — 本机 worktree 占用登记
+
+本机多个 agent 并行时，登记「哪个任务占用哪个 git worktree 路径」，抢占同一路径时提前报冲突（prd-0098）。
+纯本地文件 `~/.good7ob/worktree-state.json`，不调用后端；读改写由 `worktree-state.json.lock` 独占锁保护（等待 5 秒超时，超过 10 秒的残留锁自动清除），落盘用临时文件 + rename。
+
+| 命令 | 说明 |
+|---|---|
+| `worktree claim --task <id> [--path <dir>] [--branch <name>] [--pid <pid>] [--summary <text>] [--force] [--json]` | 占用路径。`--path` 默认当前目录，`--branch` 默认 git 探测（失败留空），`--pid` 默认父进程。别的活跃任务占着同一路径、或同一任务在别的路径活跃时非 0 退出；`--force` 抢占；同任务同路径重复 claim 视为刷新 |
+| `worktree heartbeat --task <id> [--pid <pid>] [--json]` | 刷新心跳；没有记录时非 0 退出 |
+| `worktree release --task <id> [--json]` | 释放占用；没有记录时幂等（0 退出） |
+| `worktree list [--all] [--json]` | 默认先清理失效记录（pid 不存在或心跳超过 240 分钟）并落盘；`--all` 不清理，失效记录标「疑似失效」 |
 
 ---
 
