@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "ts-node src/index.ts",
     "build": "tsc",
+    "prepare": "npm run build",
     "start": "node dist/index.js",
     "cli": "node dist/index.js",
     "test": "vitest",
