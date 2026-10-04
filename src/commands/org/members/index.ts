@@ -104,21 +104,24 @@ export function registerMemberCommands(orgCommand: Command) {
       }
     });
 
-  // add-member (direct, no invitation acceptance)
+  // add-member: sends an organization invitation; the user joins only after accepting
+  // fix: #75 https://github.com/good7ob/prd/issues/75
   orgCommand
     .command('add-member <org-id>')
-    .description('Add an existing user to the organization directly by email, skipping the invitation accept step')
+    .description('Add an existing user by email: sends an invitation, the user joins after accepting')
     .requiredOption('--email <email>', 'Email of an existing good7ob account')
     .option('--role <role>', 'Role for the new member (admin|member)', 'member')
     .action(async (orgId, options) => {
       try {
-        await apiClient.post(`/api/v1/orgs/${orgId}/members/add`, {
-          email: options.email,
-          role: options.role,
-        });
-        console.log(`✓ 已直接加入组织: ${options.email} (角色: ${options.role})`);
+        const res = await apiClient.post<{ invited?: boolean; email?: string; role?: string }>(
+          `/api/v1/orgs/${orgId}/members/add`,
+          { email: options.email, role: options.role },
+        );
+        const email = res?.email ?? options.email;
+        const role = res?.role ?? options.role;
+        console.log(`✓ 已发出邀请，对方接受后加入: ${email} (角色: ${role})`);
       } catch (error) {
-        console.error('✗ 直接添加成员失败:', error instanceof Error ? error.message : String(error));
+        console.error('✗ 发出邀请失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
     });
