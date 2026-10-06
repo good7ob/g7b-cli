@@ -82,8 +82,8 @@ describe('parsePrd', () => {
 describe('mapping', () => {
   it('maps types onto backend enums', () => {
     expect(mapFpType('Integration')).toBe('Integration');
-    expect(mapFpType('Bogus')).toBe('Other');
-    expect(mapFpType(undefined)).toBe('Other');
+    expect(mapFpType('Bogus')).toBeUndefined();
+    expect(mapFpType(undefined)).toBeUndefined();
     expect(mapRpType('Business Rule')).toBe('Business Rule');
     expect(mapRpType('Report')).toBe('Output');
     expect(mapRpType('Query')).toBe('Output');
@@ -100,8 +100,8 @@ describe('mapping', () => {
       .toEqual(['Completed', 'In Progress', 'Draft', 'On Hold']);
     expect(rpImplStatusFor('fun-a', 'rp-x', v)).toBe('UNVERIFIED');
     expect(rpImplStatusFor('fun-a', 'rp-y', v)).toBe('DONE');
-    expect(rpImplStatusFor('fun-z', 'rp-y', v)).toBe('TODO');
-    expect(rpImplStatusFor('fun-a', 'rp-y', undefined)).toBe('TODO');
+    expect(rpImplStatusFor('fun-z', 'rp-y', v)).toBeUndefined();
+    expect(rpImplStatusFor('fun-a', 'rp-y', undefined)).toBeUndefined();
   });
 
   it('rejects malformed verified JSON with a clear message', () => {
@@ -132,6 +132,16 @@ function fixtureDir(): string {
   write('三层结构改造方案.md', PRD.replace(/user-auth/g, 'plan'));
   return dir;
 }
+
+describe('index file name', () => {
+  it('accepts the new name and the legacy name', () => {
+    for (const name of ['prd-0000-requirement-index.md', 'prd-0000-good7ob-requirement-index.md']) {
+      const dir = fixtureDir();
+      fs.renameSync(path.join(dir, 'prd-0000-good7ob-requirement-index.md'), path.join(dir, name));
+      expect(loadStructure(dir).rows).toHaveLength(4);
+    }
+  });
+});
 
 describe('loadStructure + buildDesired', () => {
   it('builds Feature → FP → RP names, types and statuses, ignoring templates', () => {
@@ -187,8 +197,18 @@ describe('buildImportPayloads', () => {
     expect(fp).toMatchObject({ code: 'fun-user-auth-0001', name: '邮箱/密码登录', fpType: 'Integration', status: 'Completed' });
     expect(fp.line).toBeGreaterThan(0);
     expect(fp.section).toContain('FP-1');
-    expect(fp.rps[0]).toMatchObject({ code: 'rp-user-auth-0001', statement: '密码以 `MD5` 存储', rpType: 'Security', implStatus: 'TODO' });
+    expect(fp.rps[0]).toMatchObject({ code: 'rp-user-auth-0001', statement: '密码以 `MD5` 存储', rpType: 'Security' });
+    expect('implStatus' in fp.rps[0]).toBe(false);
     expect(fp.rps[0].line).toBeGreaterThan(fp.line);
+  });
+
+  it('omits fpType when the PRD declares none/unknown (no Other), keeps declared ones', () => {
+    const { payloads } = buildImportPayloads(loadStructure(dirWithVersion()), { productId: 10, tool: 't', dryRun: true });
+    const [fp1, fp2] = payloads[0].payload.features[0].fps;
+    expect(fp1.fpType).toBe('Integration');
+    expect('fpType' in fp2).toBe(false);
+    expect(JSON.parse(JSON.stringify(payloads[0].payload)).features[0].fps[1]).not.toHaveProperty('fpType');
+    expect(JSON.stringify(payloads[0].payload)).not.toContain('implStatus');
   });
 
   it('passes --verified statuses through and counts what it sends', () => {
