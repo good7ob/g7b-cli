@@ -2,14 +2,16 @@
  * Tests for `good7ob prd import-structure` — parser, mapping, planner.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { buildImportPayloads, summarizePayloads } from '../importPayload';
+import { printReport, sendAll } from '../importStructure';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import {
-  buildDesired, clip, fpStatusFor, loadStructure, mapFpType, mapRpType, parseIndex, parsePrd,
-  parseVerified, rpImplStatusFor, summarize, syncStructure,
+  buildDesired, clip, fpStatusFor, loadStructure, mapFpType, mapRpType, parseDocVersion, parseIndex, parsePrd,
+  parseVerified, rpImplStatusFor, summarize,
 } from '../structure';
 
 const INDEX = `
@@ -67,15 +69,13 @@ describe('parseIndex', () => {
 describe('parsePrd', () => {
   it('assigns RP rows to their FP section and takes fpType from the summary table only', () => {
     const fps = parsePrd(PRD);
-    expect(fps).toEqual([
-      {
-        funId: 'fun-user-auth-0001', fpType: 'Integration', rps: [
-          { rpId: 'rp-user-auth-0001', text: '密码以 `MD5` 存储', type: 'Security' },
-          { rpId: 'rp-user-auth-0002', text: '返回 a | b', type: 'Report' },
-        ],
-      },
-      { funId: 'fun-user-auth-0002', fpType: 'Bogus', rps: [{ rpId: 'rp-user-auth-0003', text: '验证码 4 位', type: 'Input/Output' }] },
+    expect(fps.map((fp) => [fp.funId, fp.fpType, fp.rps.map((r) => [r.rpId, r.text, r.type])])).toEqual([
+      ['fun-user-auth-0001', 'Integration', [['rp-user-auth-0001', '密码以 `MD5` 存储', 'Security'], ['rp-user-auth-0002', '返回 a | b', 'Report']]],
+      ['fun-user-auth-0002', 'Bogus', [['rp-user-auth-0003', '验证码 4 位', 'Input/Output']]],
     ]);
+    expect(fps[0].line).toBeGreaterThan(0);
+    expect(fps[0].rps[0].line).toBeGreaterThan(fps[0].line);
+    expect(fps[0].section).toBe('FP-1 · 邮箱密码登录');
   });
 });
 
@@ -165,116 +165,65 @@ describe('loadStructure + buildDesired', () => {
   });
 });
 
-/** In-memory stand-in for the three forge structuring controllers. */
-function fakeBackend() {
-  let seq = 100;
-  const db = { features: [] as any[], fps: [] as any[], rps: [] as any[] };
-  const writes: string[] = [];
-  const client = {
-    async get(url: string, params: any) {
-      if (url === '/forge/features') return db.features.filter((f) => f.productId === params.productId);
-      if (url === '/forge/function-points') return db.fps.filter((f) => f.featureId === params.featureId);
-      if (url === '/forge/rule-points') return db.rps.filter((r) => r.functionPointId === params.functionPointId);
-      throw new Error(`unexpected GET ${url}`);
-    },
-    async post(url: string, body: any) {
-      writes.push(`POST ${url}`);
-      const row = { id: ++seq, ...body };
-      // Mirrors the real backend: forge_feature.tenant_id is NOT NULL, so a create
-      // without tenantId blows up with a 系统异常 instead of a validation message.
-      if (url === '/forge/features' && !body.tenantId) throw new Error('系统异常，请联系管理员');
-      if (url === '/forge/features') db.features.push(row);
-      else if (url === '/forge/function-points') db.fps.push({ ...row, status: 'Draft' });
-      // Old backend: implStatus is not persisted on create, so the importer must follow up with a PUT.
-      else if (url === '/forge/rule-points') { delete row.implStatus; db.rps.push(row); } else throw new Error(`unexpected POST ${url}`);
-      return row;
-    },
-    async put(url: string, body: any) {
-      writes.push(`PUT ${url}`);
-      const m = url.match(/^\/forge\/(function-points|rule-points)\/(\d+)\/(status|impl-status)$/);
-      if (!m) throw new Error(`unexpected PUT ${url}`);
-      const row = (m[1] === 'function-points' ? db.fps : db.rps).find((r) => r.id === Number(m[2]));
-      Object.assign(row, body);
-      return row;
-    },
+describe('buildImportPayloads', () => {
+  const dirWithVersion = () => {
+    const dir = fixtureDir();
+    fs.renameSync(path.join(dir, 'user/prd-0004.md'), path.join(dir, 'user/prd-0004-user-auth.md'));
+    const md = fs.readFileSync(path.join(dir, 'user/prd-0004-user-auth.md'), 'utf8');
+    fs.writeFileSync(path.join(dir, 'user/prd-0004-user-auth.md'),
+      `# 用户认证\n\n| 版本 | 日期 | 作者 | 变更 |\n|---|---|---|---|\n| 1.0.0 | 2026-09-01 | PM | 初稿 |\n| 1.0.1 | 2026-09-05 | PM | 修订 |\n\n${md}`);
+    return dir;
   };
-  return { db, writes, client };
-}
 
-describe('syncStructure', () => {
-  const desired = () => buildDesired(loadStructure(fixtureDir()),
-    parseVerified({ fpStatus: { 'fun-user-auth-0001': 'DONE' }, rpImplStatus: { 'rp-user-auth-0002': 'TODO' } })).features;
-
-  it('dry-run against an empty product plans creates and writes nothing', async () => {
-    const { client, writes } = fakeBackend();
-    const r = await syncStructure(client, 7, desired(), { dryRun: true, concurrency: 2 });
-    expect(writes).toEqual([]);
-    expect(r.counts).toEqual({
-      feature: { create: 2, update: 0, unchanged: 0 },
-      fp: { create: 4, update: 0, unchanged: 0 },
-      rp: { create: 3, update: 0, unchanged: 0 },
-    });
+  it('one body per PRD file: prd number + latest doc version, clean names, line numbers and sections', () => {
+    const { payloads, warnings } = buildImportPayloads(loadStructure(dirWithVersion()), { tenantId: 7, productId: 10, tool: 't@1', dryRun: false });
+    expect(warnings).toEqual([]);
+    expect(payloads).toHaveLength(1);
+    const { file, payload } = payloads[0];
+    expect(file).toBe('user/prd-0004-user-auth.md');
+    expect(payload).toMatchObject({ tenantId: 7, productId: 10, prdNo: 'prd-0004', prdVersion: '1.0.1', tool: 't@1', dryRun: false });
+    expect(payload.features.map((f) => [f.code, f.name, f.fps.length])).toEqual([['MOD-01-SUB-01', '账户认证', 2]]);
+    const fp = payload.features[0].fps[0];
+    expect(fp).toMatchObject({ code: 'fun-user-auth-0001', name: '邮箱/密码登录', fpType: 'Integration', status: 'Completed' });
+    expect(fp.line).toBeGreaterThan(0);
+    expect(fp.section).toContain('FP-1');
+    expect(fp.rps[0]).toMatchObject({ code: 'rp-user-auth-0001', statement: '密码以 `MD5` 存储', rpType: 'Security', implStatus: 'TODO' });
+    expect(fp.rps[0].line).toBeGreaterThan(fp.line);
   });
 
-  it('refuses to create Features without a tenantId instead of failing mid-import', async () => {
-    const { client, writes } = fakeBackend();
-    await expect(syncStructure(client, 7, desired(), { dryRun: false, concurrency: 1 }))
-      .rejects.toThrow('--tenant');
-    expect(writes).toEqual([]);
+  it('passes --verified statuses through and counts what it sends', () => {
+    const { payloads } = buildImportPayloads(loadStructure(dirWithVersion()),
+      { productId: 10, tool: 't', dryRun: true, verified: parseVerified({ fpStatus: { 'fun-user-auth-0001': 'DONE' }, rpImplStatus: { 'rp-user-auth-0002': 'UNVERIFIED' } }) });
+    const fp = payloads[0].payload.features[0].fps[0];
+    expect(fp.status).toBe('Completed');
+    expect(fp.rps.map((r) => r.implStatus)).toEqual(['DONE', 'UNVERIFIED']);
+    expect(summarizePayloads(payloads)).toEqual({ files: 1, features: 1, fps: 2, rps: 3 });
   });
 
-  it('creates everything, then a re-run is a no-op, then only changed statuses update', async () => {
-    const { client, db, writes } = fakeBackend();
-    await syncStructure(client, 7, desired(), { dryRun: false, concurrency: 2, tenantId: 58 });
-    expect(db.features.map((f) => f.name).sort()).toEqual(['MOD-01-SUB-01 账户认证', 'MOD-02-SUB-03 支付']);
-    expect(db.features.every((f) => f.tenantId === 58)).toBe(true);
-    expect(db.fps.find((f) => f.name.startsWith('fun-user-auth-0001'))).toMatchObject({ status: 'Completed', fpType: 'Integration' });
-    expect(db.fps.find((f) => f.name.startsWith('fun-pay-0002')).status).toBe('Draft');
-    expect(db.rps.map((r) => [r.statement.split(' ')[0], r.implStatus ?? 'TODO']).sort()).toEqual([
-      ['rp-user-auth-0001', 'DONE'], ['rp-user-auth-0002', 'TODO'], ['rp-user-auth-0003', 'TODO'],
-    ]);
-
-    writes.length = 0;
-    const again = await syncStructure(client, 7, desired(), { dryRun: false, concurrency: 2 });
-    expect(writes).toEqual([]);
-    expect(again.actions).toEqual([]);
-    expect(again.counts.rp).toEqual({ create: 0, update: 0, unchanged: 3 });
-
-    // Someone renamed the text part — matching is by id prefix, so still unchanged; flip one status.
-    db.rps[0].statement = `${db.rps[0].statement.split(' ')[0]} 改过的文字`;
-    const changed = desired();
-    changed[0].fps[0].rps[0].implStatus = 'UNVERIFIED';
-    changed[0].fps[1].status = 'Completed';
-    const upd = await syncStructure(client, 7, changed, { dryRun: false, concurrency: 1 });
-    expect(upd.actions).toEqual([
-      { layer: 'rp', op: 'update', id: 'rp-user-auth-0001', field: 'implStatus', from: 'DONE', to: 'UNVERIFIED' },
-      { layer: 'fp', op: 'update', id: 'fun-user-auth-0002', field: 'status', from: 'In Progress', to: 'Completed' },
-    ]);
-    expect(writes.filter((w) => w.startsWith('POST'))).toEqual([]);
-    expect(db.rps.length).toBe(3);
+  it('refuses a PRD file without a document version instead of sending an unattributable import', () => {
+    expect(() => buildImportPayloads(loadStructure(fixtureDir()), { tenantId: 7, productId: 10, tool: 't', dryRun: false }))
+      .toThrow(/文件名里没有 PRD 编号|没有找到文档版本/);
   });
+});
 
-  it('retries when the backend rate-limits, and still imports everything', async () => {
-    const { client, db } = fakeBackend();
-    let hits = 0;
-    const throttling = { ...client, post: async (url: string, body: any) => {
-      if (url === '/forge/rule-points' && ++hits === 2) throw new Error('Too many requests. Please slow down and retry later.');
-      return client.post(url, body);
-    } };
-
-    await syncStructure(throttling, 7, desired(), { dryRun: false, concurrency: 1, tenantId: 58, retryDelaysMs: [1, 1] });
-
-    expect(db.rps.length).toBe(3);
+describe('sendAll + printReport', () => {
+  it('posts every file to the import endpoint and prints a rejection with file:line positions', async () => {
+    const calls: any[] = [];
+    const client = { async post(url: string, body: any) { calls.push([url, body.prdNo]); return { status: 'REJECTED', errors: [{ layer: 'rp', code: 'rp-a-0001', line: 30, message: '编号重复定义' }], counts: {}, changes: [], completeness: [], notes: [] }; } };
+    const out = await sendAll(client, [{ file: 'x/prd-0001-a.md', payload: { prdNo: 'prd-0001', prdVersion: '1.0.0', tool: 't', dryRun: false, features: [] } }]);
+    expect(calls).toEqual([['/forge/structuring/import', 'prd-0001']]);
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: any) => { lines.push(String(m)); });
+    printReport(out[0].file, out[0].report);
+    spy.mockRestore();
+    expect(lines.join('\n')).toContain('x/prd-0001-a.md:30  rp-a-0001  编号重复定义');
   });
+});
 
-  it('stops on the first hard error and names the node', async () => {
-    const { client } = fakeBackend();
-    const failing = { ...client, post: async (url: string, body: any) => {
-      if (url === '/forge/function-points' && body.name.startsWith('fun-pay-0001')) throw new Error('FP 类型不合法');
-      return client.post(url, body);
-    } };
-    await expect(syncStructure(failing, 7, desired(), { dryRun: false, concurrency: 1, tenantId: 58 }))
-      .rejects.toThrow('fun-pay-0001: FP 类型不合法');
+describe('parseDocVersion', () => {
+  it('takes the highest version in the history table regardless of row order', () => {
+    expect(parseDocVersion('| 1.0.5 | 2026-10-03 | x |\n| 1.0.4 | 2026-10-01 | y |\n| 1.0.10 | 2026-10-04 | z |')).toBe('1.0.10');
+    expect(parseDocVersion('no table')).toBeUndefined();
   });
 });
 
@@ -287,7 +236,7 @@ describe('prd import-structure CLI', () => {
     expect(json.parsed).toMatchObject({ features: 2, fps: 4, rps: 3 });
   });
 
-  it('requires --product unless --parse-only', () => {
+  it('requires --product and --tenant unless --parse-only', () => {
     expect(() => execSync(`npm run cli -- prd import-structure --prd-dir ${fixtureDir()}`, { stdio: 'pipe' })).toThrow();
   });
 });
