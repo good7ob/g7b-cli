@@ -240,14 +240,18 @@ export class ApiClient {
     if (error?.payload) {
       return error;
     }
-    if (error.response?.data?.msg) {
-      return new Error(error.response.data.msg);
-    }
-    if (error.response?.data?.message) {
-      return new Error(error.response.data.message);
+    const msg = error.response?.data?.msg || error.response?.data?.message;
+    if (msg) {
+      // Keep the business code / HTTP status so callers can tell e.g. a 409 conflict apart.
+      const err: any = new Error(msg);
+      err.code = error.response.data.code ?? error.response.status;
+      err.status = error.response.status;
+      return err;
     }
     if (error.message) {
-      return new Error(error.message);
+      const err: any = new Error(error.message);
+      if (error.response?.status) err.status = error.response.status;
+      return err;
     }
     return new Error('An unknown error occurred');
   }

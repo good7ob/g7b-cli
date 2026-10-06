@@ -26,6 +26,7 @@ import { registerWhoamiCommands } from './commands/whoami';
 import { registerSchemaCommands } from './commands/schema';
 import { registerBlogCommands } from './commands/blog';
 import { registerWorktreeCommands } from './commands/worktree';
+import { registerAgentCommands } from './commands/agent';
 
 const program = new Command();
 
@@ -55,6 +56,7 @@ registerWhoamiCommands(program);
 registerSchemaCommands(program);
 registerBlogCommands(program);
 registerWorktreeCommands(program);
+registerAgentCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
