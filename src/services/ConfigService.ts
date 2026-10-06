@@ -13,6 +13,8 @@ interface Config {
   userId?: number;
   orgId?: number;
   theme?: string;
+  /** `good7ob agent` settings, see commands/agent/config.ts */
+  agent?: Record<string, any>;
 }
 
 export class ConfigService {

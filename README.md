@@ -256,6 +256,25 @@ good7ob whoami
 
 Who the configured API key acts as: a user, or an AI employee (id, nickname, org, role, capabilities, product scope). See `FEATURES.md`.
 
+### `agent`
+
+Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine (`~/.good7ob/agent-state.json`): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.
+
+```bash
+# Forward claimed tasks to a Hermes webhook (HMAC-signed) — or use agent.forward.command instead
+good7ob config set agent.forward.url http://127.0.0.1:8644/webhooks/good7ob-task
+good7ob config set agent.forward.secret <secret>
+# good7ob config set agent.forward.command 'claude -p "处理 good7ob 任务 {taskId}"'   # only {taskId}/{taskNo}
+
+good7ob agent listen [--interval 15] [--once]   # poll → claim → forward
+good7ob agent next [--json]                     # for agents that pull: exit 3 = busy, 4 = queue empty
+good7ob agent done <taskId> [--status completed]
+good7ob agent status
+good7ob agent reset [--release]
+```
+
+Other settings: `agent.intervalSeconds` (15), `agent.expectedMinutes` (60), `agent.graceMinutes` (30), `agent.projectId`.
+
 ### `qc`
 
 ```bash

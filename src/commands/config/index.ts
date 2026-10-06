@@ -6,6 +6,7 @@
 
 import { Command } from 'commander';
 import configService from '../../services/ConfigService';
+import { AGENT_KEYS, getAgentValue, withAgentValue } from '../agent/config';
 
 const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'theme'> = {
   'api-url': 'apiUrl',
@@ -23,7 +24,8 @@ const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'th
   theme: 'theme',
 };
 
-const SENSITIVE_KEYS = new Set(['apiKey']);
+const SENSITIVE_KEYS = new Set(['apiKey', 'agent.forward.secret']);
+const AGENT_PREFIX = 'agent.';
 
 function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'theme' {
   const normalized = KEY_ALIASES[input];
@@ -36,6 +38,7 @@ function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'orgId' |
 function formatValue(key: string, value: unknown): string {
   if (SENSITIVE_KEYS.has(key)) {
     const text = String(value || '');
+    if (key === 'agent.forward.secret') return text ? '(set)' : '(not set)';
     if (!text) return '(not set)';
     if (text.length <= 8) return '********';
     return `${text.slice(0, 4)}...${text.slice(-4)}`;
@@ -58,6 +61,12 @@ export function registerConfigCommands(program: Command) {
     .description('Set a configuration value')
     .action((key, value) => {
       try {
+        if (key.startsWith(AGENT_PREFIX)) {
+          const agentKey = key.slice(AGENT_PREFIX.length);
+          configService.set('agent', withAgentValue(configService.get('agent'), agentKey, value));
+          console.log(`✓ Config updated: ${key} = ${formatValue(key, getAgentValue(configService.get('agent'), agentKey))}`);
+          return;
+        }
         const normalizedKey = normalizeKey(key);
         const isNumeric = normalizedKey === 'userId' || normalizedKey === 'orgId';
         const parsedValue = isNumeric ? parseInt(value, 10) : value;
@@ -79,6 +88,10 @@ export function registerConfigCommands(program: Command) {
     .description('Get a configuration value')
     .action((key) => {
       try {
+        if (key.startsWith(AGENT_PREFIX)) {
+          console.log(`${key}=${formatValue(key, getAgentValue(configService.get('agent'), key.slice(AGENT_PREFIX.length)))}`);
+          return;
+        }
         const normalizedKey = normalizeKey(key);
         const value = configService.get(normalizedKey);
         console.log(`${normalizedKey}=${formatValue(normalizedKey, value)}`);
@@ -99,6 +112,10 @@ export function registerConfigCommands(program: Command) {
       console.log(`  userId: ${formatValue('userId', config.userId)}`);
       console.log(`  orgId: ${formatValue('orgId', config.orgId)}`);
       console.log(`  theme: ${formatValue('theme', config.theme)}`);
+      AGENT_KEYS.forEach((k) => {
+        const key = `${AGENT_PREFIX}${k}`;
+        console.log(`  ${key}: ${formatValue(key, getAgentValue(config.agent, k))}`);
+      });
     });
 
   configCommand
