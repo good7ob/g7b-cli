@@ -6,13 +6,16 @@
 
 import { clip, fpStatusFor, mapFpType, mapRpType, NAME_MAX, ParsedStructure, rpImplStatusFor, Verified } from './structure';
 
-export interface ImportRp { code: string; statement: string; rpType: string; implStatus: string; section?: string; line: number }
-export interface ImportFp { code: string; name: string; fpType: string; description?: string; status: string; section?: string; line: number; rps: ImportRp[] }
+export interface ImportRp { code: string; statement: string; rpType: string; implStatus?: string; section?: string; line: number }
+export interface ImportFp { code: string; name: string; fpType?: string; description?: string; status: string; section?: string; line: number; rps: ImportRp[] }
 export interface ImportFe { code: string; name: string; line?: number; fps: ImportFp[] }
 export interface ImportPayload {
   tenantId?: number; productId?: number; prdNo: string; prdVersion: string; tool: string; dryRun: boolean; confirm?: boolean; features: ImportFe[];
 }
 export interface FilePayload { file: string; payload: ImportPayload }
+
+/** Omit the key entirely when undeclared (JSON.stringify would drop undefined anyway; this keeps toEqual/keys honest). */
+const optional = <K extends string>(k: K, v?: string) => (v === undefined ? {} : { [k]: v } as Record<K, string>);
 
 const PRD_NO = /(?:^|\/)(prd-\d{4,})-[^/]*\.md$/;
 
@@ -37,14 +40,14 @@ export function buildImportPayloads(
     fe.fps.push({
       code: prdFp.funId,
       name: clip(row.desc, NAME_MAX),
-      fpType: mapFpType(prdFp.fpType),
+      ...optional('fpType', mapFpType(prdFp.fpType)),
       description: row.prdLink ? `来源：docs/prd/${row.prdLink.replace(/^\.\//, '')}` : undefined,
       status: fpStatusFor(row.funId, row.status, opts.verified),
       section: prdFp.section,
       line: prdFp.line,
       rps: prdFp.rps.map((rp) => ({
         code: rp.rpId, statement: rp.text, rpType: mapRpType(rp.type),
-        implStatus: rpImplStatusFor(row.funId, rp.rpId, opts.verified), section: rp.section, line: rp.line,
+        ...optional('implStatus', rpImplStatusFor(row.funId, rp.rpId, opts.verified)), section: rp.section, line: rp.line,
       })),
     });
   }

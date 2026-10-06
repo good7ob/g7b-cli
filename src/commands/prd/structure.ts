@@ -8,7 +8,8 @@
 import fs from 'fs';
 import path from 'path';
 
-export const INDEX_FILE = 'prd-0000-good7ob-requirement-index.md';
+/** New name first; the legacy name is still accepted (g7b #1496). */
+export const INDEX_FILES = ['prd-0000-requirement-index.md', 'prd-0000-good7ob-requirement-index.md'];
 /** forge_feature.name / forge_function_point.name are VARCHAR(100). */
 export const NAME_MAX = 100;
 
@@ -105,8 +106,8 @@ function listMarkdown(dir: string): string[] {
 }
 
 export function loadStructure(prdDir: string, onlyFiles?: Set<string>): ParsedStructure {
-  const indexPath = path.join(prdDir, INDEX_FILE);
-  if (!fs.existsSync(indexPath)) throw new Error(`找不到需求索引: ${indexPath}`);
+  const indexPath = INDEX_FILES.map((f) => path.join(prdDir, f)).find((p) => fs.existsSync(p));
+  if (!indexPath) throw new Error(`找不到需求索引: ${path.join(prdDir, INDEX_FILES[0])}（旧名 ${INDEX_FILES[1]} 也不存在）`);
   const rows = parseIndex(fs.readFileSync(indexPath, 'utf8'));
   const prdFps: PrdFp[] = [];
   const versions: Record<string, string | undefined> = {};
@@ -145,7 +146,8 @@ export function parseVerified(raw: unknown): Verified {
 
 // ── mapping ──────────────────────────────────────────────────────────────
 
-export const mapFpType = (t?: string) => (t && FP_TYPES.includes(t) ? t : 'Other');
+/** undefined = the PRD declares no (known) type; callers omit it so the server keeps the existing value (g7b #1496). */
+export const mapFpType = (t?: string): string | undefined => (t && FP_TYPES.includes(t) ? t : undefined);
 export const mapRpType = (t?: string) => (t && RP_TYPES.includes(t) ? t : RP_TYPE_ALIASES[t ?? ''] ?? 'Other');
 
 export function fpStatusFor(funId: string, indexStatus: IndexStatus, v?: Verified): string {
@@ -153,9 +155,9 @@ export function fpStatusFor(funId: string, indexStatus: IndexStatus, v?: Verifie
   return s ? VERIFIED_FP_STATUS[s] : INDEX_FP_STATUS[indexStatus];
 }
 
-/** Only RPs under a verified FP carry a verdict; unlisted ones there are DONE, everything else is unverified work → TODO. */
-export function rpImplStatusFor(funId: string, rpId: string, v?: Verified): string {
-  return v?.fpStatus[funId] ? v.rpImplStatus[rpId] ?? 'DONE' : 'TODO';
+/** Only RPs under a verified FP carry a verdict (unlisted ones there are DONE); otherwise undeclared → undefined, server keeps its value. */
+export function rpImplStatusFor(funId: string, rpId: string, v?: Verified): string | undefined {
+  return v?.fpStatus[funId] ? v.rpImplStatus[rpId] ?? 'DONE' : undefined;
 }
 
 /** Truncate to max UTF-16 units without splitting a surrogate pair; the leading id token always survives. */
@@ -185,14 +187,14 @@ export function buildDesired(parsed: ParsedStructure, verified?: Verified): { fe
     features.get(row.featureId).fps.push({
       key: row.funId,
       name: clip(`${row.funId} ${row.desc}`, NAME_MAX),
-      fpType: mapFpType(prd?.fpType),
+      fpType: mapFpType(prd?.fpType) ?? 'Other',
       description: row.prdLink ? `来源：docs/prd/${row.prdLink.replace(/^\.\//, '')}` : undefined,
       status: fpStatusFor(row.funId, row.status, verified),
       rps: (prd?.rps ?? []).map((rp) => ({
         key: rp.rpId,
         statement: `${rp.rpId} ${rp.text}`,
         rpType: mapRpType(rp.type),
-        implStatus: rpImplStatusFor(row.funId, rp.rpId, verified),
+        implStatus: rpImplStatusFor(row.funId, rp.rpId, verified) ?? 'TODO',
       })),
     });
   }
