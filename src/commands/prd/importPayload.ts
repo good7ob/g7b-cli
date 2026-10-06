@@ -10,14 +10,14 @@ export interface ImportRp { code: string; statement: string; rpType: string; imp
 export interface ImportFp { code: string; name: string; fpType: string; description?: string; status: string; section?: string; line: number; rps: ImportRp[] }
 export interface ImportFe { code: string; name: string; line?: number; fps: ImportFp[] }
 export interface ImportPayload {
-  tenantId?: number; productId?: number; prdNo: string; prdVersion: string; tool: string; dryRun: boolean; features: ImportFe[];
+  tenantId?: number; productId?: number; prdNo: string; prdVersion: string; tool: string; dryRun: boolean; confirm?: boolean; features: ImportFe[];
 }
 export interface FilePayload { file: string; payload: ImportPayload }
 
 const PRD_NO = /(?:^|\/)(prd-\d{4,})-[^/]*\.md$/;
 
 export function buildImportPayloads(
-  parsed: ParsedStructure, opts: { tenantId?: number; productId?: number; tool: string; dryRun: boolean; verified?: Verified },
+  parsed: ParsedStructure, opts: { tenantId?: number; productId?: number; tool: string; dryRun: boolean; confirm?: boolean; verified?: Verified },
 ): { payloads: FilePayload[]; warnings: string[] } {
   const rowByFun = new Map(parsed.rows.map((r) => [r.funId, r]));
   const warnings: string[] = [];
@@ -57,7 +57,7 @@ export function buildImportPayloads(
     if (!prdVersion) throw new Error(`${file}: 没有找到文档版本（版本记录表里需要 | x.y.z | YYYY-MM-DD | 行），无法推导来源`);
     payloads.push({
       file,
-      payload: { tenantId: opts.tenantId, productId: opts.productId, prdNo, prdVersion, tool: opts.tool, dryRun: opts.dryRun, features },
+      payload: { tenantId: opts.tenantId, productId: opts.productId, prdNo, prdVersion, tool: opts.tool, dryRun: opts.dryRun, ...(opts.confirm ? { confirm: true } : {}), features },
     });
   }
   return { payloads, warnings };
