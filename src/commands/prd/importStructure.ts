@@ -40,10 +40,11 @@ export function cliTool(): string {
 
 export interface ServerReport {
   status: string; reportId?: number;
-  counts: Record<string, { created: number; updated: number; unchanged: number; failed: number }>;
+  counts: Record<string, { created: number; updated: number; unchanged: number; failed: number; removed?: number }>;
   errors: { layer: string; code: string; line?: number; message: string }[];
   changes: { code: string; field: string; from?: string; to?: string }[];
   completeness: string[]; notes: string[];
+  impacts?: { nodeType: string; nodeId: number; kind: string; refId: number; name?: string; status?: string }[];
 }
 
 export function printReport(file: string, r: ServerReport) {
@@ -52,19 +53,24 @@ export function printReport(file: string, r: ServerReport) {
     console.log(`  整份拒绝，未写入任何节点，共 ${r.errors.length} 处错误：`);
     r.errors.forEach((e) => console.log(`  ✗ ${file}${e.line ? `:${e.line}` : ''}  ${e.code}  ${e.message}`));
   } else {
-    console.log(`  ${''.padEnd(10)}${'新建'.padEnd(8)}${'更新'.padEnd(8)}${'未变'.padEnd(8)}失败`);
+    console.log(`  ${''.padEnd(10)}${'新建'.padEnd(8)}${'更新'.padEnd(8)}${'未变'.padEnd(8)}${'移除'.padEnd(8)}失败`);
     Object.entries(r.counts).forEach(([layer, c]) =>
-      console.log(`  ${(LAYER_CN[layer] ?? layer).padEnd(10)}${String(c.created).padEnd(10)}${String(c.updated).padEnd(10)}${String(c.unchanged).padEnd(10)}${c.failed}`));
+      console.log(`  ${(LAYER_CN[layer] ?? layer).padEnd(10)}${String(c.created).padEnd(10)}${String(c.updated).padEnd(10)}${String(c.unchanged).padEnd(10)}${String(c.removed ?? 0).padEnd(10)}${c.failed}`));
     r.changes.forEach((c) => console.log(`  ↻ ${c.code}  ${c.field}: ${c.from ?? ''} → ${c.to ?? ''}`));
+  }
+  if (r.impacts?.length) {
+    console.log(`  受影响的任务/用例 ${r.impacts.length} 个：`);
+    r.impacts.forEach((i) => console.log(`  ! ${i.nodeType}#${i.nodeId} → ${i.kind === 'TASK' ? '任务' : '用例'} #${i.refId} ${i.name ?? ''} [${i.status ?? ''}]`));
   }
   r.completeness.forEach((m) => console.log(`  ⚠ 完成度  ${m}`));
   r.notes.forEach((m) => console.log(`  ℹ ${m}`));
 }
 
-export async function sendAll(client: { post(url: string, body?: any): Promise<any> }, payloads: FilePayload[]) {
+export async function sendAll(client: { post(url: string, body?: any): Promise<any> }, payloads: FilePayload[],
+  endpoint = '/forge/structuring/import') {
   const reports: { file: string; report: ServerReport }[] = [];
   for (const { file, payload } of payloads) {
-    reports.push({ file, report: await client.post('/forge/structuring/import', payload) });
+    reports.push({ file, report: await client.post(endpoint, payload) });
   }
   return reports;
 }
@@ -115,6 +121,50 @@ export function registerImportStructureCommand(prdCommand: Command) {
         if (rejected.length) process.exit(1);
       } catch (e: any) {
         console.error('✗ 导入需求结构失败:', e instanceof Error ? e.message : String(e));
+        process.exit(1);
+      }
+    });
+}
+
+/**
+ * `good7ob prd sync-structure` — diff sync after a new PRD version is approved (prd-0076 FP-10, path B, free):
+ * same input as import-structure, sent to `POST /forge/structuring/sync`. Vanished codes are marked 已移除, never deleted;
+ * when tasks / test cases are affected the server answers NEEDS_CONFIRMATION and writes nothing until `--confirm`.
+ */
+export function registerSyncStructureCommand(prdCommand: Command) {
+  prdCommand
+    .command('sync-structure')
+    .description('PRD 新版本批准后按业务编号同步需求树差异：新增/更新/标已移除/恢复；有任务或用例受影响时先列影响，加 --confirm 才写入')
+    .requiredOption('--prd-dir <path>', 'docs/prd 目录（含 prd-0000 需求索引）')
+    .requiredOption('--product <id>', '目标产品 ID')
+    .requiredOption('--tenant <id>', '组织 ID（= tenant_id）')
+    .option('--verified <json>', '代码核实结果 JSON，同 import-structure')
+    .option('--only-files <files>', '只处理指定的 PRD 文件（逗号分隔）')
+    .option('--dry-run', '只列差异与影响，不写入')
+    .option('--confirm', '确认有任务/用例受影响时仍写入')
+    .option('--json', '输出 JSON')
+    .action(async (o) => {
+      try {
+        const verified = o.verified ? parseVerified(readJson(o.verified)) : undefined;
+        const onlyFiles = o.onlyFiles ? new Set<string>(o.onlyFiles.split(',').map((f: string) => f.trim())) : undefined;
+        const parsedStructure = loadStructure(path.resolve(o.prdDir), onlyFiles);
+        const { payloads, warnings } = buildImportPayloads(parsedStructure, {
+          tenantId: positiveInt(o.tenant, '--tenant'), productId: positiveInt(o.product, '--product'),
+          tool: cliTool(), dryRun: !!o.dryRun, confirm: !!o.confirm, verified,
+        });
+        if (!o.json) warnings.forEach((w) => console.error(`⚠ ${w}`));
+        const reports = await sendAll(apiClient, payloads, '/forge/structuring/sync');
+        const blocked = reports.filter((r) => r.report.status === 'REJECTED' || r.report.status === 'NEEDS_CONFIRMATION');
+        if (o.json) console.log(JSON.stringify({ warnings, reports }, null, 2));
+        else {
+          reports.forEach((r) => {
+            printReport(r.file, r.report);
+            if (r.report.status === 'NEEDS_CONFIRMATION') console.log('  → 以上任务/用例会受影响，确认无误后加 --confirm 重新执行');
+          });
+        }
+        if (blocked.length) process.exit(1);
+      } catch (e: any) {
+        console.error('✗ 同步需求结构失败:', e instanceof Error ? e.message : String(e));
         process.exit(1);
       }
     });

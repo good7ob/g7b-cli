@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { checkMaxLength, emit, fail, parseId } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
-import { registerImportStructureCommand } from './importStructure';
+import { registerImportStructureCommand, registerSyncStructureCommand } from './importStructure';
 import { registerImportFileCommand } from './importFile';
 
 /**

@@ -220,6 +220,30 @@ describe('sendAll + printReport', () => {
   });
 });
 
+describe('sync-structure payload and report', () => {
+  it('sends confirm only when asked, and prints impacted tasks of a NEEDS_CONFIRMATION answer', () => {
+    const parsed = loadStructure((() => {
+      const dir = fixtureDir();
+      const f = path.join(dir, 'user/prd-0004.md');
+      fs.renameSync(f, path.join(dir, 'user/prd-0004-a.md'));
+      fs.writeFileSync(path.join(dir, 'user/prd-0004-a.md'), `| 1.0.0 | 2026-09-01 | PM | x |\n${PRD}`);
+      return dir;
+    })());
+    const noConfirm = buildImportPayloads(parsed, { productId: 1, tenantId: 2, tool: 't', dryRun: false });
+    const confirm = buildImportPayloads(parsed, { productId: 1, tenantId: 2, tool: 't', dryRun: false, confirm: true });
+    expect('confirm' in noConfirm.payloads[0].payload).toBe(false);
+    expect(confirm.payloads[0].payload.confirm).toBe(true);
+
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((m: any) => { lines.push(String(m)); });
+    printReport('x.md', { status: 'NEEDS_CONFIRMATION', errors: [], completeness: [], notes: [], changes: [],
+      counts: { rp: { created: 0, updated: 0, unchanged: 1, failed: 0, removed: 1 } },
+      impacts: [{ nodeType: 'RP', nodeId: 4, kind: 'TASK', refId: 1450, name: '实现', status: 'in_progress' }] });
+    spy.mockRestore();
+    expect(lines.join('\n')).toContain('任务 #1450');
+  });
+});
+
 describe('parseDocVersion', () => {
   it('takes the highest version in the history table regardless of row order', () => {
     expect(parseDocVersion('| 1.0.5 | 2026-10-03 | x |\n| 1.0.4 | 2026-10-01 | y |\n| 1.0.10 | 2026-10-04 | z |')).toBe('1.0.10');
