@@ -1,12 +1,12 @@
 /**
  * Pure helpers for `good7ob prd import-structure`: parse docs/prd (requirement index + FP/RP
- * tables), map onto the backend's Feature / Function Point / Rule Point enums, and sync
- * idempotently through an injected client. Kept free of apiClient so it can be unit tested.
+ * tables) and map onto the backend's Feature / Function Point / Rule Point enums. The write itself
+ * is done by the server (`POST /forge/structuring/import`, see importPayload.ts). Kept free of
+ * apiClient so it can be unit tested.
  */
 
 import fs from 'fs';
 import path from 'path';
-import { rateLimitRetry, runPool } from '../../utils/pool';
 
 export const INDEX_FILE = 'prd-0000-good7ob-requirement-index.md';
 /** forge_feature.name / forge_function_point.name are VARCHAR(100). */
@@ -24,9 +24,9 @@ const VERIFIED_FP_STATUS: Record<string, string> = { DONE: 'Completed', PARTIAL:
 const RP_IMPL_STATUSES = ['TODO', 'DONE', 'UNVERIFIED'];
 
 export interface IndexRow { featureId: string; featureName: string; funId: string; desc: string; status: IndexStatus; prdLink?: string }
-export interface PrdRp { rpId: string; text: string; type: string }
-export interface PrdFp { funId: string; fpType?: string; rps: PrdRp[] }
-export interface ParsedStructure { rows: IndexRow[]; prdFps: PrdFp[] }
+export interface PrdRp { rpId: string; text: string; type: string; line: number; section?: string }
+export interface PrdFp { funId: string; fpType?: string; rps: PrdRp[]; line: number; section?: string; file?: string }
+export interface ParsedStructure { rows: IndexRow[]; prdFps: PrdFp[]; /** PRD file (relative path) → document version */ versions: Record<string, string | undefined> }
 export interface Verified { fpStatus: Record<string, string>; rpImplStatus: Record<string, string> }
 
 export interface DesiredRp { key: string; statement: string; rpType: string; implStatus: string }
@@ -62,23 +62,38 @@ export function parsePrd(md: string): PrdFp[] {
   const fps: PrdFp[] = [];
   let current: PrdFp | undefined;
   let inSummary = false;
-  for (const line of md.split('\n')) {
-    if (/^##\s/.test(line)) { current = undefined; inSummary = false; }
-    if (SUMMARY_HEADER.test(line)) { inSummary = true; continue; }
+  let h1: string | undefined;
+  let h2: string | undefined;
+  const lines = md.split('\n');
+  lines.forEach((line, i) => {
+    if (/^#\s/.test(line)) { h1 = line.replace(/^#\s+/, '').trim(); h2 = undefined; }
+    if (/^##\s/.test(line)) { h2 = line.replace(/^##\s+/, '').trim(); current = undefined; inSummary = false; }
+    if (SUMMARY_HEADER.test(line)) { inSummary = true; return; }
     if (inSummary) {
       const s = line.match(SUMMARY_ROW);
-      if (s) { types.set(s[1], s[2].trim()); continue; }
+      if (s) { types.set(s[1], s[2].trim()); return; }
       if (!line.startsWith('|')) inSummary = false;
     }
+    const section = [h1, h2].filter(Boolean).join(' > ') || undefined;
     const fpId = line.match(FP_ID_LINE);
-    if (fpId) { current = { funId: fpId[1], rps: [] }; fps.push(current); continue; }
+    if (fpId) { current = { funId: fpId[1], rps: [], line: i + 1, section }; fps.push(current); return; }
     const rp = line.match(RP_ROW);
     if (rp) {
-      if (!current) throw new Error(`${rp[1]} 不在任何 FP 小节内`);
-      current.rps.push({ rpId: rp[1], text: unescapePipes(rp[2]), type: rp[3].trim() });
+      if (!current) throw new Error(`第 ${i + 1} 行 ${rp[1]} 不在任何 FP 小节内`);
+      current.rps.push({ rpId: rp[1], text: unescapePipes(rp[2]), type: rp[3].trim(), line: i + 1, section });
     }
-  }
+  });
   return fps.map((fp) => ({ ...fp, fpType: types.get(fp.funId) }));
+}
+
+const semverKey = (v: string) => v.split('.').map(Number).reduce((acc, n) => acc * 1000 + n, 0);
+
+/** Highest x.y.z in the version-history table (rows look like `| 1.0.5 | 2026-10-03 | ... |`), or undefined. */
+export function parseDocVersion(md: string): string | undefined {
+  const versions = md.split('\n')
+    .map((line) => line.match(/^\|\s*(\d+\.\d+\.\d+)\s*\|\s*\d{4}-\d{2}-\d{2}\s*\|/)?.[1])
+    .filter((v): v is string => !!v);
+  return versions.sort((a, b) => semverKey(b) - semverKey(a))[0];
 }
 
 function listMarkdown(dir: string): string[] {
@@ -94,6 +109,7 @@ export function loadStructure(prdDir: string, onlyFiles?: Set<string>): ParsedSt
   if (!fs.existsSync(indexPath)) throw new Error(`找不到需求索引: ${indexPath}`);
   const rows = parseIndex(fs.readFileSync(indexPath, 'utf8'));
   const prdFps: PrdFp[] = [];
+  const versions: Record<string, string | undefined> = {};
   const seen = new Map<string, string>();
   for (const file of listMarkdown(prdDir).sort()) {
     const rel = path.relative(prdDir, file);
@@ -106,9 +122,10 @@ export function loadStructure(prdDir: string, onlyFiles?: Set<string>): ParsedSt
       if (seen.has(fp.funId)) throw new Error(`${fp.funId} 同时出现在 ${seen.get(fp.funId)} 和 ${rel}`);
       seen.set(fp.funId, rel);
     }
-    prdFps.push(...fps);
+    prdFps.push(...fps.map((fp) => ({ ...fp, file: rel })));
+    versions[rel] = parseDocVersion(md);
   }
-  return { rows, prdFps };
+  return { rows, prdFps, versions };
 }
 
 export function parseVerified(raw: unknown): Verified {
@@ -191,102 +208,4 @@ export function summarize(features: DesiredFeature[]) {
     fpStatus: tally(fps.map((fp) => fp.status)),
     rpImplStatus: tally(rps.map((rp) => rp.implStatus)),
   };
-}
-
-// ── sync ─────────────────────────────────────────────────────────────────
-
-export interface StructureClient {
-  get(url: string, params?: Record<string, any>): Promise<any>;
-  post(url: string, body?: any): Promise<any>;
-  put(url: string, body?: any): Promise<any>;
-}
-export type Layer = 'feature' | 'fp' | 'rp';
-export interface SyncAction { layer: Layer; op: 'create' | 'update'; id: string; field?: string; from?: string; to?: string }
-export interface SyncResult { counts: Record<Layer, { create: number; update: number; unchanged: number }>; actions: SyncAction[] }
-
-/** Existing rows keyed by the leading id token of name/statement (MOD-xx-SUB-yy / fun-… / rp-…). */
-const byLeadingId = (rows: any[], field: string) =>
-  new Map<string, any>((rows ?? []).map((r) => [String(r[field] ?? '').trim().split(/\s+/)[0], r]));
-
-/**
- * Create missing nodes, update FP status / RP implStatus only when different, never delete.
- * dryRun reads existing data and records the plan without writing.
- */
-export async function syncStructure(
-  client: StructureClient, productId: number, features: DesiredFeature[],
-  opts: { dryRun: boolean; concurrency: number; tenantId?: number; retryDelaysMs?: number[] },
-): Promise<SyncResult> {
-  const zero = () => ({ create: 0, update: 0, unchanged: 0 });
-  const result: SyncResult = { counts: { feature: zero(), fp: zero(), rp: zero() }, actions: [] };
-  const record = (layer: Layer, op: 'create' | 'update' | 'unchanged', id: string, change?: Partial<SyncAction>) => {
-    result.counts[layer][op] += 1;
-    if (op !== 'unchanged') result.actions.push({ layer, op, id, ...change });
-  };
-  const at = rateLimitRetry(opts.retryDelaysMs);
-
-  const syncRp = async (fpRow: any, existing: Map<string, any>, rp: DesiredRp) => {
-    const row = existing.get(rp.key);
-    if (!row) {
-      record('rp', 'create', rp.key);
-      if (opts.dryRun) return;
-      const created = await at(rp.key, () => client.post('/forge/rule-points',
-        { functionPointId: fpRow.id, statement: rp.statement, rpType: rp.rpType, implStatus: rp.implStatus }));
-      if ((created?.implStatus ?? 'TODO') !== rp.implStatus) {
-        await at(rp.key, () => client.put(`/forge/rule-points/${created.id}/impl-status`, { implStatus: rp.implStatus }));
-      }
-      return;
-    }
-    const current = row.implStatus ?? 'TODO';
-    if (current === rp.implStatus) { record('rp', 'unchanged', rp.key); return; }
-    record('rp', 'update', rp.key, { field: 'implStatus', from: current, to: rp.implStatus });
-    if (!opts.dryRun) await at(rp.key, () => client.put(`/forge/rule-points/${row.id}/impl-status`, { implStatus: rp.implStatus }));
-  };
-
-  const syncFp = async (featureRow: any, existing: Map<string, any>, fp: DesiredFp) => {
-    let row = existing.get(fp.key);
-    if (!row) {
-      record('fp', 'create', fp.key);
-      if (!opts.dryRun) {
-        row = await at(fp.key, () => client.post('/forge/function-points',
-          { featureId: featureRow.id, name: fp.name, fpType: fp.fpType, description: fp.description }));
-        if (row.status !== fp.status) await at(fp.key, () => client.put(`/forge/function-points/${row.id}/status`, { status: fp.status }));
-      }
-      for (const rp of fp.rps) await syncRp(row, new Map(), rp);
-      return;
-    }
-    if (row.status === fp.status) record('fp', 'unchanged', fp.key);
-    else {
-      record('fp', 'update', fp.key, { field: 'status', from: row.status, to: fp.status });
-      if (!opts.dryRun) await at(fp.key, () => client.put(`/forge/function-points/${row.id}/status`, { status: fp.status }));
-    }
-    const rps = byLeadingId(await at(fp.key, () => client.get('/forge/rule-points', { functionPointId: row.id })), 'statement');
-    for (const rp of fp.rps) await syncRp(row, rps, rp);
-  };
-
-  try {
-    const existing = byLeadingId(await at(`product ${productId}`, () => client.get('/forge/features', { productId })), 'name');
-    // ponytail: parallel across Features only, FPs/RPs inside one Feature go sequentially; fan out deeper if imports get slow.
-    await runPool(features, opts.concurrency, async (feature) => {
-      let row = existing.get(feature.key);
-      let fps = new Map<string, any>();
-      if (row) {
-        record('feature', 'unchanged', feature.key);
-        fps = byLeadingId(await at(feature.key, () => client.get('/forge/function-points', { featureId: row.id })), 'name');
-      } else {
-        record('feature', 'create', feature.key);
-        // 后端 forge_feature.tenant_id 非空，缺了会 500；tenantId 与组织 ID 同源（前端同约定）。
-        if (!opts.dryRun) {
-          if (!opts.tenantId) throw new Error('缺少 --tenant（租户/组织 ID）：新建 Feature 必须提供');
-          row = await at(feature.key, () => client.post('/forge/features',
-            { productId, tenantId: opts.tenantId, name: feature.name }));
-        }
-      }
-      for (const fp of feature.fps) await syncFp(row, fps, fp);
-    });
-  } catch (e) {
-    const err: any = e instanceof Error ? e : new Error(String(e));
-    err.partial = result;
-    throw err;
-  }
-  return result;
 }
