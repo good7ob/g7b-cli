@@ -7,7 +7,7 @@
 import { Command } from 'commander';
 import configService from '../../services/ConfigService';
 
-const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'theme'> = {
+const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'theme'> = {
   'api-url': 'apiUrl',
   apiurl: 'apiUrl',
   apiUrl: 'apiUrl',
@@ -17,12 +17,15 @@ const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'theme'> = {
   'user-id': 'userId',
   userid: 'userId',
   userId: 'userId',
+  'org-id': 'orgId',
+  orgid: 'orgId',
+  orgId: 'orgId',
   theme: 'theme',
 };
 
 const SENSITIVE_KEYS = new Set(['apiKey']);
 
-function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'theme' {
+function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'theme' {
   const normalized = KEY_ALIASES[input];
   if (!normalized) {
     throw new Error(`Unsupported config key: ${input}`);
@@ -56,10 +59,11 @@ export function registerConfigCommands(program: Command) {
     .action((key, value) => {
       try {
         const normalizedKey = normalizeKey(key);
-        const parsedValue = normalizedKey === 'userId' ? parseInt(value, 10) : value;
+        const isNumeric = normalizedKey === 'userId' || normalizedKey === 'orgId';
+        const parsedValue = isNumeric ? parseInt(value, 10) : value;
 
-        if (normalizedKey === 'userId' && Number.isNaN(parsedValue)) {
-          throw new Error('user-id must be a number');
+        if (isNumeric && Number.isNaN(parsedValue)) {
+          throw new Error(`${normalizedKey === 'orgId' ? 'org-id' : 'user-id'} must be a number`);
         }
 
         configService.set(normalizedKey, parsedValue);
@@ -93,6 +97,7 @@ export function registerConfigCommands(program: Command) {
       console.log(`  apiUrl: ${formatValue('apiUrl', config.apiUrl)}`);
       console.log(`  apiKey: ${formatValue('apiKey', config.apiKey)}`);
       console.log(`  userId: ${formatValue('userId', config.userId)}`);
+      console.log(`  orgId: ${formatValue('orgId', config.orgId)}`);
       console.log(`  theme: ${formatValue('theme', config.theme)}`);
     });
 

@@ -11,6 +11,7 @@ interface Config {
   apiUrl: string;
   apiKey: string;
   userId?: number;
+  orgId?: number;
   theme?: string;
 }
 
