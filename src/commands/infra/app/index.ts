@@ -20,6 +20,11 @@ import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { dash } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
+import { resolveOrgId } from '../../../utils/resolveOrgId';
+import configService from '../../../services/ConfigService';
+
+const ORG_OPTION = '--org-id <id>';
+const ORG_OPTION_DESC = '组织 ID（必填；也可用 GOOD7OB_ORG_ID 或 config set org-id）';
 
 /** Page size used when walking the full application list. */
 const FETCH_ALL_PAGE_SIZE = 200;
@@ -234,9 +239,12 @@ export function registerAppCommands(infraCommand: Command) {
     .option('--limit <num>', 'Items per page (default: 20)')
     .option('--json', 'JSON format output')
     .option('--csv', 'CSV format output')
+    .option(ORG_OPTION, ORG_OPTION_DESC)
     .action(async (options) => {
       try {
         const params: any = {
+          // g7b#1408: the backend lists one org's applications only
+          orgId: resolveOrgId(options.orgId, configService.get('orgId')),
           pageNo: parseInt(options.page) || 1,
           pageSize: parseInt(options.limit) || 20,
         };
@@ -372,6 +380,7 @@ export function registerAppCommands(infraCommand: Command) {
     .option('-t, --tags <tags>', 'Filter by tags for export')
     .option('--include-resources', 'Include associated resources')
     .option('--include-costs', 'Include cost data')
+    .option(ORG_OPTION, ORG_OPTION_DESC)
     .action(async (options) => {
       try {
         const fs = require('fs');
@@ -381,7 +390,8 @@ export function registerAppCommands(infraCommand: Command) {
         const filePath = options.file || `apps.${format}`;
 
         // Build query parameters
-        const filters: any = {};
+        // g7b#1408: the backend lists one org's applications only
+        const filters: any = { orgId: resolveOrgId(options.orgId, configService.get('orgId')) };
 
         if (options.environment) filters.environment = options.environment;
         if (options.ownerId) filters.ownerId = options.ownerId;
@@ -647,8 +657,10 @@ export function registerAppCommands(infraCommand: Command) {
     .option('--fix', 'Auto fix issues')
     .option('--json', 'JSON format output')
     .option('--report <file>', 'Generate report file')
+    .option(ORG_OPTION, ORG_OPTION_DESC)
     .action(async (options) => {
       try {
+        const orgId = resolveOrgId(options.orgId, configService.get('orgId'));
         console.log('执行应用清单健康检查...');
         console.log('─'.repeat(50));
 
@@ -659,7 +671,7 @@ export function registerAppCommands(infraCommand: Command) {
           // fix: #1 https://github.com/remo-studio/solution-juren/issues/1
           // an empty body only returned the first default-sized page, so the health check
           // silently audited 20 applications and reported the result as a full inventory scan
-          const allApps = await fetchAllApplications();
+          const allApps = await fetchAllApplications({ orgId });
 
           // Check unassociated
           if (options.checkUnassociated) {
