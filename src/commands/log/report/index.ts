@@ -176,12 +176,31 @@ export function registerAgentReportCommands(logCommand: Command) {
     });
 
   reportCommand
-    .command('publish <id>')
-    .description('Publish a report (draft -> published)')
-    .action(async (id) => {
+    .command('publish <ids...>')
+    .description('Publish draft reports (draft -> published); several ids publish in one batch call (max 100)')
+    .action(async (rawIds: string[]) => {
       try {
-        await apiClient.put(`${API_PREFIX}/${id}/publish`);
-        console.log(`✓ 报告已发布: ${id}`);
+        const ids = rawIds.map((v) => (/^\d+$/.test(v) ? Number(v) : NaN));
+        const bad = rawIds.filter((_, i) => Number.isNaN(ids[i]));
+        if (bad.length > 0) {
+          console.error(`✗ 参数错误: 报告 ID 必须是数字: ${bad.join(', ')}`);
+          process.exit(1);
+        }
+        if (ids.length === 1) {
+          await apiClient.put(`${API_PREFIX}/${ids[0]}/publish`);
+          console.log(`✓ 报告已发布: ${ids[0]}`);
+          return;
+        }
+        const result = await apiClient.post<{
+          published: number[];
+          failed: { id: number; reason: string }[];
+        }>(`${API_PREFIX}/batch-publish`, { ids });
+        console.log(`✓ 已发布 ${result.published.length} 份: ${result.published.join(', ') || '-'}`);
+        if (result.failed.length > 0) {
+          console.error(`✗ ${result.failed.length} 份发布失败:`);
+          result.failed.forEach((f) => console.error(`  - ${f.id}: ${f.reason}`));
+          process.exit(1);
+        }
       } catch (error) {
         console.error('✗ 发布报告失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
