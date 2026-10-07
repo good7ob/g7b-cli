@@ -27,6 +27,7 @@ import { registerSchemaCommands } from './commands/schema';
 import { registerBlogCommands } from './commands/blog';
 import { registerWorktreeCommands } from './commands/worktree';
 import { registerAgentCommands } from './commands/agent';
+import { registerDevInfoCommands } from './commands/devInfo';
 
 const program = new Command();
 
@@ -57,6 +58,7 @@ registerSchemaCommands(program);
 registerBlogCommands(program);
 registerWorktreeCommands(program);
 registerAgentCommands(program);
+registerDevInfoCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
