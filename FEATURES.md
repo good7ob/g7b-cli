@@ -29,6 +29,7 @@
 - [template — 模板中心](#template--模板中心)
 - [whoami — 当前身份](#whoami--当前身份)
 - [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
+- [heartbeat — 本地 Agent 在线心跳](#heartbeat--本地-agent-在线心跳)
 - [worktree — 本机 worktree 占用登记](#worktree--本机-worktree-占用登记)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
@@ -92,6 +93,7 @@ good7ob
 ├── trace                    # 追溯关系：对象之间的有向关联
 ├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
 ├── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
+├── heartbeat                # 本地 Agent 在线心跳（AI 员工 Key）：start / stop / beat / status
 └── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
 ```
 
@@ -1349,6 +1351,19 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 ```
 
 ---
+
+## heartbeat — 本地 Agent 在线心跳
+
+让网站上的 AI 员工在本地 Agent 运行时显示「工作中」而不是「空闲」（prd-0092 FP-17）。**只接受 AI 员工的 Key**（员工取自 Key；用 `good7ob whoami` 确认身份是 AI 员工）。
+
+| 命令 | 说明 |
+|---|---|
+| `heartbeat start [--pid <pid>]` | 先上报一次，再启动后台循环（每 30 秒），监视的 Agent 进程退出时循环自行结束；同一进程已有循环则不重复启动。`--pid` 默认是父进程，在 hook 脚本里要显式传长期存活的 Agent 进程。Key 被拒绝（401 / 403 / 404 / 非员工 Key）时报错且不启动 |
+| `heartbeat stop [--pid <pid>]` | 停止该 Agent 的循环；本机没有其他会话在为同一员工上报时才立即下线 |
+| `heartbeat beat` | 手动上报一次（调试） |
+| `heartbeat status` | 列出本机运行中的心跳循环 |
+
+后端 90 秒内没有收到心跳就把员工视为不在线，所以 Agent 崩溃也会自动变回空闲。循环状态文件在 `~/.good7ob/heartbeat/<agentPid>.json`。
 
 ## worktree — 本机 worktree 占用登记
 
