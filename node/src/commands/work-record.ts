@@ -64,7 +64,7 @@ export function registerWorkRecordCommand(program: Command): void {
   workRecordCmd
     .command('create')
     .requiredOption('-s, --summary <summary>', 'Task summary (1-500 characters)')
-    .requiredOption('-a, --agent <agent>', 'AI agent name')
+    .requiredOption('-a, --agent <agent>', 'AI agent; use emp:<employeeId> for an org AI employee so it shows in their work log, else a free name (claude-code)')
     .requiredOption('-o, --output-path <path>', 'Output/document path (1-1000 characters)')
     .option('-t, --task-type <type>', 'Task type (feature, bugfix, refactor, docs, analysis)')
     .option('-st, --status <status>', 'Status (pending, in_progress, success, failed)')
@@ -130,7 +130,7 @@ export function registerWorkRecordCommand(program: Command): void {
   workRecordCmd
     .command('update <id>')
     .option('-s, --summary <summary>', 'Task summary')
-    .option('-a, --agent <agent>', 'AI agent name')
+    .option('-a, --agent <agent>', 'AI agent; use emp:<employeeId> for an org AI employee so it shows in their work log, else a free name (claude-code)')
     .option('-o, --output-path <path>', 'Output/document path')
     .option('-t, --task-type <type>', 'Task type')
     .option('-st, --status <status>', 'Status')
