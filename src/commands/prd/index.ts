@@ -4,6 +4,7 @@ import { checkMaxLength, emit, fail, parseId } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
 import { registerImportStructureCommand, registerSyncStructureCommand } from './importStructure';
 import { registerImportFileCommand } from './importFile';
+import { registerLibraryCommands } from './library';
 
 /**
  * PRD approval (g7b #1061-D, good7ob/backend#282). `<document-id>` is a forge_prd_documents.id,
@@ -548,6 +549,7 @@ export function registerPrdCommands(program: Command) {
 
   registerImportStructureCommand(prdCommand);
   registerImportFileCommand(prdCommand);
+  registerLibraryCommands(prdCommand);
 
   return prdCommand;
 }
