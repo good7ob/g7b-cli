@@ -1197,6 +1197,7 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 | 命令 | 说明 |
 |------|------|
 | `template review add <id> --rating <1-5>` | 评价（已评价则覆盖）；`--comment`（≤1000）。只有安装 / 使用过该模板的用户可评，且不能评价自己的模板（`2000`） |
+| `template review get <id>` | 我对该模板的评价（`GET /templates/{id}/reviews/mine`）；还没评价过输出「你还没有评价过」，`--json` 输出 `null` |
 | `template review list <id>` | 评价列表（最新在前）；`-p` `--page-size` |
 | `template review rm <id>` | 删除自己的评价（之后可重评） |
 
@@ -1222,12 +1223,12 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 | `template install <id>` | 安装（幂等；评价资格的来源之一）；`--org <orgId>` 装到组织范围（须是活跃成员，默认个人范围）`--version x.y.z`（须发布过，默认当前已发布版本）`--with-deps` 把缺失 / 过旧的可安装依赖同事务装上。输出「已安装 / 已是安装状态（未变化）」、有新版本时提示、依赖检查表 |
 | `template uninstall <id> [--org <orgId>]` | 卸载（软删除，**保留实例**；没装过也成功，提示未变化） |
 | `template installed` | 我的安装（个人 + 我所在组织，最近的在前）；`--org` `-p` `--page-size`。模板已不可见时显示 `（已不可见）` 与 `—` |
-| `template use <id> --org <N> --product <N>` | 实例化。`--version x.y.z` `--module <id>` `--suite <id>` `--start <yyyy-MM-dd>` `--end <yyyy-MM-dd>` `--var name=value`（可重复）或 `--vars-file vars.json`（二选一）`--with-deps` `--dry-run` `--out <file>` `--force`。输出实例、产出对象（类型 / ID / 名称 / 引用）与 warnings；文档型模板（UI / API / DB / ARCH / AI_PROMPT / AGENT_SKILL）直接打印渲染出的正文，`--out` 改写入文件 |
+| `template use <id> --org <N> --product <N>` | 实例化。`--version x.y.z` `--module <id>` `--suite <id>` `--start <yyyy-MM-dd>` `--end <yyyy-MM-dd>` `--var name=value`（可重复）或 `--vars-file vars.json`（二选一）`--with-deps` `--dry-run` `--out <file>` `--force` `--idempotency-key <key>`。**幂等**：每次都会带幂等键（不给就自动生成 UUID），超时 / 网络错误后用**同一个键**重试，服务端返回首次结果而不重复创建（键限 `A-Za-z0-9_.:-`、≤64，每用户唯一，同键换模板 `1001`）；超时错误信息里会打印该键。输出实例、产出对象（类型 / ID / 名称 / 引用）与 warnings；文档型模板（UI / API / DB / ARCH / AI_PROMPT / AGENT_SKILL）直接打印渲染出的正文，`--out` 改写入文件 |
 | `template use <id> … --dry-run` | **预演，不创建任何东西**：只发 GET（模板 + 版本、`dependencies/check`），按该版本的变量定义在本地校验变量（类型 / 必填 / enum / ≤5000 字符 / ≤50 个）、补全默认值，本地单趟渲染（≤2 MB）并显示「将创建什么」。列出会导致失败的问题（缺必需依赖、TASK 缺 `--module`、RELEASE 渲染出的 version 为空、模板未发布…）与被忽略的选项；`--json` 含 `ready` / `issues` / `variables`（规范化后的值）/ `renderedContent`。组织成员资格、产品 / 模块 / 用例目录归属、渲染结果的类型结构校验只有服务端能判断，输出会明说「未验证」 |
 | `template deps <id>` | 依赖检查（只读）：每个依赖的类型 / 最低版本 / 已装版本 / 最新发布 / 状态（OK、缺失、过旧、不可用）/ 可安装 / 深度 / 被谁依赖；`--org` `--version` |
 | `template instances` | 我创建的实例（最新在前，不含渲染结果）；`--template <id>` `--type <T>` `--org` `--product` `--package <id>` `-p` `--page-size` |
 | `template instance <id>` | 一个实例：变量、产出对象、渲染结果（文档全文；结构化内容只显示前 60 行，完整用 `--json`）；`--out <file>` `--force` |
-| `template package use <packageId> --org <N> --product <N>` | 一次实例化整个包（按条目顺序、**整包一个事务**，任何一项失败整包回滚，合计创建 ≤1000 个对象）。`--module` `--suite` `--start` `--end` 是各条目的默认值；`--var` / `--vars-file` 是**共享变量**（只投给定义了该名字的模板，没有任何条目定义的名字服务端 1001）；`--item <templateId>:<name>=<value>`（可重复）覆盖某个条目的变量，按该模板自己的定义严格校验；`--item-opt <templateId>:<module\|suite\|start\|end>=<值>`（可重复）逐项覆盖 module/suite/日期（优先于默认值）；`--with-deps` |
+| `template package use <packageId> --org <N> --product <N>` | 一次实例化整个包（按条目顺序、**整包一个事务**，任何一项失败整包回滚，合计创建 ≤1000 个对象）。`--module` `--suite` `--start` `--end` 是各条目的默认值；`--var` / `--vars-file` 是**共享变量**（只投给定义了该名字的模板，没有任何条目定义的名字服务端 1001）；`--item <templateId>:<name>=<value>`（可重复）覆盖某个条目的变量，按该模板自己的定义严格校验；`--item-opt <templateId>:<module\|suite\|start\|end>=<值>`（可重复）逐项覆盖 module/suite/日期（优先于默认值）；`--with-deps`；`--idempotency-key <key>` 同 `template use`（重试返回首次的整包结果，warnings 不保留） |
 | `template upgrade <instanceId>` | 升级提示（只读）：当前版本 / 最新已发布版本，有新版本时显示差异（新增 `+` / 修改 `~` / 删除 `-`，同 `template diff`），并说明「**已有实例与它创建的业务对象不会被自动修改**；如需使用新版本，请用新版本重新实例化」。模板已下架 / 归档 / 不可见时显示原因 |
 | `template upgrade <instanceId> --preview` | 用实例**保存的变量**（`--var` / `--vars-file` 可覆盖）渲染目标版本（`--version x.y.z`，默认最新已发布），**不创建对象、不改实例**；新版本新增的必填变量没有值时服务端 1001 并指出变量名；`--out` `--force` |
 

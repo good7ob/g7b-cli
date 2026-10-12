@@ -27,16 +27,21 @@ export function renderTags(result: unknown): string {
 }
 
 interface ReviewVo {
-  id?: number; templateId?: number; userId?: number; rating?: number | null; comment?: string | null; createdAt?: ApiDate; updatedAt?: ApiDate;
+  id?: number; templateId?: number; userId?: number; authorName?: string | null; rating?: number | null; comment?: string | null; createdAt?: ApiDate; updatedAt?: ApiDate;
 }
 
 export function renderReviewList(result: unknown, pageNum: number, pageSize: number): string {
   const records = extractRecords<ReviewVo>(result);
   if (!records.length) return '暂无评价。';
   const rows = [['ID', '用户', '评分', '时间', '评论']].concat(
-    records.map((r) => [dash(r.id), dash(r.userId), r.rating ? '★'.repeat(r.rating) : DASH, fmtDateTime(r.updatedAt ?? r.createdAt), dash(r.comment)])
+    records.map((r) => [dash(r.id), dash(r.authorName ?? r.userId), r.rating ? '★'.repeat(r.rating) : DASH, fmtDateTime(r.updatedAt ?? r.createdAt), dash(r.comment)])
   );
   return `${renderTable(rows, { 4: { truncate: 60 } })}\n${pageFooter(result, records, pageNum, pageSize)}`;
+}
+
+export function renderMyReview(r: ReviewVo | null | undefined, templateId: number): string {
+  if (!r || !r.id) return `你还没有评价过模板 #${templateId}。`;
+  return `我对模板 #${templateId} 的评价: ${r.rating ? '★'.repeat(r.rating) : DASH}${r.comment ? ` — ${r.comment}` : ''}  (${fmtDateTime(r.updatedAt ?? r.createdAt)})`;
 }
 
 export function renderReviewSaved(r: ReviewVo, templateId: number): string {

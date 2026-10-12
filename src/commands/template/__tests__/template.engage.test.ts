@@ -54,6 +54,21 @@ describe('template review', () => {
     expect((await tpl(['review', 'list', '4'], ok(page([])))).stdout).toContain('暂无评价');
   });
 
+  it('get reads my review from /reviews/mine and says so when there is none', async () => {
+    const mine = await tpl(['review', 'get', '4'], ok({ id: 1, templateId: 4, userId: 11, authorName: '小明', rating: 4, comment: '不错', updatedAt: '2026-09-20 10:00:00' }));
+    expect(mine.http.get.mock.calls[0][0]).toBe('/templates/4/reviews/mine');
+    expect(mine.stdout).toContain('我对模板 #4 的评价: ★★★★ — 不错');
+    const none = await tpl(['review', 'get', '4', '--json'], ok(null));
+    expect(JSON.parse(none.stdout)).toBeNull();
+    expect((await tpl(['review', 'get', '4'], ok(null))).stdout).toContain('你还没有评价过模板 #4');
+  });
+
+  it('list shows the author nickname and falls back to the user id', async () => {
+    const r = await tpl(['review', 'list', '4'], ok(page([{ id: 1, userId: 11, authorName: '小明', rating: 5 }, { id: 2, userId: 12, rating: 3 }])));
+    expect(r.stdout).toContain('小明');
+    expect(r.stdout).toMatch(/\b12\b/);
+  });
+
   it('rm DELETEs my review', async () => {
     const r = await tpl(['review', 'rm', '4']);
     expect(r.http.delete).toHaveBeenCalledWith('/templates/4/reviews', undefined);

@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { emit, guarded, parseId } from '../../utils/cliHelpers';
 import { TEMPLATE_ERROR_CODES as CODES, pageParams } from './input';
-import { renderReviewList, renderReviewSaved } from './renderMisc';
+import { renderMyReview, renderReviewList, renderReviewSaved } from './renderMisc';
 import { buildReviewBody } from './versionInput';
 
 const url = (id: string) => `/templates/${parseId(id, 'id')}/reviews`;
@@ -21,6 +21,16 @@ export function registerReviewCommands(tpl: Command): void {
       const target = url(id);
       const saved = await apiClient.post(target, buildReviewBody(o));
       emit(o.json, saved, () => renderReviewSaved(saved, Number(id)));
+    }));
+
+  review
+    .command('get <id>')
+    .description('Show my own review of a template (nothing yet = not rated)')
+    .option('--json', 'Output as JSON')
+    .action((id, o) => guarded('获取我的评价失败', CODES, async () => {
+      const target = `${url(id)}/mine`;
+      const mine = await apiClient.get(target);
+      emit(o.json, mine ?? null, () => renderMyReview(mine, Number(id)));
     }));
 
   review

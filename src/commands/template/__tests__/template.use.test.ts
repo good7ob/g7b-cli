@@ -168,7 +168,7 @@ describe('template use', () => {
   it('POSTs orgId / productId / options / variables with the long instantiate timeout and renders created objects', async () => {
     const r = await tpl([...USE, '--module', '55', '--version', '1.0.0', '--var', 'feature=登录', '--var', 'note=a=b', '--with-deps'], ok(taskInstance));
     expect(r.http.post).toHaveBeenCalledWith('/templates/4/instantiate', {
-      orgId: 3, productId: 9, moduleId: 55, version: '1.0.0', variables: { feature: '登录', note: 'a=b' }, installDependencies: true,
+      orgId: 3, productId: 9, moduleId: 55, version: '1.0.0', variables: { feature: '登录', note: 'a=b' }, installDependencies: true, idempotencyKey: expect.any(String),
     }, REQUEST);
     expect(r.stdout).toContain('✓ 已实例化: 实例 #31 [COMPLETED]  模板 #4 登录功能开发 (TASK v1.0.0)');
     expect(r.stdout).toContain('产出: TASK_BATCH #55');
@@ -180,7 +180,7 @@ describe('template use', () => {
   it('sends only what was given (RELEASE dates, TEST suite)', async () => {
     const r = await tpl([...USE, '--start', '2026-10-01', '--end', '2026-10-31', '--suite', '12'], ok(taskInstance));
     expect(r.http.post).toHaveBeenCalledWith('/templates/4/instantiate', {
-      orgId: 3, productId: 9, suiteId: 12, plannedStartDate: '2026-10-01', plannedEndDate: '2026-10-31',
+      orgId: 3, productId: 9, suiteId: 12, plannedStartDate: '2026-10-01', plannedEndDate: '2026-10-31', idempotencyKey: expect.any(String),
     }, REQUEST);
   });
 
@@ -247,10 +247,26 @@ describe('template use', () => {
     }
   });
 
+  it('--idempotency-key is sent as given, a fresh key is generated otherwise and differs per call, a bad key is rejected', async () => {
+    const given = await tpl([...USE, '--idempotency-key', 'my-key.1'], ok(taskInstance));
+    expect(given.http.post.mock.calls[0][1]).toMatchObject({ idempotencyKey: 'my-key.1' });
+    const a = (await tpl(USE, ok(taskInstance))).http.post.mock.calls[0][1].idempotencyKey;
+    const b = (await tpl(USE, ok(taskInstance))).http.post.mock.calls[0][1].idempotencyKey;
+    expect(a).toMatch(/^[0-9a-f-]{36}$/);
+    expect(a).not.toBe(b);
+    await expectRejected([...USE, '--idempotency-key', 'a b'], '--idempotency-key 只能含');
+    await expectRejected([...USE, '--idempotency-key', 'x'.repeat(65)], '--idempotency-key 只能含');
+  });
+
+  it('the timeout message carries the key to retry with', async () => {
+    const r = await runCli(registerTemplateCommands, ['template', ...USE, '--idempotency-key', 'k-9'], () => { throw new Error('timeout of 120000ms exceeded'); });
+    expect(r.stderr).toContain('--idempotency-key k-9');
+  });
+
   it('a client timeout warns that the server may have executed; a 502 does too; a business error does not', async () => {
     const timeout = await runCli(registerTemplateCommands, ['template', ...USE], () => { throw new Error('timeout of 120000ms exceeded'); });
     expect(timeout.exitCode).toBe(1);
-    expect(timeout.stderr).toContain('服务端可能已执行，请先用 template instances 核对，勿盲目重试');
+    expect(timeout.stderr).toContain('用同一个幂等键重试不会重复创建：--idempotency-key ');
     const gateway = await runCli(registerTemplateCommands, ['template', ...USE], () => { throw new Error('Request failed with status code 502'); });
     expect(gateway.stderr).toContain('服务端可能已执行');
   });
