@@ -1227,7 +1227,7 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 | `template deps <id>` | 依赖检查（只读）：每个依赖的类型 / 最低版本 / 已装版本 / 最新发布 / 状态（OK、缺失、过旧、不可用）/ 可安装 / 深度 / 被谁依赖；`--org` `--version` |
 | `template instances` | 我创建的实例（最新在前，不含渲染结果）；`--template <id>` `--type <T>` `--org` `--product` `--package <id>` `-p` `--page-size` |
 | `template instance <id>` | 一个实例：变量、产出对象、渲染结果（文档全文；结构化内容只显示前 60 行，完整用 `--json`）；`--out <file>` `--force` |
-| `template package use <packageId> --org <N> --product <N>` | 一次实例化整个包（按条目顺序、**整包一个事务**，任何一项失败整包回滚，合计创建 ≤1000 个对象）。`--module` `--suite` `--start` `--end` 是各条目的默认值；`--var` / `--vars-file` 是**共享变量**（只投给定义了该名字的模板，没有任何条目定义的名字服务端 1001）；`--item <templateId>:<name>=<value>`（可重复）覆盖某个条目的变量，按该模板自己的定义严格校验；`--with-deps` |
+| `template package use <packageId> --org <N> --product <N>` | 一次实例化整个包（按条目顺序、**整包一个事务**，任何一项失败整包回滚，合计创建 ≤1000 个对象）。`--module` `--suite` `--start` `--end` 是各条目的默认值；`--var` / `--vars-file` 是**共享变量**（只投给定义了该名字的模板，没有任何条目定义的名字服务端 1001）；`--item <templateId>:<name>=<value>`（可重复）覆盖某个条目的变量，按该模板自己的定义严格校验；`--item-opt <templateId>:<module\|suite\|start\|end>=<值>`（可重复）逐项覆盖 module/suite/日期（优先于默认值）；`--with-deps` |
 | `template upgrade <instanceId>` | 升级提示（只读）：当前版本 / 最新已发布版本，有新版本时显示差异（新增 `+` / 修改 `~` / 删除 `-`，同 `template diff`），并说明「**已有实例与它创建的业务对象不会被自动修改**；如需使用新版本，请用新版本重新实例化」。模板已下架 / 归档 / 不可见时显示原因 |
 | `template upgrade <instanceId> --preview` | 用实例**保存的变量**（`--var` / `--vars-file` 可覆盖）渲染目标版本（`--version x.y.z`，默认最新已发布），**不创建对象、不改实例**；新版本新增的必填变量没有值时服务端 1001 并指出变量名；`--out` `--force` |
 
@@ -1274,7 +1274,7 @@ good7ob template deps 4 --org 3                     # 依赖检查
 good7ob template use 4 --org 3 --product 9 --module 55 --var feature=登录 --dry-run   # 预演，不创建
 good7ob template use 4 --org 3 --product 9 --module 55 --var feature=登录 --with-deps
 good7ob template use 8 --org 3 --product 9 --var title=登录接口 --out ./api.md        # 文档型：正文写入文件
-good7ob template package use 5 --org 3 --product 9 --module 55 --var project_name=商城 --item 4:owner=张三
+good7ob template package use 5 --org 3 --product 9 --module 55 --var project_name=商城 --item 4:owner=张三 --item-opt 4:module=56 --item-opt 7:suite=3
 good7ob template instances --product 9 && good7ob template instance 31
 good7ob template upgrade 31 && good7ob template upgrade 31 --preview --var owner=张三
 GOOD7OB_API_KEY=<管理员 token> good7ob template admin reviews
