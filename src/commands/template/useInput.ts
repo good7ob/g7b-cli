@@ -4,6 +4,7 @@
  * (com.remostudio.template); everything is checked here before the first request.
  */
 
+import { randomUUID } from 'crypto';
 import { ErrorCodeMap, InputError, parseDate, parseId } from '../../utils/cliHelpers';
 import { TEMPLATE_ERROR_CODES, TEMPLATE_TYPES, pageParams, upperOneOf } from './input';
 import { ItemOverride, VarFlags, parseItemOverrides, resolveVariables } from './varsInput';
@@ -22,8 +23,21 @@ export const USE_ERROR_CODES: ErrorCodeMap = {
   2000: '你不是目标组织的活跃成员',
 };
 
-/** Instantiation is transactional but NOT idempotent: after a timeout the server may already have created everything. */
-export const TIMEOUT_HINT = '服务端可能已执行，请先用 template instances 核对，勿盲目重试';
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+/** --idempotency-key flag (use / package use): same key = same result, the server never creates twice (g7b #1084). */
+export const IDEMPOTENCY_OPTION = ['--idempotency-key <key>', 'Idempotency key (letters, digits, _ . : -, max 64); generated when omitted. Retry with the SAME key after a timeout: the server returns the first result instead of creating again'] as const;
+
+/** The key to send: the one given with --idempotency-key, else a fresh UUID. */
+export function resolveIdempotencyKey(flag: string | undefined): string {
+  if (flag === undefined) return randomUUID();
+  const key = flag.trim();
+  if (!IDEMPOTENCY_KEY.test(key)) throw new InputError('--idempotency-key 只能含字母数字 _ . : -，最长 64 个字符');
+  return key;
+}
+
+/** After a timeout the server may already have created everything; the same key makes the retry safe. */
+export const timeoutHint = (key: string): string => `服务端可能已执行；用同一个幂等键重试不会重复创建：--idempotency-key ${key}`;
 
 /** Creating up to 200 tasks in one transaction can outlast the 30 s default. */
 export const INSTANTIATE_REQUEST = { timeout: 120_000 } as const;

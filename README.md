@@ -234,7 +234,7 @@ good7ob template admin reviews                        # platform admins only (se
 good7ob template admin reject 9 --reason "missing description"
 ```
 
-Template Center: browse the catalog, manage personal / organization templates and their `x.y.z` versions (content and variables are validated locally against the server limits before upload), publish, favorite, review, bundle templates into packages, install and instantiate them (one server transaction; `--dry-run` previews with a local single-pass render, `--out` never overwrites without `--force`; instantiation is not idempotent, so after a timeout check `template instances` before retrying), get upgrade hints, and moderate public submissions. Admin commands need an admin-identity token: the CLI has no separate admin credential, so run them with `GOOD7OB_API_KEY=<admin token>`. See `FEATURES.md`.
+Template Center: browse the catalog, manage personal / organization templates and their `x.y.z` versions (content and variables are validated locally against the server limits before upload), publish, favorite, review, bundle templates into packages, install and instantiate them (one server transaction; `--dry-run` previews with a local single-pass render, `--out` never overwrites without `--force`; instantiation takes an idempotency key (`--idempotency-key`, auto-generated otherwise), so after a timeout retry with the same key and the server returns the first result instead of creating again), get upgrade hints, and moderate public submissions. Admin commands need an admin-identity token: the CLI has no separate admin credential, so run them with `GOOD7OB_API_KEY=<admin token>`. See `FEATURES.md`.
 
 ### `org`
 

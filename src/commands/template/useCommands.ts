@@ -6,7 +6,7 @@ import { checkOutTarget, emitWithOut } from './outFile';
 import { renderDryRun } from './renderDryRun';
 import { InstanceVo, renderInstantiated } from './renderUse';
 import { withOutFlags, withTargetFlags, withVarFlags } from './useFlags';
-import { INSTANTIATE_REQUEST, TIMEOUT_HINT, USE_ERROR_CODES as CODES, buildInstantiateBody } from './useInput';
+import { IDEMPOTENCY_OPTION, INSTANTIATE_REQUEST, USE_ERROR_CODES as CODES, buildInstantiateBody, resolveIdempotencyKey, timeoutHint } from './useInput';
 import { VarMap } from './varsInput';
 
 const BASE = '/templates';
@@ -17,9 +17,10 @@ const BASE = '/templates';
  */
 export function registerUseCommands(tpl: Command): void {
   withOutFlags(withVarFlags(withTargetFlags(tpl.command('use <id>'))), 'the rendered document body (or rendered JSON)')
-    .description('Instantiate a template into your product (one transaction; not idempotent — see `template instances` before retrying)')
+    .description('Instantiate a template into your product (one transaction; idempotent with --idempotency-key, so a retry after a timeout never creates twice)')
     .option('--version <x.y.z>', 'Version to use (must have been published; default the current published one)')
     .option('--dry-run', 'Preview only: check dependencies and variables, render locally, create nothing')
+    .option(...IDEMPOTENCY_OPTION)
     .option('--json', 'Output as JSON')
     .action((id, o) => guarded('实例化模板失败', CODES, async () => {
       const tid = parseId(id, 'id');
@@ -31,10 +32,11 @@ export function registerUseCommands(tpl: Command): void {
           file: out, force: o.force, content: report.renderedContent, failPrefix: '预演已完成，但写入文件失败',
         });
       }
+      const key = resolveIdempotencyKey(o.idempotencyKey);
       const instance: InstanceVo = await apiClient
-        .post(`${BASE}/${tid}/instantiate`, body, INSTANTIATE_REQUEST)
+        .post(`${BASE}/${tid}/instantiate`, { ...body, idempotencyKey: key }, INSTANTIATE_REQUEST)
         .catch((error: unknown) => {
-          throw withTimeoutHint(error, TIMEOUT_HINT);
+          throw withTimeoutHint(error, timeoutHint(key));
         });
       emitWithOut(o.json, instance, (writtenTo) => renderInstantiated(instance ?? {}, writtenTo), {
         file: out, force: o.force, content: instance?.renderedContent, failPrefix: `实例 #${instance?.id ?? '?'} 已创建，但写入文件失败`,
