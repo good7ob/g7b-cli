@@ -44,6 +44,29 @@ describe('template package use', () => {
     expect(r.stdout).toContain('⚠ 可选依赖 X 未安装');
   });
 
+  it('--item-opt sends a per-item module / suite / dates override next to that item\'s variables', async () => {
+    const r = await tpl([...PKG, '--module', '55', '--item', '4:feature=登录', '--item-opt', '4:module=12',
+      '--item-opt', '7:suite=3', '--item-opt', '9:start=2026-10-01', '--item-opt', '9:end=2026-10-31'], ok(packageResult));
+    expect(r.http.post.mock.calls[0][1]).toEqual({
+      orgId: 3, productId: 9, moduleId: 55,
+      items: [
+        { templateId: 4, variables: { feature: '登录' }, moduleId: 12 },
+        { templateId: 7, suiteId: 3 },
+        { templateId: 9, plannedStartDate: '2026-10-01', plannedEndDate: '2026-10-31' },
+      ],
+    });
+  });
+
+  it('--item-opt is validated before any request', async () => {
+    await expectRejected([...PKG, '--item-opt', 'nocolon'], '--item-opt 必须是');
+    await expectRejected([...PKG, '--item-opt', '4:module'], '--item-opt 必须是');
+    await expectRejected([...PKG, '--item-opt', '4:color=1'], '--item-opt 的键必须是');
+    await expectRejected([...PKG, '--item-opt', 'x:module=1'], 'templateId 必须是正整数');
+    await expectRejected([...PKG, '--item-opt', '4:module=0'], '必须是正整数');
+    await expectRejected([...PKG, '--item-opt', '4:module=1', '--item-opt', '4:module=2'], '重复');
+    await expectRejected([...PKG, '--item-opt', '4:start=2026-10-31', '--item-opt', '4:end=2026-10-01'], '不能早于');
+  });
+
   it('sends only what was given and reads --vars-file', async () => {
     const bare = await tpl(PKG, ok(packageResult));
     expect(bare.http.post).toHaveBeenCalledWith('/templates/packages/5/instantiate', { orgId: 3, productId: 9 }, REQUEST);
