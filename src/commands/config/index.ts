@@ -8,7 +8,7 @@ import { Command } from 'commander';
 import configService from '../../services/ConfigService';
 import { AGENT_KEYS, getAgentValue, withAgentValue } from '../agent/config';
 
-const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'theme'> = {
+const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'projectId' | 'theme'> = {
   'api-url': 'apiUrl',
   apiurl: 'apiUrl',
   apiUrl: 'apiUrl',
@@ -21,13 +21,16 @@ const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'th
   'org-id': 'orgId',
   orgid: 'orgId',
   orgId: 'orgId',
+  'project-id': 'projectId',
+  projectid: 'projectId',
+  projectId: 'projectId',
   theme: 'theme',
 };
 
 const SENSITIVE_KEYS = new Set(['apiKey', 'agent.forward.secret']);
 const AGENT_PREFIX = 'agent.';
 
-function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'theme' {
+function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'projectId' | 'theme' {
   const normalized = KEY_ALIASES[input];
   if (!normalized) {
     throw new Error(`Unsupported config key: ${input}`);
@@ -68,11 +71,11 @@ export function registerConfigCommands(program: Command) {
           return;
         }
         const normalizedKey = normalizeKey(key);
-        const isNumeric = normalizedKey === 'userId' || normalizedKey === 'orgId';
+        const isNumeric = normalizedKey === 'userId' || normalizedKey === 'orgId' || normalizedKey === 'projectId';
         const parsedValue = isNumeric ? parseInt(value, 10) : value;
 
         if (isNumeric && Number.isNaN(parsedValue)) {
-          throw new Error(`${normalizedKey === 'orgId' ? 'org-id' : 'user-id'} must be a number`);
+          throw new Error(`${normalizedKey} must be a number`);
         }
 
         configService.set(normalizedKey, parsedValue);
@@ -111,6 +114,7 @@ export function registerConfigCommands(program: Command) {
       console.log(`  apiKey: ${formatValue('apiKey', config.apiKey)}`);
       console.log(`  userId: ${formatValue('userId', config.userId)}`);
       console.log(`  orgId: ${formatValue('orgId', config.orgId)}`);
+      console.log(`  projectId: ${formatValue('projectId', config.projectId)}`);
       console.log(`  theme: ${formatValue('theme', config.theme)}`);
       AGENT_KEYS.forEach((k) => {
         const key = `${AGENT_PREFIX}${k}`;
