@@ -100,12 +100,12 @@ describe('ui version', () => {
 });
 
 describe('ui screenshot', () => {
-  const upload = (url: string): Responder => (m, u) => (m === 'post' && u === '/files' ? ok({ fileUrl: url }) : ok({ id: 11, fileUrl: url }));
+  const upload = (url: string): Responder => (m, u) => (m === 'post' && u === '/file/upload2s3' ? ok({ fileUrl: url }) : ok({ id: 11, fileUrl: url }));
 
-  it('uploads a local image as UI_SCREENSHOT, then registers its URL', async () => {
-    const r = await ui(['screenshot', 'add', '5', '--file', png, '--caption', '首页', '--org', '7'], upload('https://b.s3.amazonaws.com/public/home.png'));
+  it('uploads a local image via /file/upload2s3, then registers its URL', async () => {
+    const r = await ui(['screenshot', 'add', '5', '--file', png, '--caption', '首页'], upload('https://b.s3.amazonaws.com/public/home.png'));
     const [upUrl, , upCfg] = r.http.post.mock.calls[0];
-    expect(upUrl).toBe('/files');
+    expect(upUrl).toBe('/file/upload2s3');
     expect(upCfg.headers['content-type']).toContain('multipart/form-data');
     expect(r.http.post.mock.calls[1]).toEqual(['/forge/ui-design/versions/5/screenshots',
       { caption: '首页', fileUrl: 'https://b.s3.amazonaws.com/public/home.png' }]);
@@ -114,7 +114,7 @@ describe('ui screenshot', () => {
 
   it('adds several files in order with incrementing sort', async () => {
     const r = await ui(['screenshot', 'add', '5', '--file', path.join(dir, 'a.png'), '--file', path.join(dir, 'b.jpg'), '--sort', '10'], upload('https://h/x.png'));
-    const registered = r.http.post.mock.calls.filter((c) => c[0] !== '/files').map((c) => c[1].sortOrder);
+    const registered = r.http.post.mock.calls.filter((c) => c[0] !== '/file/upload2s3').map((c) => c[1].sortOrder);
     expect(registered).toEqual([10, 11]);
   });
 
@@ -132,7 +132,6 @@ describe('ui screenshot', () => {
     await expectRejected(['screenshot', 'add', '5', '--file', path.join(dir, 'empty.png')], '空文件');
     await expectRejected(['screenshot', 'add', '5', '--file', path.join(dir, 'nope.png')], '不是可读文件');
     await expectRejected(['screenshot', 'add', '5', '--url', 'http://a/b.png'], 'https');
-    await expectRejected(['screenshot', 'add', '5', '--url', 'https://a/b.png', '--org', '7'], '--org');
     await expectRejected(['screenshot', 'add', '5', '--file', path.join(dir, 'a.png'), '--file', path.join(dir, 'b.jpg'), '--caption', 'c'], '多个');
   });
 
@@ -141,7 +140,7 @@ describe('ui screenshot', () => {
     const r = await ui(['screenshot', 'add', '5', '--file', path.join(dir, 'a.png'), '--file', path.join(dir, 'b.jpg')], (m, u) => {
       if (m !== 'post') return ok(null);
       posts += 1;
-      return posts === 3 ? bizError(500, '文件过大') : u === '/files' ? ok({ fileUrl: 'https://h/x.png' }) : ok({ id: 11 });
+      return posts === 3 ? bizError(500, '文件过大') : u === '/file/upload2s3' ? ok({ fileUrl: 'https://h/x.png' }) : ok({ id: 11 });
     });
     expect(r.exitCode).toBe(1);
     expect(r.stderr).toContain('已成功添加 1 张: #11');

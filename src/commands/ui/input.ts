@@ -111,7 +111,7 @@ export function checkImageUrl(raw: string | undefined, label: string): string {
 }
 
 export interface ScreenshotFlags {
-  file?: string[]; url?: string; thumbnail?: string; caption?: string; sort?: string; org?: string;
+  file?: string[]; url?: string; thumbnail?: string; caption?: string; sort?: string;
 }
 
 export interface ScreenshotPlan {
@@ -120,7 +120,6 @@ export interface ScreenshotPlan {
   /** Body for each registration, minus fileUrl for uploaded files. */
   base: { caption?: string; thumbnailUrl?: string; sortOrder?: number };
   url?: string;
-  orgId?: number;
 }
 
 /** A local image: exists, is a regular file, image extension, within the 10MB UI_SCREENSHOT limit. */
@@ -145,11 +144,9 @@ export function planScreenshots(o: ScreenshotFlags): ScreenshotPlan {
   if (files.length > 1 && (o.thumbnail !== undefined || o.caption !== undefined)) {
     throw new InputError('多个 --file 时不能共用 --caption / --thumbnail，请分次添加');
   }
-  if (o.org !== undefined && o.url !== undefined) throw new InputError('--org 只用于 --file 上传');
   return {
     files: files.map(checkImageFile),
     url: o.url === undefined ? undefined : checkImageUrl(o.url, '--url'),
-    orgId: o.org === undefined ? undefined : parseId(o.org, '--org'),
     base: defined({
       caption: optText(o.caption, 256, '--caption'),
       thumbnailUrl: o.thumbnail === undefined ? undefined : checkImageUrl(o.thumbnail, '--thumbnail'),

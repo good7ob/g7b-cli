@@ -15,7 +15,7 @@ import {
  *
  * The backend PUTs overwrite every field (a missing text field becomes ""), so each `update` first reads
  * the current row from the parent list (hence --app / --screen / --flow) and resends what you did not change.
- * Screenshot files are uploaded through POST /files (purpose UI_SCREENSHOT: images only, 10MB), then registered.
+ * Screenshot files are uploaded through POST /file/upload2s3 (checked locally: images only, 10MB), then registered.
  */
 
 const BASE = '/forge/ui-design';
@@ -154,11 +154,12 @@ function registerVersionCommands(ui: Command): void {
     });
 }
 
-/** Upload one local image; returns the stored https URL. */
-async function uploadImage(file: string, orgId?: number): Promise<string> {
-  const fields: Record<string, string> = { purpose: 'UI_SCREENSHOT' };
-  if (orgId !== undefined) fields.orgId = String(orgId);
-  const uploaded = await apiClient.uploadFiles('/files', [file], 'file', fields);
+/**
+ * Upload one local image through the existing /file/upload2s3 (what UiScreenshotController documents);
+ * it stores under public/ so the returned URL can be viewed. Type and size were checked locally.
+ */
+async function uploadImage(file: string): Promise<string> {
+  const uploaded = await apiClient.uploadFiles('/file/upload2s3', [file], 'file');
   if (!uploaded?.fileUrl) throw new Error(`上传成功但没有返回 fileUrl: ${file}`);
   return uploaded.fileUrl;
 }
@@ -175,7 +176,7 @@ function registerScreenshotCommands(ui: Command): void {
   shot.command('add <versionId>')
     .description('Add screenshots: upload local images (--file, repeatable) or register an uploaded https URL (--url)')
     .option('--file <path>', 'Local image (png/jpg/jpeg/gif/webp/bmp, <=10MB); repeat to add several', (v: string, p: string[] = []) => [...p, v])
-    .option('--url <url>', 'Already-uploaded https image URL').option('--org <id>', 'Org that owns the uploaded file (--file only)')
+    .option('--url <url>', 'Already-uploaded https image URL')
     .option('--caption <text>', 'Caption (max 256; single image only)').option('--thumbnail <url>', 'Thumbnail https URL (single image only)')
     .option('--sort <n>', 'Sort order; with several files, the i-th gets n+i').option(...J)
     .action(async (versionId, o) => {
@@ -185,7 +186,7 @@ function registerScreenshotCommands(ui: Command): void {
         const plan = planScreenshots(o);
         const sources = plan.url ? [plan.url] : plan.files;
         for (const [i, source] of sources.entries()) {
-          const fileUrl = plan.url ?? (await uploadImage(source, plan.orgId));
+          const fileUrl = plan.url ?? (await uploadImage(source));
           const body = { ...plan.base, fileUrl, ...(plan.base.sortOrder === undefined ? {} : { sortOrder: plan.base.sortOrder + i }) };
           created.push(await apiClient.post(`${BASE}/versions/${id}/screenshots`, body));
         }
