@@ -13,6 +13,9 @@ import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { dash } from '../../../utils/cliHelpers';
 
+// fix: #1645 g7b 任务 [API-GOV-P1-8]（BillController 映射在 /api/infra/bills/schedules）
+const SCHEDULES = '/api/infra/bills/schedules';
+
 export function registerBillCommands(infraCommand: Command) {
   const billCommand = infraCommand
     .command('bill')
@@ -235,6 +238,7 @@ export function registerBillCommands(infraCommand: Command) {
     });
 
   // 4. schedule
+  // fix: #1645 g7b 任务 [API-GOV-P1-8]（BillController 映射在 /api/infra/bills/schedules）
   billCommand
     .command('schedule')
     .description('Configure automatic bill import schedule')
@@ -256,7 +260,7 @@ export function registerBillCommands(infraCommand: Command) {
       try {
         // List schedules
         if (options.listSchedules) {
-          const schedules = await apiClient.get('/api/infra/bill-schedules');
+          const schedules = await apiClient.get(SCHEDULES);
 
           if (options.json) {
             console.log(JSON.stringify(schedules, null, 2));
@@ -269,7 +273,7 @@ export function registerBillCommands(infraCommand: Command) {
             schedules.forEach((schedule: any) => {
               console.log(
                 dash(schedule.id).padEnd(10) +
-                dash(schedule.cloudProvider).padEnd(12) +
+                dash(schedule.provider).padEnd(12) +
                 dash(schedule.frequency).padEnd(10) +
                 (schedule.enabled ? '已启用' : '已禁用').padEnd(10) +
                 dash(schedule.nextRun).padEnd(20) +
@@ -282,50 +286,16 @@ export function registerBillCommands(infraCommand: Command) {
 
         // Remove schedule
         if (options.removeSchedule) {
-          await apiClient.delete(`/api/infra/bill-schedules/${options.removeSchedule}`);
+          await apiClient.delete(`${SCHEDULES}/${options.removeSchedule}`);
           console.log(`✓ 删除计划成功`);
-          return;
-        }
-
-        // Add or update schedule
-        if (options.addSchedule || options.scheduleId) {
-          if (!options.provider) {
-            console.error('错误: --provider 参数是必需的');
-            process.exit(1);
-          }
-
-          const payload: any = {
-            cloudProvider: options.provider,
-            frequency: options.frequency || 'monthly',
-            dayOfMonth: parseInt(options.day) || 1,
-            time: options.time || '00:00',
-            bucket: options.bucket,
-            prefix: options.prefix,
-          };
-
-          let result;
-          if (options.scheduleId) {
-            result = await apiClient.put(`/api/infra/bill-schedules/${options.scheduleId}`, payload);
-            console.log(`✓ 更新计划成功`);
-          } else {
-            result = await apiClient.post('/api/infra/bill-schedules', payload);
-            console.log(`✓ 创建计划成功`);
-          }
-
-          if (options.json) {
-            console.log(JSON.stringify(result, null, 2));
-          } else {
-            console.log(`计划ID: ${result.id}`);
-            console.log(`下次运行: ${result.nextRun}`);
-          }
           return;
         }
 
         // Enable/Disable schedule
         if (options.scheduleId && (options.enabled || options.disable)) {
           const endpoint = options.enabled
-            ? `/api/infra/bill-schedules/${options.scheduleId}/enable`
-            : `/api/infra/bill-schedules/${options.scheduleId}/disable`;
+            ? `${SCHEDULES}/${options.scheduleId}/enable`
+            : `${SCHEDULES}/${options.scheduleId}/disable`;
 
           await apiClient.patch(endpoint, {});
           console.log(`✓ 计划已${options.enabled ? '启用' : '禁用'}`);
@@ -335,7 +305,7 @@ export function registerBillCommands(infraCommand: Command) {
         // Test schedule
         if (options.test && options.scheduleId) {
           console.log(`正在测试计划 ${options.scheduleId}...`);
-          const result = await apiClient.post(`/api/infra/bill-schedules/${options.scheduleId}/test`, {});
+          const result = await apiClient.post(`${SCHEDULES}/${options.scheduleId}/test`, {});
 
           if (options.json) {
             console.log(JSON.stringify(result, null, 2));
@@ -348,6 +318,46 @@ export function registerBillCommands(infraCommand: Command) {
           }
           return;
         }
+
+        // Add or update schedule
+        if (options.addSchedule || options.scheduleId) {
+          let result;
+          if (options.scheduleId) {
+            // update reads frequency / dayOfMonth / time / bucketName / bucketPrefix; provider is fixed
+            const payload: any = {};
+            if (options.frequency) payload.frequency = options.frequency;
+            if (options.day) payload.dayOfMonth = parseInt(options.day);
+            if (options.time) payload.time = options.time;
+            if (options.bucket) payload.bucketName = options.bucket;
+            if (options.prefix) payload.bucketPrefix = options.prefix;
+            result = await apiClient.put(`${SCHEDULES}/${options.scheduleId}`, payload);
+            console.log(`✓ 更新计划成功`);
+          } else {
+            if (!options.provider) {
+              console.error('错误: --provider 参数是必需的');
+              process.exit(1);
+            }
+            // create reads provider / frequency / dayOfMonth / time / bucket / prefix
+            result = await apiClient.post(SCHEDULES, {
+              provider: options.provider,
+              frequency: options.frequency || 'monthly',
+              dayOfMonth: parseInt(options.day) || 1,
+              time: options.time || '00:00',
+              bucket: options.bucket,
+              prefix: options.prefix,
+            });
+            console.log(`✓ 创建计划成功`);
+          }
+
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            console.log(`计划ID: ${result.id}`);
+            console.log(`下次运行: ${result.nextRun}`);
+          }
+          return;
+        }
+
 
         console.error('错误: 请提供 --add-schedule, --remove-schedule, --list-schedules 或 --test 选项');
       } catch (error) {
