@@ -18,10 +18,20 @@ interface ApiResponse<T> {
   };
 }
 
+// fix: #564 https://github.com/good7ob/backend/issues/564
+// /api/infra/** is isolated per organization: the backend requires X-Org-Id on those calls.
+export function withInfraOrg(config: AxiosRequestConfig, orgId: number | undefined): AxiosRequestConfig {
+  if (!orgId || !config.url?.startsWith('/api/infra') || config.headers?.['X-Org-Id']) {
+    return config;
+  }
+  return { ...config, headers: { ...config.headers, 'X-Org-Id': String(orgId) } };
+}
+
 export class ApiClient {
   private instance: AxiosInstance;
   private baseURL: string;
   private apiKey: string;
+  private infraOrgId: number | undefined;
 
   constructor() {
     // Get API endpoint and key from environment or config file
@@ -42,7 +52,7 @@ export class ApiClient {
       if (this.apiKey && config.headers) {
         config.headers['Authorization'] = `Bearer ${this.apiKey}`;
       }
-      return config;
+      return withInfraOrg(config, this.infraOrgId);
     });
 
     // Add response interceptor for error handling
@@ -198,6 +208,11 @@ export class ApiClient {
   /**
    * Load config value from ~/.good7ob/config.json
    */
+  /** The org every /api/infra call of this run acts on (set by the `infra` command's preAction). */
+  setInfraOrgId(orgId: number): void {
+    this.infraOrgId = orgId;
+  }
+
   private loadConfigValue(key: string): string | null {
     try {
       const configPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.good7ob', 'config.json');
