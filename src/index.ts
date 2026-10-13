@@ -29,6 +29,7 @@ import { registerBlogCommands } from './commands/blog';
 import { registerWorktreeCommands } from './commands/worktree';
 import { registerAgentCommands } from './commands/agent';
 import { registerDevInfoCommands } from './commands/devInfo';
+import { registerHeartbeatCommands } from './commands/heartbeat';
 import { registerQuestionCommands } from './commands/question';
 import { registerSyncCommands } from './commands/sync';
 import { registerUiCommands } from './commands/ui';
@@ -66,6 +67,7 @@ registerBlogCommands(program);
 registerWorktreeCommands(program);
 registerAgentCommands(program);
 registerDevInfoCommands(program);
+registerHeartbeatCommands(program);
 registerUiCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
