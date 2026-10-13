@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { checkMaxLength, emit, fail, parseId } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
+import { currentProjectId } from '../../utils/resolveProjectId';
 import { registerImportStructureCommand, registerSyncStructureCommand } from './importStructure';
 import { registerImportFileCommand } from './importFile';
 import { registerLibraryCommands } from './library';
@@ -364,7 +365,7 @@ export function registerPrdCommands(program: Command) {
   prdCommand
     .command('breakdown-import <prd-id>')
     .description('Batch import tasks from PRD breakdown into a project')
-    .requiredOption('--project-id <id>', 'Target project ID')
+    .option('--project-id <id>', 'Target project ID (default: current project)')
     .option('--project-name <name>', 'Project name (if creating new project)')
     .option('--project-desc <desc>', 'Project description')
     .option('--lang <language>', 'Language for task generation', 'zh')
@@ -374,6 +375,7 @@ export function registerPrdCommands(program: Command) {
     .option('--json', 'Output result as JSON')
     .action(async (prdId, options) => {
       try {
+        const projectId = currentProjectId(options.projectId);
         // Step 1: generate breakdown
         console.log(`ℹ 正在拆解 PRD ${prdId}...`);
         const breakdown = await apiClient.post(`/forge/prd/${prdId}/breakdown`, {
@@ -402,7 +404,7 @@ export function registerPrdCommands(program: Command) {
 
         // Step 2: confirm and batch create
         const confirmBody: any = {
-          projectId: parseInt(options.projectId),
+          projectId,
           tasks,
         };
         if (options.projectName) confirmBody.projectName = options.projectName;
@@ -416,7 +418,7 @@ export function registerPrdCommands(program: Command) {
         }
 
         const created = result?.createdCount ?? result?.tasks?.length ?? tasks.length;
-        console.log(`✓ 已批量导入 ${created} 个任务到项目 ${options.projectId}`);
+        console.log(`✓ 已批量导入 ${created} 个任务到项目 ${projectId}`);
         if (result?.projectId) console.log(`  项目 ID: ${result.projectId}`);
         if (result?.failed?.length) {
           console.log(`⚠ 失败 ${result.failed.length} 个`);
