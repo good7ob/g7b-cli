@@ -24,12 +24,15 @@ import { registerTraceCommands } from './commands/trace';
 import { registerTemplateCommands } from './commands/template';
 import { registerWhoamiCommands } from './commands/whoami';
 import { registerSchemaCommands } from './commands/schema';
+import { registerCloudArchCommands } from './commands/cloudArch';
 import { registerBlogCommands } from './commands/blog';
 import { registerWorktreeCommands } from './commands/worktree';
 import { registerAgentCommands } from './commands/agent';
 import { registerDevInfoCommands } from './commands/devInfo';
 import { registerHeartbeatCommands } from './commands/heartbeat';
 import { registerQuestionCommands } from './commands/question';
+import { registerSyncCommands } from './commands/sync';
+import { registerUiCommands } from './commands/ui';
 
 const program = new Command();
 
@@ -57,12 +60,15 @@ registerTraceCommands(program);
 registerQuestionCommands(program);
 registerTemplateCommands(program);
 registerWhoamiCommands(program);
+registerSyncCommands(program);
 registerSchemaCommands(program);
+registerCloudArchCommands(program);
 registerBlogCommands(program);
 registerWorktreeCommands(program);
 registerAgentCommands(program);
 registerDevInfoCommands(program);
 registerHeartbeatCommands(program);
+registerUiCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would

@@ -1,4 +1,5 @@
-node_modules/
+# no trailing slash: also ignore a node_modules symlink (one was committed by mistake in #50)
+node_modules
 dist/
 .worktrees/
 .worktrees-run/

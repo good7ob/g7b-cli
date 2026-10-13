@@ -36,6 +36,7 @@ export interface TemplateCard {
   canManage?: boolean | null;
   suspendReason?: string | null;
   createdBy?: number | null;
+  authorName?: string | null;
   publishedAt?: ApiDate;
   createdAt?: ApiDate;
   updatedAt?: ApiDate;
@@ -80,7 +81,7 @@ export function renderTemplateHeader(t: TemplateCard): string[] {
     `标签:     ${t.tags?.length ? t.tags.map((g) => dash(g.name)).join(', ') : DASH}    分类: ${dash(t.categoryId)}`,
     `我的:     ${t.favorited ? '已收藏' : '未收藏'}    ${t.canManage ? '可管理' : '只读'}`,
     ...(t.suspendReason ? [`下架原因: ${t.suspendReason}`] : []),
-    `时间:     发布 ${fmtDateTime(t.publishedAt)}    创建 ${fmtDateTime(t.createdAt)} by ${dash(t.createdBy)}    更新 ${fmtDateTime(t.updatedAt)}`,
+    `时间:     发布 ${fmtDateTime(t.publishedAt)}    创建 ${fmtDateTime(t.createdAt)} by ${dash(t.authorName ?? t.createdBy)}    更新 ${fmtDateTime(t.updatedAt)}`,
     ...(t.description ? ['', '描述:', t.description] : []),
   ];
 }

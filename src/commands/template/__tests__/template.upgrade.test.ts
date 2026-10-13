@@ -35,7 +35,7 @@ describe('template package use', () => {
       '--var', 'project_name=商城', '--item', '4:feature=登录', '--item', '9:lang=zh', '--item', '4:owner=张三', '--with-deps'], ok(packageResult));
     expect(r.http.post).toHaveBeenCalledWith('/templates/packages/5/instantiate', {
       orgId: 3, productId: 9, moduleId: 55, suiteId: 12, plannedStartDate: '2026-10-01', plannedEndDate: '2026-10-31',
-      installDependencies: true, variables: { project_name: '商城' },
+      installDependencies: true, variables: { project_name: '商城' }, idempotencyKey: expect.any(String),
       items: [{ templateId: 4, variables: { feature: '登录', owner: '张三' } }, { templateId: 9, variables: { lang: 'zh' } }],
     }, REQUEST);
     expect(r.stdout).toContain('✓ 已实例化模板包 #5 Web 起步包: 2 个实例，共创建 3 个对象（整包一个事务）');
@@ -44,13 +44,36 @@ describe('template package use', () => {
     expect(r.stdout).toContain('⚠ 可选依赖 X 未安装');
   });
 
+  it('--item-opt sends a per-item module / suite / dates override next to that item\'s variables', async () => {
+    const r = await tpl([...PKG, '--module', '55', '--item', '4:feature=登录', '--item-opt', '4:module=12',
+      '--item-opt', '7:suite=3', '--item-opt', '9:start=2026-10-01', '--item-opt', '9:end=2026-10-31'], ok(packageResult));
+    expect(r.http.post.mock.calls[0][1]).toEqual({
+      orgId: 3, productId: 9, moduleId: 55, idempotencyKey: expect.any(String),
+      items: [
+        { templateId: 4, variables: { feature: '登录' }, moduleId: 12 },
+        { templateId: 7, suiteId: 3 },
+        { templateId: 9, plannedStartDate: '2026-10-01', plannedEndDate: '2026-10-31' },
+      ],
+    });
+  });
+
+  it('--item-opt is validated before any request', async () => {
+    await expectRejected([...PKG, '--item-opt', 'nocolon'], '--item-opt 必须是');
+    await expectRejected([...PKG, '--item-opt', '4:module'], '--item-opt 必须是');
+    await expectRejected([...PKG, '--item-opt', '4:color=1'], '--item-opt 的键必须是');
+    await expectRejected([...PKG, '--item-opt', 'x:module=1'], 'templateId 必须是正整数');
+    await expectRejected([...PKG, '--item-opt', '4:module=0'], '必须是正整数');
+    await expectRejected([...PKG, '--item-opt', '4:module=1', '--item-opt', '4:module=2'], '重复');
+    await expectRejected([...PKG, '--item-opt', '4:start=2026-10-31', '--item-opt', '4:end=2026-10-01'], '不能早于');
+  });
+
   it('sends only what was given and reads --vars-file', async () => {
     const bare = await tpl(PKG, ok(packageResult));
-    expect(bare.http.post).toHaveBeenCalledWith('/templates/packages/5/instantiate', { orgId: 3, productId: 9 }, REQUEST);
+    expect(bare.http.post).toHaveBeenCalledWith('/templates/packages/5/instantiate', { orgId: 3, productId: 9, idempotencyKey: expect.any(String) }, REQUEST);
     const file = path.join(dir, 'shared.json');
     fs.writeFileSync(file, '{"project_name":"商城","n":3}');
     const r = await tpl([...PKG, '--vars-file', file], ok(packageResult));
-    expect(r.http.post.mock.calls[0][1]).toEqual({ orgId: 3, productId: 9, variables: { project_name: '商城', n: 3 } });
+    expect(r.http.post.mock.calls[0][1]).toEqual({ orgId: 3, productId: 9, variables: { project_name: '商城', n: 3 }, idempotencyKey: expect.any(String) });
   });
 
   it('--json prints the raw result; a sparse result renders "—"', async () => {
@@ -78,7 +101,9 @@ describe('template package use', () => {
     expect((await tpl(PKG, bizError(1001, '共享变量 zzz 没有条目定义'))).stderr).toContain('变量缺失 / 未知');
     expect((await tpl(PKG, bizError(2000, 'no'))).stderr).toContain('你不是目标组织的活跃成员');
     const timeout = await runCli(registerTemplateCommands, ['template', ...PKG], () => { throw new Error('timeout of 120000ms exceeded'); });
-    expect(timeout.stderr).toContain('服务端可能已执行，请先用 template instances 核对，勿盲目重试');
+    expect(timeout.stderr).toContain('用同一个幂等键重试不会重复创建：--idempotency-key ');
+    const keyed = await runCli(registerTemplateCommands, ['template', ...PKG, '--idempotency-key', 'pk-1'], () => { throw new Error('timeout of 120000ms exceeded'); });
+    expect(keyed.stderr).toContain('--idempotency-key pk-1');
   });
 
   it('does not disturb the existing package subcommands', async () => {

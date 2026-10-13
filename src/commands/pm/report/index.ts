@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { currentProjectId } from '../../../utils/resolveProjectId';
 
 export function registerReportCommands(pmCommand: Command) {
   const reportCommand = pmCommand
@@ -8,11 +9,12 @@ export function registerReportCommands(pmCommand: Command) {
     .description('Progress reports — generate, view, publish, archive');
 
   reportCommand
-    .command('list <project-id>')
+    .command('list [project-id]')
     .description('List progress reports for a project')
     .option('--json', 'Output as JSON')
-    .action(async (projectId, options) => {
+    .action(async (projectArg, options) => {
       try {
+        const projectId = currentProjectId(projectArg);
         const reports = await apiClient.get(`/progress/reports/project/${projectId}`);
         if (options.json) {
           console.log(JSON.stringify(reports, null, 2));
@@ -74,12 +76,13 @@ export function registerReportCommands(pmCommand: Command) {
     });
 
   reportCommand
-    .command('generate <project-id>')
+    .command('generate [project-id]')
     .description('Generate an AI progress report for a project')
-    .action(async (projectId) => {
+    .action(async (projectArg) => {
       try {
+        const projectId = currentProjectId(projectArg);
         console.log(`ℹ 正在生成项目 ${projectId} 的 AI 进度报告...`);
-        const report = await apiClient.post('/progress/reports/generate', { projectId: parseInt(projectId) });
+        const report = await apiClient.post('/progress/reports/generate', { projectId });
         console.log(`✓ 报告已生成: [${report?.id || ''}] ${report?.title || ''}`);
       } catch (error) {
         console.error('✗ 生成报告失败:', error instanceof Error ? error.message : String(error));

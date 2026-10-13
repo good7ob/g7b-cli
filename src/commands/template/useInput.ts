@@ -4,6 +4,7 @@
  * (com.remostudio.template); everything is checked here before the first request.
  */
 
+import { randomUUID } from 'crypto';
 import { ErrorCodeMap, InputError, parseDate, parseId } from '../../utils/cliHelpers';
 import { TEMPLATE_ERROR_CODES, TEMPLATE_TYPES, pageParams, upperOneOf } from './input';
 import { ItemOverride, VarFlags, parseItemOverrides, resolveVariables } from './varsInput';
@@ -22,8 +23,21 @@ export const USE_ERROR_CODES: ErrorCodeMap = {
   2000: '你不是目标组织的活跃成员',
 };
 
-/** Instantiation is transactional but NOT idempotent: after a timeout the server may already have created everything. */
-export const TIMEOUT_HINT = '服务端可能已执行，请先用 template instances 核对，勿盲目重试';
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+/** --idempotency-key flag (use / package use): same key = same result, the server never creates twice (g7b #1084). */
+export const IDEMPOTENCY_OPTION = ['--idempotency-key <key>', 'Idempotency key (letters, digits, _ . : -, max 64); generated when omitted. Retry with the SAME key after a timeout: the server returns the first result instead of creating again'] as const;
+
+/** The key to send: the one given with --idempotency-key, else a fresh UUID. */
+export function resolveIdempotencyKey(flag: string | undefined): string {
+  if (flag === undefined) return randomUUID();
+  const key = flag.trim();
+  if (!IDEMPOTENCY_KEY.test(key)) throw new InputError('--idempotency-key 只能含字母数字 _ . : -，最长 64 个字符');
+  return key;
+}
+
+/** After a timeout the server may already have created everything; the same key makes the retry safe. */
+export const timeoutHint = (key: string): string => `服务端可能已执行；用同一个幂等键重试不会重复创建：--idempotency-key ${key}`;
 
 /** Creating up to 200 tasks in one transaction can outlast the 30 s default. */
 export const INSTANTIATE_REQUEST = { timeout: 120_000 } as const;
@@ -82,14 +96,63 @@ export function buildInstantiateBody(o: UseFlags): Body {
 
 export interface PackageUseFlags extends TargetFlags, VarFlags {
   item?: string[];
+  itemOpt?: string[];
+}
+
+const ITEM_OPT_KEYS = ['module', 'suite', 'start', 'end'] as const;
+
+/**
+ * `--item-opt <templateId>:<module|suite|start|end>=<value>` (repeatable): per-item target override
+ * (PackageInstantiateDto.Item moduleId / suiteId / plannedStartDate / plannedEndDate; wins over --module etc.).
+ */
+export function parseItemOpts(raw: string[]): Map<number, Body> {
+  const byItem = new Map<number, Body>();
+  for (const entry of raw) {
+    const colon = entry.indexOf(':');
+    const eq = entry.indexOf('=');
+    if (colon <= 0 || eq < colon + 2) {
+      throw new InputError(`--item-opt 必须是 <templateId>:<module|suite|start|end>=<值> 格式，收到: ${entry.slice(0, 80)}`);
+    }
+    const templateId = parseId(entry.slice(0, colon), '--item-opt 的 templateId');
+    const key = entry.slice(colon + 1, eq);
+    const value = entry.slice(eq + 1);
+    if (!(ITEM_OPT_KEYS as readonly string[]).includes(key)) {
+      throw new InputError(`--item-opt 的键必须是 ${ITEM_OPT_KEYS.join(' / ')}，收到: ${key}`);
+    }
+    const field = { module: 'moduleId', suite: 'suiteId', start: 'plannedStartDate', end: 'plannedEndDate' }[key] as string;
+    const opts: Body = byItem.get(templateId) ?? {};
+    if (field in opts) throw new InputError(`--item-opt ${templateId}:${key} 重复`);
+    opts[field] = key === 'module' || key === 'suite' ? parseId(value, `--item-opt ${templateId}:${key}`) : parseDate(value, `--item-opt ${templateId}:${key}`);
+    byItem.set(templateId, opts);
+  }
+  if (byItem.size > MAX_ITEMS_OPT) throw new InputError(`--item-opt 最多覆盖 ${MAX_ITEMS_OPT} 个模板，当前 ${byItem.size} 个`);
+  byItem.forEach((opts, id) => {
+    const start = opts.plannedStartDate as string | undefined;
+    const end = opts.plannedEndDate as string | undefined;
+    if (start && end && end < start) throw new InputError(`--item-opt ${id}: end (${end}) 不能早于 start (${start})`);
+  });
+  return byItem;
+}
+
+const MAX_ITEMS_OPT = 20;
+
+/** Merge variable overrides (--item) and target overrides (--item-opt) into one entry per templateId. */
+function mergeItems(vars: ItemOverride[], opts: Map<number, Body>): Body[] {
+  const ids = Array.from(new Set([...vars.map((v) => v.templateId), ...Array.from(opts.keys())]));
+  return ids.map((templateId) => ({
+    templateId,
+    ...withoutUndefined({ variables: vars.find((v) => v.templateId === templateId)?.variables }),
+    ...opts.get(templateId),
+  }));
 }
 
 export function buildPackageUseBody(o: PackageUseFlags): Body {
   const overrides: ItemOverride[] = o.item?.length ? parseItemOverrides(o.item) : [];
+  const items = mergeItems(overrides, o.itemOpt?.length ? parseItemOpts(o.itemOpt) : new Map());
   return withoutUndefined({
     ...buildTarget(o),
     variables: resolveVariables(o),
-    items: overrides.length ? overrides : undefined,
+    items: items.length ? items : undefined,
   });
 }
 

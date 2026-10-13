@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { currentProjectId } from '../../../utils/resolveProjectId';
 
 function parseDateTime(input: string): string {
   // Accepts "YYYY-MM-DD HH:mm" (local time) or a value Date already understands.
@@ -104,7 +105,7 @@ export function registerPlanCommands(pmCommand: Command) {
   planCommand
     .command('create')
     .description('Create an execution plan (draft)')
-    .requiredOption('--project-id <id>', 'Project ID')
+    .option('--project-id <id>', 'Project ID (default: current project)')
     .requiredOption('--name <name>', 'Plan name')
     .option('--description <desc>', 'Plan description')
     .option('--start <datetime>', 'Scheduled start, "YYYY-MM-DD HH:mm" (omit for manual start)')
@@ -114,7 +115,7 @@ export function registerPlanCommands(pmCommand: Command) {
     .action(async (options) => {
       try {
         const body: any = {
-          projectId: parseInt(options.projectId, 10),
+          projectId: currentProjectId(options.projectId),
           name: options.name,
         };
         if (options.description) body.description = options.description;
@@ -138,13 +139,13 @@ export function registerPlanCommands(pmCommand: Command) {
     });
 
   planCommand
-    .command('list <project-id>')
+    .command('list [project-id]')
     .description('List execution plans in a project')
     .option('--status <status>', 'Filter by status (draft|scheduled|running|pausing|paused|completed|failed|cancelled)')
     .option('--json', 'Output as JSON')
-    .action(async (projectId, options) => {
+    .action(async (projectArg, options) => {
       try {
-        const params: any = { projectId: parseInt(projectId, 10) };
+        const params: any = { projectId: currentProjectId(projectArg) };
         if (options.status) params.status = options.status;
         const result = await apiClient.get('/progress/execution-plans', params);
         const records = extractRecords(result);

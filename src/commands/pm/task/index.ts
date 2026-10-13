@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
 
 export function registerTaskCommands(pmCommand: Command) {
@@ -9,7 +10,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .description('Task management — create, update, list, batch update');
 
   taskCommand
-    .command('list <project-id>')
+    .command('list [project-id]')
     .description('List tasks in a project')
     .option('--status <status>', 'Filter by status (not_started|in_progress|completed|blocked|cancelled)')
     .option('--priority <priority>', 'Filter by priority (high|medium|low)')
@@ -19,8 +20,9 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--order <direction>', 'Sort direction (asc|desc)', 'desc')
     .option('--json', 'Output as JSON')
     .option('--csv', 'Output as CSV')
-    .action(async (projectId, options) => {
+    .action(async (projectArg, options) => {
       try {
+        const projectId = currentProjectId(projectArg);
         const params: any = { sort: options.sort, order: options.order };
         if (options.status) params.status = options.status;
         if (options.priority) params.priority = options.priority;
@@ -119,7 +121,7 @@ export function registerTaskCommands(pmCommand: Command) {
   taskCommand
     .command('create')
     .description('Create a new task')
-    .requiredOption('--project-id <id>', 'Project ID')
+    .option('--project-id <id>', 'Project ID (default: current project)')
     .requiredOption('--name <name>', 'Task name')
     .option('--description <desc>', 'Task description')
     .option('--priority <priority>', 'Priority (high|medium|low)', 'medium')
@@ -131,7 +133,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .action(async (options) => {
       try {
         const body: any = {
-          projectId: parseInt(options.projectId),
+          projectId: currentProjectId(options.projectId),
           name: options.name,
           priority: options.priority,
           status: options.status,

@@ -1,6 +1,8 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { currentProjectId } from '../../../utils/resolveProjectId';
+import configService from '../../../services/ConfigService';
 
 export function registerProjectCommands(pmCommand: Command) {
   const projectCommand = pmCommand
@@ -78,11 +80,12 @@ export function registerProjectCommands(pmCommand: Command) {
     });
 
   projectCommand
-    .command('get <id>')
+    .command('get [id]')
     .description('Get project details')
     .option('--json', 'Output as JSON')
-    .action(async (id, options) => {
+    .action(async (idArg, options) => {
       try {
+        const id = currentProjectId(idArg);
         const project = await apiClient.get(`/progress/projects/${id}`);
         if (options.json) {
           console.log(JSON.stringify(project, null, 2));
@@ -108,6 +111,33 @@ export function registerProjectCommands(pmCommand: Command) {
         console.error('✗ 获取项目详情失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
+    });
+
+  projectCommand
+    .command('use [id]')
+    .description('Remember the current project so project-id can be omitted (--clear to forget)')
+    .option('--clear', 'Forget the current project')
+    .action((id, options) => {
+      if (options.clear) {
+        configService.set('projectId', undefined);
+        console.log('✓ 已清除当前项目');
+        return;
+      }
+      const n = parseInt(String(id ?? ''), 10);
+      if (!Number.isInteger(n) || n <= 0) {
+        console.error('✗ 请提供项目号：good7ob pm project use <id>');
+        process.exit(1);
+      }
+      configService.set('projectId', n);
+      console.log(`✓ 当前项目: ${n}`);
+    });
+
+  projectCommand
+    .command('current')
+    .description('Show the current project')
+    .action(() => {
+      const id = configService.get('projectId');
+      console.log(id ? `当前项目: ${id}` : '未设置当前项目（good7ob pm project use <id>）');
     });
 
   projectCommand
@@ -217,11 +247,12 @@ export function registerProjectCommands(pmCommand: Command) {
     });
 
   projectCommand
-    .command('gantt <id>')
+    .command('gantt [id]')
     .description('Get Gantt chart data for a project')
     .option('--json', 'Output as JSON')
-    .action(async (id, options) => {
+    .action(async (idArg, options) => {
       try {
+        const id = currentProjectId(idArg);
         const data = await apiClient.get(`/progress/projects/${id}/gantt`);
         if (options.json) {
           console.log(JSON.stringify(data, null, 2));
@@ -249,11 +280,12 @@ export function registerProjectCommands(pmCommand: Command) {
     });
 
   projectCommand
-    .command('participants <id>')
+    .command('participants [id]')
     .description('List project participants')
     .option('--json', 'Output as JSON')
-    .action(async (id, options) => {
+    .action(async (idArg, options) => {
       try {
+        const id = currentProjectId(idArg);
         const participants = await apiClient.get(`/progress/projects/${id}/participants`);
         if (options.json) {
           console.log(JSON.stringify(participants, null, 2));

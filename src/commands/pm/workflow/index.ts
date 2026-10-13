@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
+import { currentProjectId } from '../../../utils/resolveProjectId';
 
 export function registerWorkflowCommands(pmCommand: Command) {
   const workflowCommand = pmCommand
@@ -129,11 +130,12 @@ export function registerWorkflowCommands(pmCommand: Command) {
     });
 
   workflowCommand
-    .command('project-status <project-id>')
+    .command('project-status [project-id]')
     .description('Get workflow status for all tasks in a project')
     .option('--json', 'Output as JSON')
-    .action(async (projectId, options) => {
+    .action(async (projectArg, options) => {
       try {
+        const projectId = currentProjectId(projectArg);
         const statuses = await apiClient.get(`/progress/workflows/project/${projectId}`);
         if (options.json) {
           console.log(JSON.stringify(statuses, null, 2));
