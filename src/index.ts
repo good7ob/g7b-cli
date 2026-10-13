@@ -29,6 +29,7 @@ import { registerWorktreeCommands } from './commands/worktree';
 import { registerAgentCommands } from './commands/agent';
 import { registerDevInfoCommands } from './commands/devInfo';
 import { registerQuestionCommands } from './commands/question';
+import { registerSyncCommands } from './commands/sync';
 
 const program = new Command();
 
@@ -56,6 +57,7 @@ registerTraceCommands(program);
 registerQuestionCommands(program);
 registerTemplateCommands(program);
 registerWhoamiCommands(program);
+registerSyncCommands(program);
 registerSchemaCommands(program);
 registerBlogCommands(program);
 registerWorktreeCommands(program);
