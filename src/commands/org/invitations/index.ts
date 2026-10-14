@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerInvitationCommands(orgCommand: Command) {
   // list invitations for an org
@@ -43,7 +44,7 @@ export function registerInvitationCommands(orgCommand: Command) {
             (inv.email || '-').substring(0, 26).padEnd(28) +
             (inv.role || '-').padEnd(10) +
             (inv.status || '-').padEnd(12) +
-            (inv.expiresAt || '-')
+            fmtDateTime(inv.expiresAt, '-')
           );
         });
         console.log('─'.repeat(85));
@@ -117,7 +118,7 @@ export function registerInvitationCommands(orgCommand: Command) {
             (inv.orgName || '-').substring(0, 22).padEnd(24) +
             (inv.role || '-').padEnd(12) +
             (inv.inviterName || '-').substring(0, 16).padEnd(18) +
-            (inv.expiresAt || '-')
+            fmtDateTime(inv.expiresAt, '-')
           );
         });
         console.log('─'.repeat(80));

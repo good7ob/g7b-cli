@@ -8,6 +8,8 @@
  * CLI refuses the obviously broken moves before issuing any write.
  */
 
+import { fmtDate } from '../../../utils/cliHelpers';
+
 export interface SubTaskRef {
   id: number;
 }
@@ -88,11 +90,14 @@ export function planMove(tasks: TaskLike[], target: ProjectLike, options: MoveOp
 
     let taskBlocked = false;
 
-    if (task.deadline && target.endDate && task.deadline > target.endDate) {
+    // fix: #1663 deadline/endDate may arrive as epoch ms; compare and print the normalised text
+    const deadline = fmtDate(task.deadline, '');
+    const endDate = fmtDate(target.endDate, '');
+    if (deadline && endDate && deadline > endDate) {
       fail(
         task.id,
         'DEADLINE_AFTER_PROJECT_END',
-        `任务 ${task.id} 的截止日期 ${task.deadline} 晚于目标项目结束日期 ${target.endDate}`
+        `任务 ${task.id} 的截止日期 ${deadline} 晚于目标项目结束日期 ${endDate}`
       );
       taskBlocked = !options.force;
     }

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
+import { fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerReportCommands(pmCommand: Command) {
   const reportCommand = pmCommand
@@ -35,7 +36,7 @@ export function registerReportCommands(pmCommand: Command) {
             String(r.id).padEnd(8) +
             (r.title || '').substring(0, 28).padEnd(30) +
             (r.status || '-').padEnd(12) +
-            (r.createdAt || '-')
+            fmtDateTime(r.createdAt, '-')
           );
         });
         console.log('─'.repeat(80));
@@ -62,7 +63,7 @@ export function registerReportCommands(pmCommand: Command) {
         console.log(`标题:   ${report.title || '-'}`);
         console.log(`状态:   ${report.status || '-'}`);
         console.log(`项目:   ${report.projectId}`);
-        console.log(`创建:   ${report.createdAt || '-'}`);
+        console.log(`创建:   ${fmtDateTime(report.createdAt, '-')}`);
         console.log('─'.repeat(60));
         if (report.content) {
           console.log('\n内容:');

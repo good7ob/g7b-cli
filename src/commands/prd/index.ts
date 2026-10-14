@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { checkMaxLength, emit, fail, parseId } from '../../utils/cliHelpers';
+import { checkMaxLength, emit, fail, fmtDateTime, parseId } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
 import { currentProjectId } from '../../utils/resolveProjectId';
 import { registerImportStructureCommand, registerSyncStructureCommand } from './importStructure';
@@ -59,7 +59,7 @@ export function registerPrdCommands(program: Command) {
         if (options.csv) {
           console.log('ID,Title,Status,CreatedAt,UpdatedAt');
           records.forEach((s: any) => {
-            console.log(`${s.id},"${(s.title || '').replace(/"/g, '""')}",${s.status || ''},${s.createdAt || ''},${s.updatedAt || ''}`);
+            console.log(`${s.id},"${(s.title || '').replace(/"/g, '""')}",${s.status || ''},${fmtDateTime(s.createdAt, '')},${fmtDateTime(s.updatedAt, '')}`);
           });
           return;
         }
@@ -78,8 +78,8 @@ export function registerPrdCommands(program: Command) {
             String(s.id).padEnd(10) +
             (s.title || '-').substring(0, 33).padEnd(35) +
             (s.status || '-').padEnd(12) +
-            (s.createdAt || '-').padEnd(22) +
-            (s.updatedAt || '-')
+            fmtDateTime(s.createdAt, '-').padEnd(22) +
+            fmtDateTime(s.updatedAt, '-')
           );
         });
         console.log('─'.repeat(85));
@@ -110,8 +110,8 @@ export function registerPrdCommands(program: Command) {
         console.log(`状态:     ${session.status || '-'}`);
         console.log(`项目 ID:  ${session.projectId || '-'}`);
         console.log(`语言:     ${session.language || '-'}`);
-        console.log(`创建时间: ${session.createdAt || '-'}`);
-        console.log(`更新时间: ${session.updatedAt || '-'}`);
+        console.log(`创建时间: ${fmtDateTime(session.createdAt, '-')}`);
+        console.log(`更新时间: ${fmtDateTime(session.updatedAt, '-')}`);
         console.log('─'.repeat(55));
       } catch (error) {
         console.error('✗ 获取会话详情失败:', error instanceof Error ? error.message : String(error));
@@ -200,7 +200,7 @@ export function registerPrdCommands(program: Command) {
         console.log(`状态:     ${doc.status || '-'}`);
         console.log(`会话 ID:  ${doc.chatId || doc.sessionId || '-'}`);
         console.log(`语言:     ${doc.language || '-'}`);
-        console.log(`创建时间: ${doc.createdAt || '-'}`);
+        console.log(`创建时间: ${fmtDateTime(doc.createdAt, '-')}`);
         if (doc.content) {
           console.log('\n内容摘要:');
           console.log(String(doc.content).substring(0, 300) + (doc.content.length > 300 ? '...' : ''));
@@ -237,7 +237,7 @@ export function registerPrdCommands(program: Command) {
             String(v.id).padEnd(10) +
             (v.version || '-').padEnd(10) +
             (v.title || '-').substring(0, 28).padEnd(30) +
-            (v.createdAt || '-')
+            fmtDateTime(v.createdAt, '-')
           );
         });
         console.log('─'.repeat(70));

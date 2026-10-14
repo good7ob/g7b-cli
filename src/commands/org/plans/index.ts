@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { fmtDate } from '../../../utils/cliHelpers';
 
 /** Not to be confused with `pm plan` (AI-agent execution plans, a different domain) —
  *  these are org-lead-assigned next-day/weekly/monthly plans for a member (human or
@@ -51,7 +52,7 @@ export function registerPlanCommands(orgCommand: Command) {
         if (options.csv) {
           console.log('ID,MemberType,MemberName,PlanType,PeriodStart,PeriodEnd,Title,TaskCount,CompletedTaskCount');
           records.forEach((p: any) => {
-            console.log(`${p.id},${p.memberType},"${p.memberName}",${p.planType},${p.periodStartDate},${p.periodEndDate},"${p.title || ''}",${p.taskCount},${p.completedTaskCount}`);
+            console.log(`${p.id},${p.memberType},"${p.memberName}",${p.planType},${fmtDate(p.periodStartDate)},${fmtDate(p.periodEndDate)},"${p.title || ''}",${p.taskCount},${p.completedTaskCount}`);
           });
           return;
         }
@@ -74,7 +75,7 @@ export function registerPlanCommands(orgCommand: Command) {
         console.log('─'.repeat(90));
         records.forEach((p: any) => {
           const memberLabel = `${p.memberName}${p.memberType === 'AGENT' ? ' (AI)' : ''}`;
-          const period = `${p.periodStartDate} ~ ${p.periodEndDate}`;
+          const period = `${fmtDate(p.periodStartDate)} ~ ${fmtDate(p.periodEndDate)}`;
           const completion = `${p.completedTaskCount}/${p.taskCount}`;
           console.log(
             String(p.id).padEnd(8) +
@@ -119,7 +120,7 @@ export function registerPlanCommands(orgCommand: Command) {
           console.log(JSON.stringify(plan, null, 2));
           return;
         }
-        console.log(`✓ 计划已创建: [${plan?.id || ''}] ${options.planType} ${plan?.periodStartDate || ''} ~ ${plan?.periodEndDate || ''}`);
+        console.log(`✓ 计划已创建: [${plan?.id || ''}] ${options.planType} ${fmtDate(plan?.periodStartDate, '')} ~ ${fmtDate(plan?.periodEndDate, '')}`);
       } catch (error) {
         console.error('✗ 创建计划失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);

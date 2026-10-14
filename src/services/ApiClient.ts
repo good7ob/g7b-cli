@@ -7,6 +7,10 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
+/** Backend common/util/ApiTimes.HEADER / EPOCH_MS. */
+export const TIME_FORMAT_HEADER = 'X-Time-Format';
+export const TIME_FORMAT_EPOCH_MS = 'epoch-ms';
+
 interface ApiResponse<T> {
   code: number;
   message: string;
@@ -44,6 +48,8 @@ export class ApiClient {
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': 'good7ob-cli/0.2.0',
+        // Date-times come back as epoch ms; rendered as JST by utils/cliHelpers fmtDate/fmtDateTime. --json passes them through.
+        [TIME_FORMAT_HEADER]: TIME_FORMAT_EPOCH_MS,
       },
     });
 

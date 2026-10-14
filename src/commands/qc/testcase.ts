@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import path from 'path';
 import apiClient from '../../services/ApiClient';
+import { fmtDateTime } from '../../utils/cliHelpers';
 import { collectFeatureFiles, ensureSuitePath, parseStep, planBatches, readBatchFile, SuiteRef } from './testcaseFiles';
 
 /**
@@ -68,7 +69,7 @@ export function registerTestCaseCommands(qcCommand: Command) {
             (c.priority || '').padEnd(7) +
             (c.execMode || '').padEnd(11) +
             (STATUS_CN[c.status] || c.status || '').padEnd(8) +
-            (c.updatedAt || '-')
+            fmtDateTime(c.updatedAt, '-')
           );
         });
         console.log('─'.repeat(110));

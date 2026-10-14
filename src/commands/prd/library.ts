@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { dash, emit, guarded, InputError, parseId, renderTable, requireOneOf } from '../../utils/cliHelpers';
+import { dash, emit, fmtDateTime, guarded, InputError, parseId, renderTable, requireOneOf } from '../../utils/cliHelpers';
 
 /** PRD library (prd-library contract): `prd list` / `prd bind` over /forge/prd/prds. */
 export function registerLibraryCommands(prdCommand: Command) {
@@ -33,7 +33,7 @@ export function registerLibraryCommands(prdCommand: Command) {
           if (!list.length) return '没有找到 PRD。';
           const rows = [['PRD 编号', 'PRD ID', '标题', '状态', '产品', '来源', '会话数', '更新时间'],
             ...list.map((p) => [dash(p.prdNo), dash(p.prdId), dash(p.title), dash(p.status), dash(p.productName ?? p.productId),
-              dash(p.source), String(p.sessionCount ?? 0), dash(p.updatedAt)])];
+              dash(p.source), String(p.sessionCount ?? 0), fmtDateTime(p.updatedAt)])];
           return `${renderTable(rows)}\n\n共 ${result.total ?? list.length} 条，第 ${params.page} 页`;
         });
       })

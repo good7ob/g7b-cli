@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { InputError, parseId } from '../../utils/cliHelpers';
+import { fmtDate, InputError, parseId } from '../../utils/cliHelpers';
 
 /**
  * 研发进度台账（good7ob-进度台账CLI设计）。规则与存储都在后端：
@@ -167,7 +167,7 @@ export function registerProgressCommands(program: Command) {
         const rows = (await apiClient.get(`${base(o)}/events`, { itemId: o.item, kind: o.kind, since: o.since })) ?? [];
         if (o.json) return console.log(JSON.stringify(rows, null, 2));
         rows.forEach((r: any) => {
-          const day = String(r.at).slice(0, 10);
+          const day = fmtDate(r.at).slice(0, 10);
           const sign = (n: number) => (n >= 0 ? '+' : '') + fmt(n);
           console.log(`#${r.seq}  ${day}  user:${r.actorUserId}  ${r.itemId}  预估${sign(r.deltaEstimateH)}h 剩余${sign(r.deltaRemainingH)}h\n    ${changesText(r.op, r.changes)}\n    理由：${r.reason}`);
         });

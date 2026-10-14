@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { InputError, parseId } from '../../utils/cliHelpers';
+import { InputError, parseId, fmtDateTime } from '../../utils/cliHelpers';
 
 /**
  * 外部工时建议（prd-0077 FP-13）。本地 Agent 通过 CLI 提交工时建议，附依据；
@@ -71,7 +71,7 @@ export function registerEstimateCommands(program: Command) {
       try {
         const rows = (await apiClient.get(`/forge/function-points/${parseId(fpId, 'fpId')}/estimate-suggestions`)) ?? [];
         if (o.json) return console.log(JSON.stringify(rows, null, 2));
-        rows.forEach((r: any) => console.log(`#${String(r.id).padEnd(6)}${String(r.status).padEnd(12)}${String(r.hours).padStart(8)}h  ${String(r.source).padEnd(15)}${String(r.agentName).padEnd(22)}${String(r.createdAt).slice(0, 16)}  ${r.reason}`));
+        rows.forEach((r: any) => console.log(`#${String(r.id).padEnd(6)}${String(r.status).padEnd(12)}${String(r.hours).padStart(8)}h  ${String(r.source).padEnd(15)}${String(r.agentName).padEnd(22)}${fmtDateTime(r.createdAt).slice(0, 16)}  ${r.reason}`));
       } catch (e) { fail('读取工时建议失败', e); }
     });
 }

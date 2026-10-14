@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as readline from 'readline';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
+import { fmtDate } from '../../utils/cliHelpers';
 
 /**
  * SES 案件导入命令（g7b #1008）。
@@ -80,7 +81,7 @@ function printCase(index: number, c: CaseDTO): void {
     console.log(`    作业场所: ${[c.workPlace, c.workAddress].filter(Boolean).join(' / ')}`);
   }
   if (c.startDate || c.endDate) {
-    console.log(`    作业期间: ${c.startDate || '?'} ~ ${c.endDate || '?'}`);
+    console.log(`    作业期间: ${fmtDate(c.startDate, '?')} ~ ${fmtDate(c.endDate, '?')}`);
   }
   if (c.mustElements) console.log(`    薪资/条件: ${c.mustElements}`);
   if (c.publisher) console.log(`    发布者:   ${c.publisher}${c.publisherContact ? ` (${c.publisherContact})` : ''}`);

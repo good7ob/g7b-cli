@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerMemberCommands(orgCommand: Command) {
   // members list
@@ -40,7 +41,7 @@ export function registerMemberCommands(orgCommand: Command) {
         if (options.csv) {
           console.log('UserID,Name,Email,Role,Status,JoinedAt');
           records.forEach((m: any) => {
-            console.log(`${m.userId},${m.displayName || ''},${m.email || ''},${m.role},${m.status || ''},${m.joinedAt || ''}`);
+            console.log(`${m.userId},${m.displayName || ''},${m.email || ''},${m.role},${m.status || ''},${fmtDateTime(m.joinedAt, '')}`);
           });
           return;
         }
@@ -68,7 +69,7 @@ export function registerMemberCommands(orgCommand: Command) {
             (m.email || '-').substring(0, 26).padEnd(28) +
             (m.role || '-').padEnd(10) +
             (m.status || '-').padEnd(12) +
-            (m.joinedAt || '-')
+            fmtDateTime(m.joinedAt, '-')
           );
         });
         console.log('─'.repeat(90));

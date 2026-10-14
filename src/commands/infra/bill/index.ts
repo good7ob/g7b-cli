@@ -11,7 +11,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
-import { dash } from '../../../utils/cliHelpers';
+import { dash, fmtDateTime } from '../../../utils/cliHelpers';
 
 // fix: #1645 g7b 任务 [API-GOV-P1-8]（BillController 映射在 /api/infra/bills/schedules）
 const SCHEDULES = '/api/infra/bills/schedules';
@@ -130,7 +130,7 @@ export function registerBillCommands(infraCommand: Command) {
           console.log('ID,账单月份,云提供商,状态,记录数,成本总额,创建时间');
           result.records?.forEach((bill: any) => {
             console.log(
-              `${bill.id},${bill.month},${bill.cloudProvider},${bill.status},${bill.recordCount},${bill.totalCost},${bill.createdAt}`
+              `${bill.id},${bill.month},${bill.cloudProvider},${bill.status},${bill.recordCount},${bill.totalCost},${fmtDateTime(bill.createdAt)}`
             );
           });
         } else {
@@ -155,7 +155,7 @@ export function registerBillCommands(infraCommand: Command) {
               dash(bill.status).padEnd(10) +
               (bill.recordCount || 0).toString().padEnd(8) +
               `$${(bill.totalCost || 0).toFixed(2)}`.padEnd(15) +
-              dash(bill.createdAt)
+              fmtDateTime(bill.createdAt)
             );
           });
         }
@@ -205,7 +205,7 @@ export function registerBillCommands(infraCommand: Command) {
           console.log(`成功数: ${bill.successCount || 0}`);
           console.log(`失败数: ${bill.failureCount || 0}`);
           console.log(`跳过数: ${bill.skippedCount || 0}`);
-          console.log(`创建时间: ${bill.createdAt}`);
+          console.log(`创建时间: ${fmtDateTime(bill.createdAt)}`);
 
           if (options.showReconcile && bill.reconcileStatus) {
             console.log('\n对账状态:');
@@ -277,7 +277,7 @@ export function registerBillCommands(infraCommand: Command) {
                 dash(schedule.frequency).padEnd(10) +
                 (schedule.enabled ? '已启用' : '已禁用').padEnd(10) +
                 dash(schedule.nextRun).padEnd(20) +
-                (schedule.createdAt || '-')
+                fmtDateTime(schedule.createdAt, '-')
               );
             });
           }

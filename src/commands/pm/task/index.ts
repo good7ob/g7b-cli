@@ -3,6 +3,7 @@ import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
+import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerTaskCommands(pmCommand: Command) {
   const taskCommand = pmCommand
@@ -41,7 +42,7 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.csv) {
           console.log('ID,Name,Status,Priority,Owner,Deadline');
           records.forEach((t: any) => {
-            console.log(`${t.id},${t.name},${t.status},${t.priority || ''},${t.ownerName || ''},${t.deadline || ''}`);
+            console.log(`${t.id},${t.name},${t.status},${t.priority || ''},${t.ownerName || ''},${fmtDate(t.deadline, '')}`);
           });
           return;
         }
@@ -69,7 +70,7 @@ export function registerTaskCommands(pmCommand: Command) {
             (t.status || '').padEnd(14) +
             (t.priority || '-').padEnd(10) +
             (t.ownerName || '-').padEnd(16) +
-            (t.deadline || '-')
+            fmtDate(t.deadline, '-')
           );
         });
         console.log('─'.repeat(95));
@@ -99,12 +100,12 @@ export function registerTaskCommands(pmCommand: Command) {
         console.log(`优先级:     ${task.priority || '-'}`);
         console.log(`描述:       ${task.description || '-'}`);
         console.log(`负责人:     ${task.ownerName || task.ownerId || '-'}`);
-        console.log(`截止日期:   ${task.deadline || '-'}`);
+        console.log(`截止日期:   ${fmtDate(task.deadline, '-')}`);
         console.log(`父任务ID:   ${task.parentTaskId || '-'}`);
         console.log(`项目ID:     ${task.projectId}`);
         console.log(`执行者类型: ${task.executorType || '-'}`);
         console.log(`阻塞原因:   ${task.blockedReason || '-'}`);
-        console.log(`创建时间:   ${task.createdAt || '-'}`);
+        console.log(`创建时间:   ${fmtDateTime(task.createdAt, '-')}`);
         if (task.tags?.length) {
           console.log(`标签:       ${task.tags.map((t: any) => t.name || t).join(', ')}`);
         }

@@ -1,4 +1,4 @@
-import { ApiDate, DASH, dash, fmtDateTime, renderTable } from '../../utils/cliHelpers';
+import { ApiDate, DASH, dash, fmtDate, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 
 export interface SecretVo {
   kind?: string | null;
@@ -99,7 +99,7 @@ export function renderItemDetail(i: ItemVo): string {
     `条目 #${i.id}  ${dash(i.name)}${flag(i)}`,
     '─'.repeat(60),
     `类型: ${dash(i.type)}    环境: ${dash(i.env)}    安全级别: ${dash(i.securityLevel)}    挂载: ${dash(i.ownerType)}#${dash(i.ownerId)}`,
-    `到期: ${dash(i.expiresAt)}    我能编辑: ${i.canEdit ? '是' : '否'}    我能看明文: ${i.canReveal ? '是' : '否'}    更新: ${fmtDateTime(i.updatedAt)}`,
+    `到期: ${fmtDate(i.expiresAt)}    我能编辑: ${i.canEdit ? '是' : '否'}    我能看明文: ${i.canReveal ? '是' : '否'}    更新: ${fmtDateTime(i.updatedAt)}`,
     `内容: ${itemContent(i)}`,
   ];
   if (i.description) lines.push('', i.description);

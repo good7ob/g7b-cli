@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
+import { fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerProductCommands(orgCommand: Command) {
   // list products
@@ -32,7 +33,7 @@ export function registerProductCommands(orgCommand: Command) {
         if (options.csv) {
           console.log('ID,Name,Status,Description,CreatedAt');
           records.forEach((p: any) => {
-            console.log(`${p.id},"${p.name}",${p.status || ''},"${p.description || ''}",${p.createdAt || ''}`);
+            console.log(`${p.id},"${p.name}",${p.status || ''},"${p.description || ''}",${fmtDateTime(p.createdAt, '')}`);
           });
           return;
         }
@@ -53,7 +54,7 @@ export function registerProductCommands(orgCommand: Command) {
             (p.name || '').substring(0, 26).padEnd(28) +
             (p.status || '-').padEnd(12) +
             tags.substring(0, 18).padEnd(20) +
-            (p.createdAt || '-')
+            fmtDateTime(p.createdAt, '-')
           );
         });
         console.log('─'.repeat(80));
@@ -83,7 +84,7 @@ export function registerProductCommands(orgCommand: Command) {
         console.log(`描述:   ${product.description || '-'}`);
         const tags = Array.isArray(product.techTags) ? product.techTags.join(', ') : (product.techTags || '-');
         console.log(`技术栈: ${tags}`);
-        console.log(`创建:   ${product.createdAt || '-'}`);
+        console.log(`创建:   ${fmtDateTime(product.createdAt, '-')}`);
         console.log('─'.repeat(50));
       } catch (error) {
         console.error('✗ 获取产品详情失败:', error instanceof Error ? error.message : String(error));

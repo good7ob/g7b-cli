@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
+import { fmtDateTime } from '../../../utils/cliHelpers';
 
 function parseDateTime(input: string): string {
   // Accepts "YYYY-MM-DD HH:mm" (local time) or a value Date already understands.
@@ -47,8 +48,8 @@ function printPlanSummary(plan: any) {
   console.log(`状态:         ${plan.status}`);
   console.log(`执行模式:     ${plan.executionMode}`);
   console.log(`暂停方式:     ${plan.pauseKind || '-'}`);
-  console.log(`计划开始:     ${plan.scheduledStartAt || '-'}`);
-  console.log(`实际开始:     ${plan.actualStartAt || '-'}`);
+  console.log(`计划开始:     ${fmtDateTime(plan.scheduledStartAt, '-')}`);
+  console.log(`实际开始:     ${fmtDateTime(plan.actualStartAt, '-')}`);
   console.log(`预计耗时:     ${plan.estimatedDurationMinutes != null ? plan.estimatedDurationMinutes + ' min' : '-'} (${plan.estimatedDurationSource})`);
   console.log(`实际耗时:     ${plan.actualDurationMinutes != null ? plan.actualDurationMinutes + ' min' : '-'}`);
   console.log(`累计暂停:     ${plan.totalPausedSeconds || 0} 秒`);
@@ -70,7 +71,7 @@ function printItemsTable(items: any[]) {
       String(i.taskId).padEnd(10) +
       (i.status || '-').padEnd(12) +
       String(i.estimatedDurationMinutes ?? '-').padEnd(12) +
-      (i.plannedStartAt || '-')
+      fmtDateTime(i.plannedStartAt, '-')
     );
   });
 }
@@ -168,7 +169,7 @@ export function registerPlanCommands(pmCommand: Command) {
             (p.name || '').substring(0, 28).padEnd(30) +
             (p.status || '-').padEnd(12) +
             String(p.estimatedDurationMinutes ?? '-').padEnd(12) +
-            (p.scheduledStartAt || '-')
+            fmtDateTime(p.scheduledStartAt, '-')
           );
         });
         console.log('─'.repeat(90));
@@ -326,7 +327,7 @@ export function registerPlanCommands(pmCommand: Command) {
     .action(async (id) => {
       try {
         const plan = await apiClient.post(`/progress/execution-plans/${id}/schedule`);
-        console.log(`✓ 计划 #${id} 已排期: ${plan.scheduledStartAt || '(等待手动启动)'}`);
+        console.log(`✓ 计划 #${id} 已排期: ${fmtDateTime(plan.scheduledStartAt, '(等待手动启动)')}`);
       } catch (error) {
         fail('排期', error);
       }
@@ -423,7 +424,7 @@ export function registerPlanCommands(pmCommand: Command) {
         console.log('─'.repeat(100));
         records.forEach((e: any) => {
           const who = e.operatorType === 'HUMAN' ? `HUMAN#${e.operatorId}` : e.operatorType;
-          console.log(`${e.createdAt}  [${who}]  ${e.eventType}` + (e.itemId ? `  item#${e.itemId}` : ''));
+          console.log(`${fmtDateTime(e.createdAt)}  [${who}]  ${e.eventType}` + (e.itemId ? `  item#${e.itemId}` : ''));
           if (e.message) {
             console.log(`    ${e.message}`);
           }

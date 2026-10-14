@@ -16,12 +16,31 @@ export function dash(value: unknown): string {
 /**
  * Some endpoints serialize LocalDateTime/LocalDate as [y,m,d,h,mi,s,nanos] arrays
  * (seen live on /workspace/my-queue) rather than ISO strings. Normalise both.
+ * With `X-Time-Format: epoch-ms` (ApiClient) date-times arrive as epoch milliseconds; they are
+ * rendered as Asia/Tokyo wall time whatever the local zone is. LocalDate stays a string.
  */
-/** ISO string, or the [y,m,d,...] array form. */
-export type ApiDate = string | number[] | null;
+/** ISO string, epoch milliseconds, or the [y,m,d,...] array form. */
+export type ApiDate = string | number | number[] | null;
 
-export function fmtDate(value: unknown): string {
-  if (!Array.isArray(value)) return dash(value);
+const JST_OFFSET_MS = 9 * 3_600_000; // Asia/Tokyo has no DST
+
+/** Epoch ms -> `yyyy-MM-dd HH:mm:ss` in JST. */
+function jstDateTime(ms: number): string {
+  return new Date(ms + JST_OFFSET_MS).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
+ * Date part of a server time. Epoch ms keep their clock time unless it is exactly JST midnight
+ * (a date-only value sent as a timestamp), matching what the string form used to show.
+ */
+export function fmtDate(value: unknown, empty: string = DASH): string {
+  if (value === null || value === undefined || value === '') return empty;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return DASH;
+    const text = jstDateTime(value);
+    return text.endsWith(' 00:00:00') ? text.slice(0, 10) : text;
+  }
+  if (!Array.isArray(value)) return String(value);
   const [y, mo, d, h, mi, s] = value.map((n) => Number(n));
   if (![y, mo, d].every(Number.isFinite)) return DASH;
   const two = (n: number | undefined) => String(n ?? 0).padStart(2, '0');
@@ -29,9 +48,10 @@ export function fmtDate(value: unknown): string {
   return value.length > 3 ? `${date} ${two(h)}:${two(mi)}:${two(s)}` : date;
 }
 
-/** Same as fmtDate, but for `yyyy-MM-dd'T'HH:mm:ss` strings shows `yyyy-MM-dd HH:mm:ss`. */
-export function fmtDateTime(value: unknown): string {
-  return fmtDate(value).replace('T', ' ');
+/** Same as fmtDate, but `yyyy-MM-dd'T'HH:mm:ss` strings show as `yyyy-MM-dd HH:mm:ss` and epoch ms always carry the time. */
+export function fmtDateTime(value: unknown, empty: string = DASH): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return jstDateTime(value);
+  return fmtDate(value, empty).replace('T', ' ');
 }
 
 /** Print JSON when asked, otherwise the rendered text (control characters stripped, see stripControl). */

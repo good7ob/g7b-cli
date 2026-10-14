@@ -1,4 +1,4 @@
-import { ApiDate, DASH, dash, fmtDateTime } from '../../utils/cliHelpers';
+import { ApiDate, DASH, dash, fmtDate, fmtDateTime } from '../../utils/cliHelpers';
 import { ACTION_LABELS } from './render';
 
 /** Renderers for `workspace daily-report` and `workspace next-actions` (api-0089 §8, §9). */
@@ -43,7 +43,7 @@ const SOURCES: Record<string, string> = { template: 'template（确定性）', a
 export function renderDailyReport(r: DailyReport, generated = false): string {
   const ai = r.source === 'ai';
   const lines = [
-    `${generated ? '✓ 日报已生成  ' : ''}日报 ${dash(r.date)}    来源 ${SOURCES[r.source ?? ''] ?? dash(r.source)}    生成于 ${fmtDateTime(r.generatedAt)}`,
+    `${generated ? '✓ 日报已生成  ' : ''}日报 ${fmtDate(r.date)}    来源 ${SOURCES[r.source ?? ''] ?? dash(r.source)}    生成于 ${fmtDateTime(r.generatedAt)}`,
   ];
   if (ai) lines.push('含 AI 叙述总结（AI 生成，需人工确认；数字来自确定性数据，不会自动执行任何动作）');
   if (r.aiWarning) lines.push(`⚠ 未能使用 AI：${r.aiWarning}（已降级为确定性日报）`);

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
+import { fmtDateTime } from '../../utils/cliHelpers';
 
 /**
  * Read-only CLI access to org product copy/text resources
@@ -58,7 +59,7 @@ export function registerContentCommands(program: Command) {
                 csvField(r.locale),
                 csvField(r.value),
                 r.updatedBy ?? '',
-                r.updatedAt ?? '',
+                fmtDateTime(r.updatedAt, ''),
               ].join(',')
             );
           });

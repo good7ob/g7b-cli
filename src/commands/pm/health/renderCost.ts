@@ -1,4 +1,4 @@
-import { ApiDate, DASH, dash, fmtDateTime, fmtNum, renderTable } from '../../../utils/cliHelpers';
+import { ApiDate, DASH, dash, fmtDate, fmtDateTime, fmtNum, renderTable } from '../../../utils/cliHelpers';
 import { INSUFFICIENT, basisLabel, block } from './kpi';
 import { NO_DATA, releaseLabel } from './renderForecast';
 
@@ -161,7 +161,7 @@ export function renderCostEntries(page: CostEntryPage): string {
   if (!records.length) return '没有成本条目。';
   const rows = [['ID', '日期', '类别', '金额', '币种', 'Release', '来源', '备注']].concat(
     records.map((e) => [
-      String(e.id), dash(e.incurredOn), category(e.category), money(e.amount), dash(e.currency), dash(e.releaseId), dash(e.source), dash(e.note),
+      String(e.id), fmtDate(e.incurredOn), category(e.category), money(e.amount), dash(e.currency), dash(e.releaseId), dash(e.source), dash(e.note),
     ])
   );
   return `${renderTable(rows, { 7: { truncate: 40 } })}\n共 ${dash(page.total)} 条，第 ${dash(page.current)}/${dash(page.pages)} 页（source=auto 的条目只读）`;
@@ -173,7 +173,7 @@ export function renderCostEntry(e: CostEntry, verb: string): string {
     block([
       ['类别', category(e.category)],
       ['金额', `${money(e.amount)} ${dash(e.currency)}`],
-      ['发生日', dash(e.incurredOn)],
+      ['发生日', fmtDate(e.incurredOn)],
       ['范围', scopeLabel(e.releaseId)],
       ['来源', dash(e.source)],
       ['备注', dash(e.note)],

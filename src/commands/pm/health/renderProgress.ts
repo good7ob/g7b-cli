@@ -126,7 +126,7 @@ export function renderBurnup(b: Burnup): string {
   const ceiling = Math.max(0, ...points.flatMap((p) => [p.scope ?? 0, p.completed ?? 0]));
   const sampled = downsample(points);
   const rows = [['日期', '范围', '已完成', '剩余', '完成度']].concat(
-    points.map((p) => [dash(p.date), fmtNum(p.scope), fmtNum(p.completed), fmtNum(p.remaining), progressBar(p.completed, p.scope)])
+    points.map((p) => [fmtDate(p.date), fmtNum(p.scope), fmtNum(p.completed), fmtNum(p.remaining), progressBar(p.completed, p.scope)])
   );
   return [
     ...head,

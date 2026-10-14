@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
+import { fmtDateTime } from '../../utils/cliHelpers';
 
 const SEV_ICON: Record<string, string> = {
   blocker: '🔴', critical: '🟠', major: '🟡', minor: '🔵', trivial: '⚪',
@@ -66,7 +67,7 @@ export function registerBugCommands(qcCommand: Command) {
             (icon + ' ' + (b.severity || '')).padEnd(12) +
             (STATUS_CN[b.status] || b.status || '').padEnd(10) +
             (b.moduleName || '-').substring(0, 16).padEnd(18) +
-            (b.createdAt || '-')
+            fmtDateTime(b.createdAt, '-')
           );
         });
         console.log('─'.repeat(108));
@@ -106,10 +107,10 @@ export function registerBugCommands(qcCommand: Command) {
         console.log(`开发人员ID:   ${b.developerId || '-'}`);
         console.log(`测试人员ID:   ${b.testerId || '-'}`);
         console.log(`修复次数:     ${b.fixCount ?? 0}   Reopen次数: ${b.reopenCount ?? 0}   验证次数: ${b.verifyCount ?? 0}`);
-        console.log(`创建时间:     ${b.createdAt || '-'}`);
-        if (b.firstResolvedAt) console.log(`首次解决:     ${b.firstResolvedAt}`);
-        if (b.finalResolvedAt) console.log(`最终解决:     ${b.finalResolvedAt}`);
-        if (b.closedAt)        console.log(`关闭时间:     ${b.closedAt}`);
+        console.log(`创建时间:     ${fmtDateTime(b.createdAt, '-')}`);
+        if (b.firstResolvedAt) console.log(`首次解决:     ${fmtDateTime(b.firstResolvedAt)}`);
+        if (b.finalResolvedAt) console.log(`最终解决:     ${fmtDateTime(b.finalResolvedAt)}`);
+        if (b.closedAt)        console.log(`关闭时间:     ${fmtDateTime(b.closedAt)}`);
         if (b.reasonType)      console.log(`原因分类:     ${b.reasonType}`);
         if (b.rootCause)       console.log(`根本原因:     ${b.rootCause}`);
 
@@ -117,7 +118,7 @@ export function registerBugCommands(qcCommand: Command) {
           console.log('\n── 操作历史 ─────────────────────────────────────────');
           history.forEach((h: any) => {
             const arrow = h.oldStatus ? `${h.oldStatus} → ${h.newStatus}` : h.newStatus;
-            console.log(`  [${h.createdAt}] ${(h.actionType || '').padEnd(10)} ${arrow}${h.comment ? '  ' + h.comment : ''}`);
+            console.log(`  [${fmtDateTime(h.createdAt)}] ${(h.actionType || '').padEnd(10)} ${arrow}${h.comment ? '  ' + h.comment : ''}`);
           });
         }
         console.log();
