@@ -85,6 +85,12 @@ describe('pm health report generate <productId>', () => {
     expect(buildReportBody({ period: 'week', from: '2026-09-27' }, new Date('2026-09-21T00:00:00Z'))).toMatchObject({ from: '2026-09-27' });
   });
 
+  it('"today" is the JST date: 20:00 UTC already counts as the next day', () => {
+    const now = new Date('2026-09-19T20:00:00Z');
+    expect(buildReportBody({ period: 'custom', from: '2026-09-14', to: '2026-09-20' }, now)).toMatchObject({ to: '2026-09-20' });
+    expect(() => buildReportBody({ period: 'custom', from: '2026-09-14', to: '2026-09-21' }, now)).toThrow('JST 2026-09-20');
+  });
+
   it('requires --period', async () => {
     const r = await report(['generate', '12']);
     expect(r.exitCode).toBe(1);

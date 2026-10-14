@@ -24,7 +24,7 @@ export function registerReportCommands(health: Command): void {
     .description('Generate and store a management report for a week, month or custom period')
     .requiredOption('--period <type>', 'week | month | custom')
     .option('--from <yyyy-MM-dd>', 'week/month: a day inside the wanted period (default: the last complete one); custom: first day')
-    .option('--to <yyyy-MM-dd>', 'custom only: last day, not after today (UTC), at most 92 days from --from inclusive')
+    .option('--to <yyyy-MM-dd>', 'custom only: last day, not after today (JST), at most 92 days from --from inclusive')
     .option('--release <id>', 'Limit the report to one release')
     .option('--ai', 'Add an AI-written summary section (consumes AI tokens; AI-generated, needs human review)')
     .option('--json', 'Output as JSON')

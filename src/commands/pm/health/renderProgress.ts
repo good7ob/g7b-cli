@@ -121,7 +121,7 @@ export function renderBurnup(b: Burnup): string {
     `口径 ${basisLabel(b.weightBasis)}    基线范围 ${fmtNum(b.baselineScope)}`,
   ];
   if (!points.length) {
-    return [...head, '该区间没有快照数据（每日快照 23:50 UTC 生成；可用 `pm health snapshots rebuild` 补齐历史）。'].join('\n');
+    return [...head, '该区间没有快照数据（每日快照 23:50 JST 生成；可用 `pm health snapshots rebuild` 补齐历史）。'].join('\n');
   }
   const ceiling = Math.max(0, ...points.flatMap((p) => [p.scope ?? 0, p.completed ?? 0]));
   const sampled = downsample(points);

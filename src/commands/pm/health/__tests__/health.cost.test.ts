@@ -313,7 +313,7 @@ describe('pm health cost-entry', () => {
     await expectRejected(args, needle);
   });
 
-  it('add: today, tomorrow (UTC) and 2000-01-01 are accepted', async () => {
+  it('add: today, tomorrow (JST) and 2000-01-01 are accepted', async () => {
     for (const d of ['2000-01-01', '2026-09-19', '2026-09-20']) {
       expect((await health([...add.slice(0, -1), d], ok(entry))).exitCode).toBeUndefined();
     }
@@ -381,10 +381,11 @@ describe('cost input helpers', () => {
     expect(() => parseCurrency(undefined)).toThrow('3 位字母');
   });
 
-  it('parseIncurredOn takes an injected clock: tomorrow (UTC) is the last valid day', () => {
+  it('parseIncurredOn takes an injected clock: tomorrow (JST) is the last valid day', () => {
+    // 23:30 UTC is already 09-20 08:30 in JST, so tomorrow is 09-21
     const now = new Date('2026-09-19T23:30:00Z');
-    expect(parseIncurredOn('2026-09-20', now)).toBe('2026-09-20');
-    expect(() => parseIncurredOn('2026-09-21', now)).toThrow('明天，UTC');
+    expect(parseIncurredOn('2026-09-21', now)).toBe('2026-09-21');
+    expect(() => parseIncurredOn('2026-09-22', now)).toThrow('明天，JST');
     expect(() => parseIncurredOn(undefined, now)).toThrow('必填');
   });
 });

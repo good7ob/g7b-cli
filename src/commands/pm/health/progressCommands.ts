@@ -106,7 +106,7 @@ function registerBurnupAndSnapshots(health: Command): void {
     .command('burnup <productId>')
     .description('Burnup: scope vs completed per day (table + text chart). Defaults to the last 30 days')
     .option('--from <yyyy-MM-dd>', 'Start date')
-    .option('--to <yyyy-MM-dd>', 'End date (default: today UTC); span at most 366 days')
+    .option('--to <yyyy-MM-dd>', 'End date (default: today JST); span at most 366 days')
     .option('--release <id>', 'Release-level burnup instead of product-level')
     .option('--json', 'Output as JSON')
     .action((productId, _o, cmd: Command) =>
