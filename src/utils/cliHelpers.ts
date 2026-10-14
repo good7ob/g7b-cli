@@ -30,16 +30,13 @@ function jstDateTime(ms: number): string {
 }
 
 /**
- * Date part of a server time. Epoch ms keep their clock time unless it is exactly JST midnight
- * (a date-only value sent as a timestamp), matching what the string form used to show.
+ * Date part of a server time: epoch ms always render as the JST date (`yyyy-MM-dd`).
+ * Use fmtDateTime for points in time (createdAt, setAt, ...).
  */
 export function fmtDate(value: unknown, empty: string = DASH): string {
   if (value === null || value === undefined || value === '') return empty;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return DASH;
-    const text = jstDateTime(value);
-    return text.endsWith(' 00:00:00') ? text.slice(0, 10) : text;
-  }
+  // fix: #1663 epoch ms -> date only (no midnight special case); non-finite -> caller's placeholder
+  if (typeof value === 'number') return Number.isFinite(value) ? jstDateTime(value).slice(0, 10) : empty;
   if (!Array.isArray(value)) return String(value);
   const [y, mo, d, h, mi, s] = value.map((n) => Number(n));
   if (![y, mo, d].every(Number.isFinite)) return DASH;

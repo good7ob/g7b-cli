@@ -41,7 +41,7 @@ describe('fmtDate', () => {
       for (const zone of ['UTC', 'America/New_York', 'Asia/Tokyo']) {
         process.env.TZ = zone;
         expect(fmtDateTime(ms)).toBe('2026-10-15 10:30:45');
-        expect(fmtDate(ms)).toBe('2026-10-15 10:30:45');
+        expect(fmtDate(ms)).toBe('2026-10-15');
         expect(fmtDate(jstMidnight)).toBe('2026-10-15');
         expect(fmtDateTime(jstMidnight)).toBe('2026-10-15 00:00:00');
       }
@@ -60,6 +60,8 @@ describe('fmtDate', () => {
     expect(fmtDateTime('', '')).toBe('');
     expect(fmtDate(null, '-')).toBe('-');
     expect(fmtDate(Number.NaN)).toBe(DASH);
+    expect(fmtDate(Number.NaN, '')).toBe('');
+    expect(fmtDateTime(Number.POSITIVE_INFINITY, '-')).toBe('-');
     // the old `(x || '-').padEnd(n)` call sites must get a string back for numbers
     expect(fmtDateTime(ms).padEnd(22)).toHaveLength(22);
   });

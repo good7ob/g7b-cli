@@ -69,6 +69,13 @@ good7ob config reset
 
 > Note: the supported config keys are `api-url`, `api-key`, `user-id`, and `theme`.
 
+## Time fields
+
+The CLI sends `X-Time-Format: epoch-ms` on every request.
+
+- Text output shows date-times as Asia/Tokyo (JST) wall time, `yyyy-MM-dd HH:mm:ss`, whatever the local time zone.
+- `--json` passes the backend values through unchanged: date-time fields (`createdAt`, `updatedAt`, `completedAt`, `deadline`, ...) are **epoch milliseconds (a UTC instant)**, not JST strings. Convert with `new Date(ms)`, or add 9 hours for JST wall time. Date-only fields (`LocalDate`, e.g. `startDate` on some endpoints) stay `yyyy-MM-dd` strings.
+
 ## Command groups
 
 Top-level help:
