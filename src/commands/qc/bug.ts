@@ -99,6 +99,7 @@ export function registerBugCommands(qcCommand: Command) {
         console.log(`标题:         ${b.title}`);
         console.log(`状态:         ${STATUS_CN[b.status] ?? b.status}  (${b.status})`);
         console.log(`严重度:       ${SEV_ICON[b.severity] ?? ''} ${b.severity}   优先级: ${b.priority}`);
+        console.log(`产品ID:       ${b.productId || '-'}`);
         console.log(`模块:         ${b.moduleName || '-'}`);
         console.log(`描述:         ${b.description || '-'}`);
         console.log(`负责人ID:     ${b.assignedTo || '-'}`);
@@ -134,6 +135,7 @@ export function registerBugCommands(qcCommand: Command) {
     .requiredOption('--project-id <id>', '项目 ID')
     .requiredOption('--title <title>', 'Bug 标题')
     .requiredOption('--module <module>', '模块名称')
+    .option('--product-id <id>', '所属产品 ID（可选）')
     .option('--severity <severity>', '严重度 (blocker|critical|major|minor|trivial)', 'major')
     .option('--priority <priority>', '优先级 (high|medium|low)', 'medium')
     .option('--desc <desc>', 'Bug 描述')
@@ -149,6 +151,7 @@ export function registerBugCommands(qcCommand: Command) {
           severity:   options.severity,
           priority:   options.priority,
         };
+        if (options.productId) body.productId = parseInt(options.productId);
         if (options.desc)   body.description = options.desc;
         if (options.stage)  body.foundStage  = options.stage;
         if (options.source) body.sourceType  = options.source;
