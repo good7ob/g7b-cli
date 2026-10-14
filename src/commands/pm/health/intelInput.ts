@@ -25,6 +25,8 @@ export const MAX_REPORT_DAYS = 92;
 const DAY_MS = 86_400_000;
 const DECIMAL = /^[0-9]+(\.[0-9]+)?$/;
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+/** The backend resolves "today" in JST (Asia/Tokyo, no DST). */
+const JST_MS = 9 * 3_600_000;
 
 /** A non-negative decimal within [min, max]. */
 export function parseBounded(raw: string | undefined, label: string, min: number, max: number): number {
@@ -80,7 +82,7 @@ export interface ReportOptions { period?: string; from?: string; to?: string; re
 function checkCustomPeriod(from: string | undefined, to: string | undefined, today: string): void {
   if (!from || !to) throw new InputError('--period custom 必须同时给出 --from 和 --to');
   if (from > to) throw new InputError(`--from (${from}) 不能晚于 --to (${to})`);
-  if (to > today) throw new InputError(`--to 不能晚于今天（UTC ${today}），收到: ${to}`);
+  if (to > today) throw new InputError(`--to 不能晚于今天（JST ${today}），收到: ${to}`);
   if (from < MIN_ENTRY_DATE) throw new InputError(`--from 不能早于 ${MIN_ENTRY_DATE}，收到: ${from}`);
   const days = (Date.parse(to) - Date.parse(from)) / DAY_MS + 1;
   if (days > MAX_REPORT_DAYS) throw new InputError(`自定义报告期最长 ${MAX_REPORT_DAYS} 天（含首尾），当前 ${days} 天`);
@@ -92,7 +94,7 @@ function checkCalendarPeriod(period: string, from: string | undefined, to: strin
   }
   if (from === undefined) return;
   const start = period === 'week' ? weekStart(from) : `${from.slice(0, 8)}01`;
-  if (start > today) throw new InputError(`报告期不能在未来：${from} 所在${period === 'week' ? '周' : '月'}从 ${start} 开始，今天（UTC）是 ${today}`);
+  if (start > today) throw new InputError(`报告期不能在未来：${from} 所在${period === 'week' ? '周' : '月'}从 ${start} 开始，今天（JST）是 ${today}`);
   if (start < MIN_ENTRY_DATE) throw new InputError(`--from 所在${period === 'week' ? '周' : '月'}不能早于 ${MIN_ENTRY_DATE}，收到: ${from}`);
 }
 
@@ -102,7 +104,8 @@ export function buildReportBody(o: ReportOptions, now: Date = new Date()): Recor
   const period = requireOneOf(o.period.trim().toLowerCase(), PERIOD_TYPES, '--period');
   const from = o.from === undefined ? undefined : parseDate(o.from, '--from');
   const to = o.to === undefined ? undefined : parseDate(o.to, '--to');
-  const today = isoDay(now.getTime());
+  // fix: #1658 backend report periods are by JST date now (was UTC)
+  const today = isoDay(now.getTime() + JST_MS);
   if (period === 'custom') checkCustomPeriod(from, to, today);
   else checkCalendarPeriod(period, from, to, today);
   return {

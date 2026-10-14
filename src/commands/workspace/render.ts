@@ -65,9 +65,10 @@ export function renderCountsSummary(counts: Record<string, number | null> | null
     .join('  ');
 }
 
-/** Time cell: a live snooze wins (stored in UTC), otherwise the task deadline. */
+/** Time cell: a live snooze wins (naive JST, like every other time), otherwise the task deadline. */
+// fix: #1658 the backend stores and returns snoozedUntil in JST now, so no UTC suffix
 const whenCell = (i: QueueItem) =>
-  i.snoozedUntil ? `稍后至 ${fmtDateTime(i.snoozedUntil)} UTC` : fmtDateTime(i.dueAt);
+  i.snoozedUntil ? `稍后至 ${fmtDateTime(i.snoozedUntil)}` : fmtDateTime(i.dueAt);
 
 export function renderQueue(queue: MyQueue, status?: string): string {
   const items = queue.items ?? [];
@@ -112,7 +113,8 @@ export type Transition = keyof typeof TRANSITION_LABELS;
 const withTitle = (item?: QueueItem | null) => (item?.title ? ` — ${item.title}` : '');
 
 export function renderTransition(kind: Transition, id: number, item?: QueueItem | null): string {
-  const until = kind === 'snooze' && item?.snoozedUntil ? `，至 ${fmtDateTime(item.snoozedUntil)} UTC` : '';
+  // fix: #1658 snoozedUntil is naive JST now, so no UTC suffix
+  const until = kind === 'snooze' && item?.snoozedUntil ? `，至 ${fmtDateTime(item.snoozedUntil)}` : '';
   return `✓ 队列项 #${id} ${TRANSITION_LABELS[kind]} (${dash(item?.status)})${until}${withTitle(item)}`;
 }
 

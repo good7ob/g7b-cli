@@ -82,7 +82,7 @@ function registerItemCommands(queue: Command): void {
   queue
     .command('snooze <id>')
     .description(`Hide an item until a future time (at most ${MAX_SNOOZE_DAYS} days ahead; snoozing again moves the time)`)
-    .requiredOption('--until <time>', 'ISO date-time (no offset = UTC, e.g. 2026-09-20T09:00:00Z) or relative: +30m, +2h, +1d')
+    .requiredOption('--until <time>', 'ISO date-time (no offset = JST, e.g. 2026-09-20T18:00:00 or 2026-09-20T09:00:00Z) or relative: +30m, +2h, +1d')
     .option('--json', 'Output as JSON')
     .action((id, o, cmd: Command) => run('稍后处理队列项失败', WORKSPACE_ERROR_CODES, () =>
       moveItem('snooze', id, wantsJson(cmd), { until: parseSnoozeUntil(o.until) })));

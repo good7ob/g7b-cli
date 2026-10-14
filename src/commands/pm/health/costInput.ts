@@ -26,6 +26,8 @@ export const MAX_TOKEN_PRICE = 100_000;
 export const MIN_ENTRY_DATE = '2000-01-01';
 
 const DAY_MS = 86_400_000;
+/** The backend resolves "today" in JST (Asia/Tokyo, no DST). */
+const JST_MS = 9 * 3_600_000;
 const MONEY = /^[0-9]+(\.[0-9]{1,2})?$/;
 const TOKEN_PRICE = /^[0-9]+(\.[0-9]{1,6})?$/;
 
@@ -60,13 +62,14 @@ export function parseCurrency(raw: string | undefined, label = '--currency'): st
   return code;
 }
 
-/** Day the cost was incurred: a real date from 2000-01-01 up to tomorrow (UTC), as the backend allows. */
+/** Day the cost was incurred: a real date from 2000-01-01 up to tomorrow (JST), as the backend allows. */
 export function parseIncurredOn(raw: string | undefined, now: Date = new Date()): string {
   if (raw === undefined) throw new InputError('--date 必填（yyyy-MM-dd）');
   const date = parseDate(raw, '--date');
-  const tomorrow = new Date(now.getTime() + DAY_MS).toISOString().slice(0, 10);
+  // fix: #1658 backend checks against the JST date now (was UTC)
+  const tomorrow = new Date(now.getTime() + JST_MS + DAY_MS).toISOString().slice(0, 10);
   if (date < MIN_ENTRY_DATE || date > tomorrow) {
-    throw new InputError(`--date 必须在 ${MIN_ENTRY_DATE} 到 ${tomorrow}（明天，UTC）之间，收到: ${raw}`);
+    throw new InputError(`--date 必须在 ${MIN_ENTRY_DATE} 到 ${tomorrow}（明天，JST）之间，收到: ${raw}`);
   }
   return date;
 }

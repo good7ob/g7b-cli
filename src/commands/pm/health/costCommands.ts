@@ -89,7 +89,7 @@ function registerCostEntries(health: Command): void {
       .requiredOption('--category <category>', 'labor | cloud | ai_token | other')
       .requiredOption('--amount <n>', 'Amount, > 0, at most 2 decimals')
       .requiredOption('--currency <code>', '3-letter currency code; must equal the product\'s existing currency')
-      .requiredOption('--date <yyyy-MM-dd>', 'Day the cost was incurred (2000-01-01 to tomorrow, UTC)')
+      .requiredOption('--date <yyyy-MM-dd>', 'Day the cost was incurred (2000-01-01 to tomorrow, JST)')
       .option('--release <id>', 'Attribute it to a release (omitted = product level)')
       .option('--note <text>', 'Note (max 500 chars)')
       .option('--json', 'Output as JSON');

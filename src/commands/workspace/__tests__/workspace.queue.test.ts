@@ -63,7 +63,7 @@ describe('workspace queue: filters and rendering', () => {
     expect(r.stdout).toContain('风险预警 1');
     expect(r.stdout).toMatch(/501\s+new\s+APPROVAL\s+31\s+审批申请\s+medium\s+—\s+发布 v1\.2\.0/);
     expect(r.stdout).toMatch(/502\s+new\s+TASK\s+9\s+已阻塞\s+medium\s+主项目\s+阻塞任务\s+2026-09-20 18:00:00/);
-    expect(r.stdout).toMatch(/503\s+snoozed\s+RISK\s+12\s+风险预警.*稍后至 2026-09-20 09:00:00 UTC/);
+    expect(r.stdout).toMatch(/503\s+snoozed\s+RISK\s+12\s+风险预警.*稍后至 2026-09-20 09:00:00(?! UTC)/);
   });
 
   it('--action-type bug_fix is sent as BUG_FIX; a BUG item shows 缺陷修复, the project, and — for a null priority / due date', async () => {
@@ -174,9 +174,10 @@ describe.each([
 describe('workspace queue snooze', () => {
   it('sends the ISO instant as UTC', async () => {
     const r = await q(['snooze', '501', '--until', '2026-09-20T17:00:00+08:00'],
-      ok(item({ status: 'snoozed', snoozedUntil: '2026-09-20T09:00:00' })));
+      ok(item({ status: 'snoozed', snoozedUntil: '2026-09-20T18:00:00' })));
     expect(r.http.post).toHaveBeenCalledWith('/workspace/my-queue/501/snooze', { until: '2026-09-20T09:00:00Z' });
-    expect(r.stdout).toBe('✓ 队列项 #501 已稍后处理 (snoozed)，至 2026-09-20 09:00:00 UTC — 发布 v1.2.0');
+    // the backend echoes the same instant as naive JST; shown as-is, no UTC suffix
+    expect(r.stdout).toBe('✓ 队列项 #501 已稍后处理 (snoozed)，至 2026-09-20 18:00:00 — 发布 v1.2.0');
   });
 
   it.each([['+2h', '2026-09-19T12:00:00Z'], ['+1d', '2026-09-20T10:00:00Z'], ['+30d', '2026-10-19T10:00:00Z']])(

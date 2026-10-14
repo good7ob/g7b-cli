@@ -63,7 +63,9 @@ export function buildQueueParams(o: {
   return params;
 }
 
-const UNTIL_HINT = '（ISO 日期时间如 2026-09-20T09:00:00Z / 2026-09-20T17:00:00+08:00，无时区按 UTC；或相对时间 +30m / +2h / +1d）';
+// fix: #1658 平台时间约定为 JST：不带时区的 --until 按 JST（+09:00）解释，不再按 UTC
+const UNTIL_HINT = '（ISO 日期时间如 2026-09-20T18:00:00 / 2026-09-20T09:00:00Z / 2026-09-20T17:00:00+08:00，无时区按 JST；或相对时间 +30m / +2h / +1d）';
+const JST_OFFSET_MIN = 9 * 60;
 const RELATIVE = /^\+(\d{1,6})([mhd])$/;
 const ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?$/;
 const UNIT_MS = { m: MINUTE_MS, h: 60 * MINUTE_MS, d: DAY_MS };
@@ -74,7 +76,7 @@ function isoToEpoch(m: RegExpExecArray): number | null {
   const day = new Date(Date.UTC(y, mo - 1, d));
   const realDay = day.getUTCFullYear() === y && day.getUTCMonth() === mo - 1 && day.getUTCDate() === d;
   if (!realDay || h > 23 || mi > 59 || s > 59) return null;
-  let offsetMin = 0;
+  let offsetMin = m[7] ? 0 : JST_OFFSET_MIN;
   if (m[7] && m[7] !== 'Z') {
     const oh = Number(m[7].slice(1, 3));
     const om = Number(m[7].slice(4, 6));
@@ -86,7 +88,7 @@ function isoToEpoch(m: RegExpExecArray): number | null {
 
 /**
  * `--until` -> the UTC instant the backend expects (`yyyy-MM-ddTHH:mm:ssZ`). Accepts an ISO
- * date-time (no offset = UTC, as the backend reads it) or `+<n>m|h|d` relative to `now`.
+ * date-time (no offset = JST, the platform convention) or `+<n>m|h|d` relative to `now`.
  * Rejects what the backend would (not in the future, more than 30 days ahead) up front.
  */
 export function parseSnoozeUntil(raw: string | undefined, now: Date = new Date()): string {
