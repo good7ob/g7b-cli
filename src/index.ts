@@ -34,6 +34,7 @@ import { registerQuestionCommands } from './commands/question';
 import { registerSyncCommands } from './commands/sync';
 import { registerUiCommands } from './commands/ui';
 import { registerProgressCommands } from './commands/progress';
+import { registerEstimateCommands } from './commands/estimate';
 
 const program = new Command();
 
@@ -71,6 +72,7 @@ registerDevInfoCommands(program);
 registerHeartbeatCommands(program);
 registerUiCommands(program);
 registerProgressCommands(program);
+registerEstimateCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
