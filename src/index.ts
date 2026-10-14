@@ -32,6 +32,7 @@ import { registerDevInfoCommands } from './commands/devInfo';
 import { registerHeartbeatCommands } from './commands/heartbeat';
 import { registerQuestionCommands } from './commands/question';
 import { registerSyncCommands } from './commands/sync';
+import { registerGithubCommands } from './commands/github';
 import { registerUiCommands } from './commands/ui';
 import { registerProgressCommands } from './commands/progress';
 
@@ -62,6 +63,7 @@ registerQuestionCommands(program);
 registerTemplateCommands(program);
 registerWhoamiCommands(program);
 registerSyncCommands(program);
+registerGithubCommands(program);
 registerSchemaCommands(program);
 registerCloudArchCommands(program);
 registerBlogCommands(program);
