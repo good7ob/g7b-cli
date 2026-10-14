@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AI_REQUEST_CONFIG, DASH, InputError, checkMaxLength, describeError, dash, fmtDate, fmtNum, parseId, parseIntInRange, requireOneOf, requireText, renderTable, stripControl, emit, withTimeoutHint,
+  AI_REQUEST_CONFIG, DASH, InputError, checkMaxLength, describeError, dash, fmtDate, fmtDateTime, fmtNum, parseId, parseIntInRange, requireOneOf, requireText, renderTable, stripControl, emit, withTimeoutHint,
 } from '../cliHelpers';
 
 describe('formatting', () => {
@@ -29,6 +29,41 @@ describe('fmtDate', () => {
     expect(fmtDate([2026, 8, 24, 9, 5])).toBe('2026-08-24 09:05:00');
     expect(fmtDate(null)).toBe(DASH);
     expect(fmtDate([])).toBe(DASH);
+  });
+
+  // fix: #1663 X-Time-Format: epoch-ms returns date-times as epoch milliseconds
+  const ms = Date.UTC(2026, 9, 15, 1, 30, 45); // 2026-10-15 10:30:45 JST
+  const jstMidnight = Date.UTC(2026, 9, 14, 15, 0, 0); // 2026-10-15 00:00:00 JST
+
+  it('renders epoch ms as Asia/Tokyo wall time, whatever the local zone', () => {
+    const tz = process.env.TZ;
+    try {
+      for (const zone of ['UTC', 'America/New_York', 'Asia/Tokyo']) {
+        process.env.TZ = zone;
+        expect(fmtDateTime(ms)).toBe('2026-10-15 10:30:45');
+        expect(fmtDate(ms)).toBe('2026-10-15');
+        expect(fmtDate(jstMidnight)).toBe('2026-10-15');
+        expect(fmtDateTime(jstMidnight)).toBe('2026-10-15 00:00:00');
+      }
+    } finally {
+      process.env.TZ = tz;
+    }
+  });
+
+  it('fmtDateTime normalises strings and arrays, and falls back for empty values', () => {
+    expect(fmtDateTime('2026-09-19T10:00:00')).toBe('2026-09-19 10:00:00');
+    expect(fmtDateTime('2026-09-19 10:00:00')).toBe('2026-09-19 10:00:00');
+    expect(fmtDateTime('2026-10-01')).toBe('2026-10-01');
+    expect(fmtDateTime([2026, 8, 24, 14, 18, 43])).toBe('2026-08-24 14:18:43');
+    expect(fmtDateTime(null)).toBe(DASH);
+    expect(fmtDateTime(undefined, '-')).toBe('-');
+    expect(fmtDateTime('', '')).toBe('');
+    expect(fmtDate(null, '-')).toBe('-');
+    expect(fmtDate(Number.NaN)).toBe(DASH);
+    expect(fmtDate(Number.NaN, '')).toBe('');
+    expect(fmtDateTime(Number.POSITIVE_INFINITY, '-')).toBe('-');
+    // the old `(x || '-').padEnd(n)` call sites must get a string back for numbers
+    expect(fmtDateTime(ms).padEnd(22)).toHaveLength(22);
   });
 });
 

@@ -3,6 +3,7 @@ import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import configService from '../../../services/ConfigService';
+import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerProjectCommands(pmCommand: Command) {
   const projectCommand = pmCommand
@@ -45,7 +46,7 @@ export function registerProjectCommands(pmCommand: Command) {
         if (options.csv) {
           console.log('ID,Name,Status,Progress,Owner,StartDate,EndDate,Tasks');
           records.forEach((p: any) => {
-            console.log(`${p.id},${p.name},${p.status},${p.progress || 0}%,${p.ownerName || ''},${p.startDate || ''},${p.endDate || ''},${p.taskCount || 0}`);
+            console.log(`${p.id},${p.name},${p.status},${p.progress || 0}%,${p.ownerName || ''},${fmtDate(p.startDate, '')},${fmtDate(p.endDate, '')},${p.taskCount || 0}`);
           });
           return;
         }
@@ -66,7 +67,7 @@ export function registerProjectCommands(pmCommand: Command) {
             (p.status || '').padEnd(14) +
             `${p.progress || 0}%`.padEnd(8) +
             String(p.taskCount || 0).padEnd(8) +
-            (p.endDate || '-')
+            fmtDate(p.endDate, '-')
           );
         });
         console.log('─'.repeat(90));
@@ -99,13 +100,13 @@ export function registerProjectCommands(pmCommand: Command) {
         console.log(`进度:     ${project.progress || 0}%`);
         console.log(`描述:     ${project.description || '-'}`);
         console.log(`负责人:   ${project.ownerName || project.ownerId || '-'}`);
-        console.log(`开始日期: ${project.startDate || '-'}`);
-        console.log(`结束日期: ${project.endDate || '-'}`);
+        console.log(`开始日期: ${fmtDate(project.startDate, '-')}`);
+        console.log(`结束日期: ${fmtDate(project.endDate, '-')}`);
         console.log(`任务总数: ${project.taskCount || 0}`);
         console.log(`已完成:   ${project.completedTaskCount || 0}`);
         console.log(`剩余天数: ${project.daysRemaining ?? '-'}`);
         console.log(`已归档:   ${project.isArchived ? '是' : '否'}`);
-        console.log(`创建时间: ${project.createdAt || '-'}`);
+        console.log(`创建时间: ${fmtDateTime(project.createdAt, '-')}`);
         console.log('─'.repeat(50));
       } catch (error) {
         console.error('✗ 获取项目详情失败:', error instanceof Error ? error.message : String(error));
@@ -267,8 +268,8 @@ export function registerProjectCommands(pmCommand: Command) {
           console.log(
             String(t.id).padEnd(10) +
             (t.name || '').substring(0, 28).padEnd(30) +
-            (t.startDate || '-').padEnd(14) +
-            (t.deadline || '-').padEnd(14) +
+            fmtDate(t.startDate, '-').padEnd(14) +
+            fmtDate(t.deadline, '-').padEnd(14) +
             (t.status || '')
           );
         });

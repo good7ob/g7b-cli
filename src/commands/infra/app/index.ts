@@ -18,7 +18,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
-import { dash } from '../../../utils/cliHelpers';
+import { dash, fmtDateTime } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
 import { resolveOrgId } from '../../../utils/resolveOrgId';
 import configService from '../../../services/ConfigService';
@@ -266,7 +266,7 @@ export function registerAppCommands(infraCommand: Command) {
         } else if (options.csv) {
           console.log('ID,Name,Environment,Status,Owner,Created');
           result.records.forEach((app: any) => {
-            console.log(`${app.id},${app.name},${app.environment},${app.status},${app.ownerId},${app.createdAt}`);
+            console.log(`${app.id},${app.name},${app.environment},${app.status},${app.ownerId},${fmtDateTime(app.createdAt)}`);
           });
         } else {
           console.log(`Applications (${result.total}):`);
@@ -421,7 +421,7 @@ export function registerAppCommands(infraCommand: Command) {
               app.environment,
               app.status,
               app.ownerId,
-              app.createdAt,
+              fmtDateTime(app.createdAt, ''),
               `"${(app.description || '').replace(/"/g, '""')}"`,
             ].join(',');
             content += row + '\n';
@@ -731,7 +731,7 @@ export function registerAppCommands(infraCommand: Command) {
                   lastUpdated: app.updatedAt,
                   severity: 'warning',
                 });
-                console.log(`  ⚠ ${app.name} 最后更新: ${app.updatedAt}`);
+                console.log(`  ⚠ ${app.name} 最后更新: ${fmtDateTime(app.updatedAt)}`);
               }
             });
           }

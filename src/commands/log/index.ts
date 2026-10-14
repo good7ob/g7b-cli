@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
 import { registerAgentReportCommands } from './report';
+import { fmtDateTime } from '../../utils/cliHelpers';
 
 export function registerLogCommands(program: Command) {
   const logCommand = program
@@ -111,7 +112,7 @@ export function registerLogCommands(program: Command) {
         if (options.csv) {
           console.log('ID,Agent,TaskType,Status,Result,Summary,Tokens,Duration(ms),CompletedAt');
           records.forEach((r: any) => {
-            console.log(`${r.id},${r.aiAgent || ''},${r.taskType || ''},${r.status || ''},${r.result || ''},"${(r.summary || '').replace(/"/g, '""')}",${r.tokenUsage || ''},${r.durationMs || ''},${r.completedAt || ''}`);
+            console.log(`${r.id},${r.aiAgent || ''},${r.taskType || ''},${r.status || ''},${r.result || ''},"${(r.summary || '').replace(/"/g, '""')}",${r.tokenUsage || ''},${r.durationMs || ''},${fmtDateTime(r.completedAt, '')}`);
           });
           return;
         }
@@ -187,8 +188,8 @@ export function registerLogCommands(program: Command) {
         if (record.errorMessage) {
           console.log(`错误信息:   ${record.errorMessage}`);
         }
-        console.log(`完成时间:   ${record.completedAt || '-'}`);
-        console.log(`创建时间:   ${record.createdAt || '-'}`);
+        console.log(`完成时间:   ${fmtDateTime(record.completedAt, '-')}`);
+        console.log(`创建时间:   ${fmtDateTime(record.createdAt, '-')}`);
         console.log('─'.repeat(60));
       } catch (error) {
         console.error('✗ 获取工作日志失败:', error instanceof Error ? error.message : String(error));

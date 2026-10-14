@@ -1,4 +1,4 @@
-import { ApiDate, dash, fmtDateTime, fmtNum, renderTable } from '../../utils/cliHelpers';
+import { ApiDate, dash, fmtDate, fmtDateTime, fmtNum, renderTable } from '../../utils/cliHelpers';
 
 export interface Release {
   id: number;
@@ -32,7 +32,7 @@ export function renderReleaseList(releases: Release[]): string {
   const rows = [['ID', '状态', '版本', '名称', '任务', '计划开始', '计划结束']].concat(
     releases.map((r) => [
       String(r.id), dash(r.status), dash(r.version), dash(r.name), dash(r.taskCount),
-      dash(r.plannedStartDate), dash(r.plannedEndDate),
+      fmtDate(r.plannedStartDate), fmtDate(r.plannedEndDate),
     ])
   );
   return `${renderTable(rows, { 3: { truncate: 30 } })}\n共 ${releases.length} 个 Release`;
@@ -43,7 +43,7 @@ export function renderReleaseDetail(r: Release): string {
     `Release #${r.id}  ${dash(r.name)}`,
     '─'.repeat(60),
     `状态:     ${dash(r.status)}    版本: ${dash(r.version)}    产品: ${dash(r.productId)}`,
-    `计划:     ${dash(r.plannedStartDate)} → ${dash(r.plannedEndDate)}    发布于: ${fmtDateTime(r.releasedAt)}`,
+    `计划:     ${fmtDate(r.plannedStartDate)} → ${fmtDate(r.plannedEndDate)}    发布于: ${fmtDateTime(r.releasedAt)}`,
     `任务数:   ${dash(r.taskCount)}（good7ob release tasks ${r.id}）`,
   ];
   if (r.pendingApprovalId) {

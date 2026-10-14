@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import apiClient from '../../../services/ApiClient';
 import { extractRecords, extractTotal } from '../../../utils/extractRecords';
+import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
 
 const API_PREFIX = '/forge/agent-work-reports';
 
@@ -97,7 +98,7 @@ export function registerAgentReportCommands(logCommand: Command) {
             String(r.id).padEnd(8) +
             (r.scopeType || '-').padEnd(10) +
             (r.reportType || '-').padEnd(8) +
-            `${r.periodStart || '-'}~${r.periodEnd || '-'}`.padEnd(24) +
+            `${fmtDate(r.periodStart, '-')}~${fmtDate(r.periodEnd, '-')}`.padEnd(24) +
             (r.status || '-').padEnd(10) +
             (r.title || '').substring(0, 40)
           );
@@ -130,12 +131,12 @@ export function registerAgentReportCommands(logCommand: Command) {
         console.log(`用户ID:     ${report.userId ?? '-'}`);
         console.log(`项目ID:     ${report.projectId ?? '-'}`);
         console.log(`类型:       ${report.reportType || '-'}`);
-        console.log(`周期:       ${report.periodStart || '-'} ~ ${report.periodEnd || '-'}`);
+        console.log(`周期:       ${fmtDate(report.periodStart, '-')} ~ ${fmtDate(report.periodEnd, '-')}`);
         console.log(`状态:       ${report.status || '-'}`);
         console.log(`AI生成:     ${report.isAiGenerated ? '是' : '否（模板兜底）'}`);
         console.log(`生成来源:   ${report.generationSource || '-'}`);
-        console.log(`已通知:     ${report.notifiedAt || '未通知'}`);
-        console.log(`创建时间:   ${report.createdAt || '-'}`);
+        console.log(`已通知:     ${fmtDateTime(report.notifiedAt, '未通知')}`);
+        console.log(`创建时间:   ${fmtDateTime(report.createdAt, '-')}`);
         console.log('─'.repeat(60));
         if (report.content) {
           console.log('\n正文:\n');

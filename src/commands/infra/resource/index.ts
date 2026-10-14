@@ -10,7 +10,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
-import { dash } from '../../../utils/cliHelpers';
+import { dash, fmtDateTime } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerResourceCommands(infraCommand: Command) {
@@ -108,7 +108,7 @@ export function registerResourceCommands(infraCommand: Command) {
           console.log(`状态: ${resource.status}`);
           console.log(`月成本: $${resource.monthlyCost}`);
           if (resource.tags) console.log(`标签: ${resource.tags}`);
-          console.log(`创建时间: ${resource.createdAt}`);
+          console.log(`创建时间: ${fmtDateTime(resource.createdAt)}`);
         }
 
         if (options.showCosts) {
@@ -296,7 +296,7 @@ export function registerResourceCommands(infraCommand: Command) {
               res.environment,
               res.status,
               res.monthlyCost || 0,
-              res.createdAt,
+              fmtDateTime(res.createdAt, ''),
             ].join(',');
             content += row + '\n';
           });

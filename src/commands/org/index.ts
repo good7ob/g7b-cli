@@ -6,6 +6,7 @@ import { registerInvitationCommands } from './invitations';
 import { registerProductCommands } from './products';
 import { registerPlanCommands } from './plans';
 import { registerAiEmployeeCommands } from './aiEmployee';
+import { fmtDateTime } from '../../utils/cliHelpers';
 
 export function registerOrgCommands(program: Command) {
   const orgCommand = program
@@ -39,7 +40,7 @@ export function registerOrgCommands(program: Command) {
         if (options.csv) {
           console.log('ID,Name,Slug,Tier,Members,Products,CreatedAt');
           records.forEach((o: any) => {
-            console.log(`${o.id},${o.name},${o.slug || ''},${o.subscriptionTier || ''},${o.memberCount || 0},${o.productCount || 0},${o.createdAt || ''}`);
+            console.log(`${o.id},${o.name},${o.slug || ''},${o.subscriptionTier || ''},${o.memberCount || 0},${o.productCount || 0},${fmtDateTime(o.createdAt, '')}`);
           });
           return;
         }
@@ -97,7 +98,7 @@ export function registerOrgCommands(program: Command) {
         console.log(`订阅套餐: ${org.subscriptionTier || '-'}`);
         console.log(`成员数:   ${org.memberCount || 0}`);
         console.log(`产品数:   ${org.productCount || 0}`);
-        console.log(`创建时间: ${org.createdAt || '-'}`);
+        console.log(`创建时间: ${fmtDateTime(org.createdAt, '-')}`);
         console.log('─'.repeat(55));
       } catch (error) {
         console.error('✗ 获取组织详情失败:', error instanceof Error ? error.message : String(error));
@@ -188,7 +189,7 @@ export function registerOrgCommands(program: Command) {
         console.log(`\n订阅信息 — 组织 ${orgId}`);
         console.log('─'.repeat(50));
         console.log(`套餐:       ${sub.tier || sub.subscriptionTier || '-'}`);
-        console.log(`到期时间:   ${sub.expiresAt || '-'}`);
+        console.log(`到期时间:   ${fmtDateTime(sub.expiresAt, '-')}`);
         console.log(`成员配额:   ${sub.quota?.maxMembers || '-'}`);
         console.log(`产品配额:   ${sub.quota?.maxProducts || '-'}`);
         console.log(`已用成员:   ${sub.usage?.members || 0}`);

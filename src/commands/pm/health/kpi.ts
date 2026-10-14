@@ -1,4 +1,4 @@
-import { ApiDate, DASH, dash, fmtDate, fmtNum, renderTable } from '../../../utils/cliHelpers';
+import { ApiDate, DASH, dash, fmtDate, fmtDateTime, fmtNum, renderTable } from '../../../utils/cliHelpers';
 
 /**
  * Scope/progress KPIs shared by `pm health` (product) and `release health` (ScopeKpiVo on the
@@ -80,7 +80,7 @@ export function renderScopeSections(k: ScopeKpi, rebaselineHint: string): string
       ['范围变化', fmtNum(k.scopeChange)],
       ['范围增长', fmtNum(k.scopeGrowthPct, '%', 1)],
       ['基线进度', fmtNum(k.baselineProgressPct, '%', 1)],
-      ['基线时间', fmtDate(k.baselineSetAt)],
+      ['基线时间', fmtDateTime(k.baselineSetAt)],
     ])
   );
   if (k.baselineBasisMismatch) {

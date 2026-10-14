@@ -1,4 +1,4 @@
-import { ApiDate, DASH, dash, fmtDate, fmtNum, renderTable } from '../../utils/cliHelpers';
+import { ApiDate, DASH, dash, fmtDateTime, fmtNum, renderTable } from '../../utils/cliHelpers';
 
 export interface ReviewExpected {
   solutionId?: number | null;
@@ -86,6 +86,6 @@ export function renderReview(result: EffectReviewResult): string {
     renderMetrics(result.metrics ?? []),
   ];
   if (r.notes) lines.push('', '备注:', r.notes);
-  if (done) lines.push('', `已完成: ${fmtDate(r.reviewedAt)} by ${dash(r.reviewedBy)}（不可再刷新 / 修改；估算修正系数已重算，见 idea correction）`);
+  if (done) lines.push('', `已完成: ${fmtDateTime(r.reviewedAt)} by ${dash(r.reviewedBy)}（不可再刷新 / 修改；估算修正系数已重算，见 idea correction）`);
   return lines.join('\n');
 }

@@ -1,4 +1,4 @@
-import { ApiDate, DASH, dash, fmtDate, fmtNum, renderTable } from '../../../utils/cliHelpers';
+import { ApiDate, DASH, dash, fmtDate, fmtDateTime, fmtNum, renderTable } from '../../../utils/cliHelpers';
 import { ScopeKpi, basisLabel, block, renderScopeSections } from './kpi';
 
 /** Fields the backend cannot always compute are nullable — rendered as "—", never 0. */
@@ -87,7 +87,7 @@ export function renderBaseline(b: Baseline): string {
       ['基线范围', fmtNum(b.baselineScopeWeight)],
       ['任务数', dash(b.baselineTaskCount)],
       ['备注', dash(b.note)],
-      ['设置人 / 时间', `${dash(b.setBy)} @ ${fmtDate(b.setAt)}`],
+      ['设置人 / 时间', `${dash(b.setBy)} @ ${fmtDateTime(b.setAt)}`],
     ]),
   ].join('\n');
 }
