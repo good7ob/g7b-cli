@@ -16,6 +16,7 @@ import {
   readBatchFile,
   SuiteRef,
 } from '../testcaseFiles';
+import { buildUpdateBody, validateUpdate } from '../testcaseUpdate';
 
 describe('create-batch helpers', () => {
   it('ensureSuitePath creates missing levels once and reuses them', async () => {
@@ -99,7 +100,7 @@ describe('qc testcase CLI', () => {
 
   it('registers the subcommands under qc testcase and the tc alias', () => {
     const help = execSync(`${CLI} qc tc --help`).toString();
-    ['list', 'get', 'create', 'import', 'coverage', 'suites'].forEach((cmd) => expect(help).toContain(cmd));
+    ['list', 'get', 'create', 'update', 'import', 'coverage', 'suites'].forEach((cmd) => expect(help).toContain(cmd));
   });
 
   it('import --dry-run prints script paths without calling the API', () => {
@@ -109,5 +110,44 @@ describe('qc testcase CLI', () => {
     const out = execSync(`${CLI} qc testcase import ${root}/features --product-id 1 --root ${root} --dry-run`).toString();
     expect(out).toContain('features/a.feature');
     expect(out).toContain('--dry-run');
+  });
+});
+
+describe('qc testcase update helpers', () => {
+  const cur = {
+    id: 7, caseNo: 'TC-7', productId: 10, suiteId: 3, subModuleId: null, title: 'T', precondition: 'P',
+    steps: [{ action: 'a', expected: 'b' }], caseType: 'Functional', priority: 'P1', execMode: 'Manual',
+    status: 'Draft', tags: ['x', 'y'], scriptPath: null, scriptScenario: null,
+  };
+
+  it('keeps every untouched field and only changes the requested one', () => {
+    const b = buildUpdateBody(cur, { priority: 'P0' });
+    expect(b).toMatchObject({ priority: 'P0', title: 'T', suiteId: 3, tags: ['x', 'y'], steps: cur.steps, productId: 10 });
+  });
+
+  it('adds, removes and de-duplicates tags; --tags replaces', () => {
+    expect(buildUpdateBody(cur, { addTag: ['y,z', 'w'], removeTag: ['x'] }).tags).toEqual(['y', 'z', 'w']);
+    expect(buildUpdateBody(cur, { tags: 'a, b' }).tags).toEqual(['a', 'b']);
+  });
+
+  it('Automated needs script path and scenario, either already stored or given', () => {
+    expect(() => buildUpdateBody(cur, { mode: 'Automated' })).toThrow('脚本路径');
+    const ok = buildUpdateBody(cur, { mode: 'Automated', scriptPath: 'e2e/a.feature', scriptScenario: 's' });
+    expect(ok).toMatchObject({ execMode: 'Automated', scriptPath: 'e2e/a.feature', scriptScenario: 's' });
+    expect(buildUpdateBody({ ...cur, scriptPath: 'p', scriptScenario: 's' }, { clearScript: true, mode: 'Manual' }))
+      .toMatchObject({ scriptPath: null, scriptScenario: null, execMode: 'Manual' });
+  });
+
+  it('replaces steps when --step is given', () => {
+    expect(buildUpdateBody(cur, { step: ['go::ok'] }).steps).toEqual([{ action: 'go', expected: 'ok' }]);
+  });
+
+  it('validateUpdate rejects no-op, conflicting and multi-case single-only options', () => {
+    expect(() => validateUpdate({}, 1)).toThrow('至少指定');
+    expect(() => validateUpdate({ title: 'x' }, 2)).toThrow('--title');
+    expect(() => validateUpdate({ scriptPath: 'p' }, 3)).toThrow('--script-path');
+    expect(() => validateUpdate({ tags: 'a', addTag: ['b'] }, 1)).toThrow('不能与');
+    expect(() => validateUpdate({ clearScript: true, scriptPath: 'p' }, 1)).toThrow('不能与');
+    expect(() => validateUpdate({ addTag: ['a'] }, 5)).not.toThrow();
   });
 });
