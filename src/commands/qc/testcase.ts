@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import path from 'path';
 import apiClient from '../../services/ApiClient';
 import { fmtDateTime } from '../../utils/cliHelpers';
+import { buildUpdateBody, hasChanges, UpdateOptions, validateUpdate } from './testcaseUpdate';
 import { collectFeatureFiles, ensureSuitePath, parseStep, planBatches, readBatchFile, SuiteRef } from './testcaseFiles';
 
 /**
@@ -16,6 +17,14 @@ const collect = (value: string, previous: string[]): string[] => previous.concat
 const csv = (value?: string): string[] | undefined =>
   value ? value.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
 
+function changedFields(before: any, after: object): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(after as Record<string, unknown>)) {
+    if (JSON.stringify(v) !== JSON.stringify(before[k] ?? null)) out[k] = v;
+  }
+  return out;
+}
+
 function fail(label: string, e: unknown): never {
   console.error(`✗ ${label}:`, e instanceof Error ? e.message : String(e));
   process.exit(1);
@@ -25,7 +34,7 @@ export function registerTestCaseCommands(qcCommand: Command) {
   const tc = qcCommand
     .command('testcase')
     .alias('tc')
-    .description('测试用例库 — 列表、详情、创建、导入 Gherkin、RP 覆盖率、目录');
+    .description('测试用例库 — 列表、详情、创建、修改、导入 Gherkin、RP 覆盖率、目录');
 
   // ── list ──────────────────────────────────────────────────────────────
 
@@ -154,6 +163,57 @@ export function registerTestCaseCommands(qcCommand: Command) {
       } catch (e) {
         fail('创建用例失败', e);
       }
+    });
+
+  // ── update ────────────────────────────────────────────────────────────
+
+  tc.command('update <ids...>')
+    .description('修改测试用例（读取现有用例，仅改指定字段后整体回写）；可一次改多条，如 update 1351 1352 --add-tag playwright-ready')
+    .option('--title <title>', '标题（仅单条）')
+    .option('--precondition <text>', '前置条件')
+    .option('--suite <id>', '目录 ID')
+    .option('--type <type>', 'Functional|UI|API|Integration|Regression|Smoke|E2E')
+    .option('--priority <priority>', 'P0|P1|P2|P3')
+    .option('--mode <mode>', 'Manual|Automated（Automated 须有脚本路径与场景名）')
+    .option('--status <status>', 'Draft|Active|Deprecated')
+    .option('--step <操作::预期>', '步骤，可重复；给出则整体替换原步骤（仅单条）', collect, [])
+    .option('--tags <a,b>', '标签整体替换，逗号分隔')
+    .option('--add-tag <tag>', '追加标签，可重复，逗号分隔也可', collect, [])
+    .option('--remove-tag <tag>', '移除标签，可重复，逗号分隔也可', collect, [])
+    .option('--script-path <path>', '自动化脚本文件相对路径（仅单条）')
+    .option('--script-scenario <name>', '脚本内场景名（仅单条）')
+    .option('--clear-script', '清除脚本路径与场景名（仅单条）')
+    .option('--dry-run', '只显示将修改的内容，不回写')
+    .option('--json', '输出 JSON')
+    .action(async (ids: string[], o) => {
+      const opts: UpdateOptions = o;
+      try {
+        validateUpdate(opts, ids.length);
+      } catch (e) {
+        fail('参数错误', e);
+      }
+      if (!hasChanges(opts)) return;
+      const results: { id: string; caseNo?: string; ok: boolean; error?: string }[] = [];
+      for (const id of ids) {
+        try {
+          const current = await apiClient.get(`/qc/test/cases/${id}`);
+          const body = buildUpdateBody(current, opts);
+          if (o.dryRun) {
+            results.push({ id, caseNo: current.caseNo, ok: true });
+            if (!o.json) console.log(`○ ${current.caseNo} 将更新：${JSON.stringify(changedFields(current, body))}`);
+            continue;
+          }
+          const saved = await apiClient.put(`/qc/test/cases/${id}`, body);
+          results.push({ id, caseNo: saved?.caseNo ?? current.caseNo, ok: true });
+          if (!o.json) console.log(`✓ ${saved?.caseNo ?? current.caseNo} 已更新`);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          results.push({ id, ok: false, error: msg });
+          if (!o.json) console.error(`✗ ${id} 更新失败: ${msg}`);
+        }
+      }
+      if (o.json) console.log(JSON.stringify(results, null, 2));
+      if (results.some((r) => !r.ok)) process.exit(1);
     });
 
   // ── import ────────────────────────────────────────────────────────────
