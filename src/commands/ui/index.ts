@@ -2,11 +2,11 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { InputError, emit, fail, parseId } from '../../utils/cliHelpers';
 import {
-  buildAppBody, buildFlowBody, buildNodeBody, buildScreenBody, buildVersionBody, planScreenshots,
+  buildAppBody, buildFlowBody, buildNodeBody, buildScreenBody, buildVersionBody, planPreview, planScreenshots,
 } from './input';
 import {
-  UiApp, UiFlow, UiFlowNode, UiScreen, UiScreenshot, UiVersion,
-  renderApps, renderFlows, renderNodes, renderScreens, renderScreenshots, renderVersions,
+  UiApp, UiFlow, UiFlowNode, UiPreviewRow, UiScreen, UiScreenshot, UiVersion,
+  renderApps, renderFlows, renderNodes, renderPreviews, renderScreens, renderScreenshots, renderVersions,
 } from './render';
 
 /**
@@ -205,6 +205,37 @@ function registerScreenshotCommands(ui: Command): void {
     });
 }
 
+const PREVIEWS = '/api/v1/ui-previews';
+
+function registerPreviewCommands(ui: Command): void {
+  const preview = ui.command('preview').description('HTML / SVG / PNG design-draft previews (optionally linked to a screen)');
+  preview.command('list').description('List previews of an org, optionally of one screen')
+    .requiredOption('--org <id>', 'Org id').option('--screen <id>', 'Only previews linked to this screen').option(...J)
+    .action(async (o) => {
+      try {
+        const params: Record<string, number> = { orgId: parseId(o.org, '--org') };
+        if (o.screen !== undefined) params.screenId = parseId(o.screen, '--screen');
+        const rows = await list<UiPreviewRow>(PREVIEWS, params);
+        emit(o.json, rows, () => renderPreviews(rows));
+      } catch (e) { fail('获取设计稿预览失败', e); }
+    });
+  preview.command('add')
+    .description('Upload an html/htm/svg/png/zip draft (single-file HTML must be self-contained; use a zip with index.html for CSS/JS)')
+    .requiredOption('--org <id>', 'Org id').requiredOption('--name <name>', 'Name (max 128)')
+    .requiredOption('--file <path>', 'html|htm|svg|png|zip, <=10MB')
+    .option('--screen <id>', 'Link to a UI design screen (same org)').option('--product <id>', 'Product id')
+    .option('--description <text>', 'Description (max 1000)').option('--note <text>', 'Version note (max 500)')
+    .option('--thumbnail <png>', 'Thumbnail PNG (<=5MB) for html/zip').option(...J)
+    .action(async (o) => {
+      try {
+        const plan = planPreview(o);
+        const extra = plan.thumbnail ? { thumbnail: plan.thumbnail } : undefined;
+        const created = await apiClient.uploadFiles(PREVIEWS, [plan.file], 'file', plan.fields, extra);
+        emit(o.json, created, () => `✓ 设计稿预览已创建: ${fmtId(created?.preview ?? created)}`);
+      } catch (e) { fail('上传设计稿预览失败', e); }
+    });
+}
+
 function registerFlowCommands(ui: Command): void {
   const flow = ui.command('flow').description('Screen-transition flows (画面迁移图) of an app');
   const flags = (c: Command) => c.option('--name <name>', 'Flow name (max 128)').option('--description <text>', 'Description (max 512)')
@@ -289,6 +320,7 @@ export function registerUiCommands(program: Command) {
   registerScreenCommands(ui);
   registerVersionCommands(ui);
   registerScreenshotCommands(ui);
+  registerPreviewCommands(ui);
   registerFlowCommands(ui);
   registerNodeCommands(ui);
 }
