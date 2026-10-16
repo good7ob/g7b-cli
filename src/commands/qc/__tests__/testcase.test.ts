@@ -138,6 +138,15 @@ describe('qc testcase update helpers', () => {
       .toMatchObject({ scriptPath: null, scriptScenario: null, execMode: 'Manual' });
   });
 
+  it('sets the automation assessment and keeps the stored one otherwise', () => {
+    expect(buildUpdateBody(cur, { automation: 'READY' })).toMatchObject({ automationFeasibility: 'READY', automationNote: null });
+    const assessed = { ...cur, automationFeasibility: 'MANUAL_ONLY', automationNote: '邮件验证码' };
+    expect(buildUpdateBody(assessed, { priority: 'P0' })).toMatchObject({ automationFeasibility: 'MANUAL_ONLY', automationNote: '邮件验证码' });
+    expect(buildUpdateBody(assessed, { automationNote: '短信' })).toMatchObject({ automationFeasibility: 'MANUAL_ONLY', automationNote: '短信' });
+    expect(() => validateUpdate({ automation: 'MAYBE' }, 1)).toThrow('--automation');
+    expect(() => validateUpdate({ automation: 'PARTIAL' }, 9)).not.toThrow();
+  });
+
   it('replaces steps when --step is given', () => {
     expect(buildUpdateBody(cur, { step: ['go::ok'] }).steps).toEqual([{ action: 'go', expected: 'ok' }]);
   });

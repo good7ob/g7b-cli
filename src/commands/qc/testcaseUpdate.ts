@@ -20,6 +20,8 @@ export interface UpdateOptions {
   scriptPath?: string;
   scriptScenario?: string;
   clearScript?: boolean;
+  automation?: string;
+  automationNote?: string;
 }
 
 /** Fields that only make sense for a single case (unique per case, or free text). */
@@ -27,8 +29,10 @@ const SINGLE_ONLY: (keyof UpdateOptions)[] = ['title', 'step', 'scriptPath', 'sc
 
 const CHANGE_KEYS: (keyof UpdateOptions)[] = [
   'title', 'precondition', 'suite', 'type', 'priority', 'mode', 'status', 'step',
-  'tags', 'addTag', 'removeTag', 'scriptPath', 'scriptScenario', 'clearScript',
+  'tags', 'addTag', 'removeTag', 'scriptPath', 'scriptScenario', 'clearScript', 'automation', 'automationNote',
 ];
+
+export const FEASIBILITIES = ['READY', 'PARTIAL', 'MANUAL_ONLY'];
 
 const has = (v: unknown): boolean => (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== false);
 
@@ -44,6 +48,7 @@ export function validateUpdate(o: UpdateOptions, idCount: number): void {
     if (bad.length) throw new Error(`一次修改多条用例时不能使用：${bad.map((k) => `--${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}`).join('、')}`);
   }
   if (o.clearScript && (o.scriptPath || o.scriptScenario)) throw new Error('--clear-script 不能与 --script-path / --script-scenario 同用');
+  if (o.automation && !FEASIBILITIES.includes(o.automation)) throw new Error(`--automation 只能是 ${FEASIBILITIES.join('|')}`);
   if (o.tags && (has(o.addTag) || has(o.removeTag))) throw new Error('--tags（整体替换）不能与 --add-tag / --remove-tag 同用');
 }
 
@@ -64,6 +69,8 @@ export interface UpdateBody {
   tags: string[];
   scriptPath: string | null;
   scriptScenario: string | null;
+  automationFeasibility: string | null;
+  automationNote: string | null;
 }
 
 /** Merge requested changes into the current case (as returned by GET /qc/test/cases/{id}). */
@@ -100,5 +107,7 @@ export function buildUpdateBody(current: any, o: UpdateOptions): UpdateBody {
     tags: dedupe(tags),
     scriptPath,
     scriptScenario,
+    automationFeasibility: o.automation ?? current.automationFeasibility ?? null,
+    automationNote: o.automationNote !== undefined ? o.automationNote : current.automationNote ?? null,
   };
 }
