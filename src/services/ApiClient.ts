@@ -177,12 +177,13 @@ export class ApiClient {
    * Upload several files under one multipart field (Spring `List<MultipartFile>`).
    * Unlike uploadFile the envelope goes through unwrap, so business errors surface.
    */
-  async uploadFiles(url: string, filePaths: string[], fieldName: string, fields?: Record<string, string>): Promise<any> {
+  async uploadFiles(url: string, filePaths: string[], fieldName: string, fields?: Record<string, string>, extraFiles?: Record<string, string>): Promise<any> {
     try {
       const FormDataLibrary = require('form-data');
       const formData = new FormDataLibrary();
       Object.entries(fields ?? {}).forEach(([key, value]) => formData.append(key, value));
       filePaths.forEach((p) => formData.append(fieldName, fs.readFileSync(p), path.basename(p)));
+      Object.entries(extraFiles ?? {}).forEach(([key, p]) => formData.append(key, fs.readFileSync(p), path.basename(p)));
 
       const response = await this.instance.post(url, formData, {
         headers: formData.getHeaders(),

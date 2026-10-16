@@ -154,3 +154,47 @@ export function planScreenshots(o: ScreenshotFlags): ScreenshotPlan {
     }) as ScreenshotPlan['base'],
   };
 }
+
+export const PREVIEW_EXTENSIONS = ['html', 'htm', 'svg', 'png', 'zip'] as const;
+/** Mirrors PreviewPackageReader.MAX_FILE_BYTES (10MB) and PreviewThumbnails.MAX_SOURCE_BYTES (5MB). */
+export const MAX_PREVIEW_BYTES = 10 * 1024 * 1024;
+export const MAX_THUMBNAIL_BYTES = 5 * 1024 * 1024;
+
+function checkLocalFile(file: string | undefined, label: string, exts: readonly string[], max: number): string {
+  const f = requireText(file, 1024, label);
+  const stat = fs.existsSync(f) ? fs.statSync(f) : undefined;
+  if (!stat || !stat.isFile()) throw new InputError(`${label} 不是可读文件: ${f}`);
+  if (!exts.includes(path.extname(f).slice(1).toLowerCase())) {
+    throw new InputError(`${label} 只支持 ${exts.join('/')}，收到: ${f}`);
+  }
+  if (stat.size === 0) throw new InputError(`${label} 是空文件: ${f}`);
+  if (stat.size > max) throw new InputError(`${label} 超过 ${max / 1048576}MB 上限 (${(stat.size / 1048576).toFixed(1)}MB): ${f}`);
+  return f;
+}
+
+export interface PreviewFlags {
+  org?: string; name?: string; file?: string; screen?: string; product?: string;
+  description?: string; note?: string; thumbnail?: string;
+}
+
+export interface PreviewPlan { file: string; thumbnail?: string; fields: Record<string, string> }
+
+/** Validate `ui preview add` input; fields are the multipart text parts of POST /api/v1/ui-previews. */
+export function planPreview(o: PreviewFlags): PreviewPlan {
+  const fields: Record<string, string> = {
+    orgId: String(parseId(o.org, '--org')),
+    name: requireText(o.name, 128, '--name'),
+  };
+  const optional: [string, string | undefined][] = [
+    ['screenId', o.screen === undefined ? undefined : String(parseId(o.screen, '--screen'))],
+    ['productId', o.product === undefined ? undefined : String(parseId(o.product, '--product'))],
+    ['description', optText(o.description, 1000, '--description')],
+    ['note', optText(o.note, 500, '--note')],
+  ];
+  optional.forEach(([k, v]) => { if (v !== undefined) fields[k] = v; });
+  return {
+    file: checkLocalFile(o.file, '--file', PREVIEW_EXTENSIONS, MAX_PREVIEW_BYTES),
+    thumbnail: o.thumbnail === undefined ? undefined : checkLocalFile(o.thumbnail, '--thumbnail', ['png'], MAX_THUMBNAIL_BYTES),
+    fields,
+  };
+}

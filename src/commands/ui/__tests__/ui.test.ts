@@ -147,6 +147,35 @@ describe('ui screenshot', () => {
   });
 });
 
+describe('ui preview', () => {
+  const html = () => { const f = path.join(dir, 'p.html'); fs.writeFileSync(f, '<html></html>'); return f; };
+
+  it('uploads multipart with screenId and thumbnail', async () => {
+    const r = await ui(['preview', 'add', '--org', '7', '--name', '首页稿', '--file', html(), '--screen', '9', '--thumbnail', png], ok({ preview: { id: 4 } }));
+    const [url, form, cfg] = r.http.post.mock.calls[0];
+    expect(url).toBe('/api/v1/ui-previews');
+    expect(cfg.headers['content-type']).toContain('multipart/form-data');
+    const raw = form.getBuffer().toString();
+    expect(raw).toContain('name="screenId"');
+    expect(raw).toContain('name="thumbnail"');
+    expect(raw).toContain('name="file"');
+    expect(r.stdout).toContain('#4');
+  });
+
+  it('lists previews filtered by screen', async () => {
+    const r = await ui(['preview', 'list', '--org', '7', '--screen', '9'], ok([{ preview: { id: 4, name: '首页稿', kind: 'HTML', screenId: 9 } }]));
+    expect(r.http.get).toHaveBeenCalledWith('/api/v1/ui-previews', { params: { orgId: 7, screenId: 9 } });
+    expect(r.stdout).toContain('首页稿');
+  });
+
+  it('rejects bad input before any HTTP call', async () => {
+    await expectRejected(['preview', 'add', '--org', '7', '--name', 'n', '--file', path.join(dir, 'x.pdf')], '只支持');
+    await expectRejected(['preview', 'add', '--org', '7', '--name', 'n', '--file', path.join(dir, 'nope.html')], '不是可读文件');
+    await expectRejected(['preview', 'add', '--org', '7', '--name', 'n', '--file', html(), '--screen', 'abc'], '--screen');
+    await expectRejected(['preview', 'add', '--org', '7', '--name', 'n', '--file', html(), '--thumbnail', path.join(dir, 'b.jpg')], '--thumbnail');
+  });
+});
+
 describe('ui flow / node', () => {
   it('creates a flow and updates it keeping the description', async () => {
     const created = await ui(['flow', 'create', '4', '--name', '下单流程'], ok({ id: 8 }));

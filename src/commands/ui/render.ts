@@ -56,3 +56,14 @@ export function renderNodes(list: UiFlowNode[], names?: Map<number, string>): st
   return renderTable([['ID', 'FROM', '', 'TO', 'TRIGGER', 'CONDITION', 'SORT'],
     ...list.map((n) => [String(n.id), label(n.fromScreenId), '→', label(n.toScreenId), dash(n.triggerDesc), dash(n.conditionDesc), dash(n.sortOrder)])]);
 }
+
+export interface UiPreviewRow {
+  preview?: { id: number; name?: string; kind?: string; screenId?: number | null; currentVersionId?: number | null; updatedAt?: ApiDate };
+  thumbnailPath?: string | null;
+}
+
+export function renderPreviews(list: UiPreviewRow[]): string {
+  if (!list.length) return empty('设计稿预览');
+  return renderTable([['ID', 'KIND', 'SCREEN', 'NAME', 'UPDATED'],
+    ...list.map(({ preview: p }) => [String(p?.id ?? '-'), dash(p?.kind), dash(p?.screenId), dash(p?.name), fmtDateTime(p?.updatedAt)])], { 3: wrap(40) });
+}
