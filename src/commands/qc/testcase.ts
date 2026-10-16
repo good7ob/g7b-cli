@@ -34,7 +34,7 @@ export function registerTestCaseCommands(qcCommand: Command) {
   const tc = qcCommand
     .command('testcase')
     .alias('tc')
-    .description('测试用例库 — 列表、详情、创建、修改、导入 Gherkin、RP 覆盖率、目录');
+    .description('测试用例库 — 列表、详情、创建、修改、导入 Gherkin、RP 覆盖率、目录；自动化评估见 --automation');
 
   // ── list ──────────────────────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ export function registerTestCaseCommands(qcCommand: Command) {
     .option('--priority <priority>', 'P0|P1|P2|P3，逗号分隔')
     .option('--type <type>', 'Functional|UI|API|Integration|Regression|Smoke|E2E，逗号分隔')
     .option('--mode <mode>', 'Manual|Automated')
+    .option('--automation <value>', '自动化评估：READY|PARTIAL|MANUAL_ONLY|UNASSESSED（未评估）')
     .option('--keyword <keyword>', '标题或编号关键词')
     .option('-p, --page <num>', '页码', '1')
     .option('-l, --limit <num>', '每页条数', '20')
@@ -58,6 +59,7 @@ export function registerTestCaseCommands(qcCommand: Command) {
           priorities: csv(o.priority),
           caseTypes: csv(o.type),
           execMode: o.mode,
+          automationFeasibility: o.automation,
           keyword: o.keyword,
           pageNum: Number(o.page),
           pageSize: Number(o.limit),
@@ -67,9 +69,9 @@ export function registerTestCaseCommands(qcCommand: Command) {
         if (!cases.length) { console.log('未找到测试用例。'); return; }
 
         console.log(`\n测试用例 — 产品 ${productId}  (共 ${result.total} 条)`);
-        console.log('─'.repeat(110));
-        console.log('编号'.padEnd(10) + '标题'.padEnd(40) + '类型'.padEnd(13) + '优先级'.padEnd(7) + '执行'.padEnd(11) + '状态'.padEnd(8) + '更新时间');
-        console.log('─'.repeat(110));
+        console.log('─'.repeat(123));
+        console.log('编号'.padEnd(10) + '标题'.padEnd(40) + '类型'.padEnd(13) + '优先级'.padEnd(7) + '执行'.padEnd(11) + '自动化评估'.padEnd(13) + '状态'.padEnd(8) + '更新时间');
+        console.log('─'.repeat(123));
         cases.forEach((c) => {
           console.log(
             String(c.caseNo).padEnd(10) +
@@ -77,11 +79,12 @@ export function registerTestCaseCommands(qcCommand: Command) {
             (c.caseType || '').padEnd(13) +
             (c.priority || '').padEnd(7) +
             (c.execMode || '').padEnd(11) +
+            (c.automationFeasibility || '-').padEnd(13) +
             (STATUS_CN[c.status] || c.status || '').padEnd(8) +
             fmtDateTime(c.updatedAt, '-')
           );
         });
-        console.log('─'.repeat(110));
+        console.log('─'.repeat(123));
         if (result.total > cases.length) console.log(`（第 ${o.page} 页，共 ${result.total} 条）`);
         console.log();
       } catch (e) {
@@ -104,6 +107,7 @@ export function registerTestCaseCommands(qcCommand: Command) {
         console.log(`标题:       ${c.title}`);
         console.log(`状态:       ${STATUS_CN[c.status] ?? c.status} (${c.status})   类型: ${c.caseType}   优先级: ${c.priority}`);
         console.log(`执行方式:   ${c.execMode}   来源: ${SOURCE_CN[c.source] ?? c.source}`);
+        if (c.automationFeasibility) console.log(`自动化评估: ${c.automationFeasibility}${c.automationNote ? `  — ${c.automationNote}` : ''}`);
         if (c.scriptPath) console.log(`脚本位置:   ${c.scriptPath}  ›  ${c.scriptScenario}`);
         if (c.tags?.length) console.log(`标签:       ${c.tags.join(', ')}`);
         if (c.precondition) console.log(`前置条件:\n  ${c.precondition.replace(/\n/g, '\n  ')}`);
@@ -139,6 +143,8 @@ export function registerTestCaseCommands(qcCommand: Command) {
     .option('--tag <tag>', '标签，可重复', collect, [])
     .option('--script-path <path>', '自动化脚本文件相对路径（Automated 必填）')
     .option('--script-scenario <name>', '脚本内场景名（Automated 必填）')
+    .option('--automation <value>', '自动化评估：READY|PARTIAL|MANUAL_ONLY')
+    .option('--automation-note <text>', '自动化评估说明（如不适合的原因）')
     .option('--rp <ids>', '关联 RP ID，逗号分隔')
     .option('--json', '输出 JSON')
     .action(async (o) => {
@@ -156,6 +162,8 @@ export function registerTestCaseCommands(qcCommand: Command) {
           tags: o.tag,
           scriptPath: o.scriptPath,
           scriptScenario: o.scriptScenario,
+          automationFeasibility: o.automation,
+          automationNote: o.automationNote,
           rulePointIds: csv(o.rp)?.map(Number),
         });
         if (o.json) { console.log(JSON.stringify(created, null, 2)); return; }
@@ -183,6 +191,8 @@ export function registerTestCaseCommands(qcCommand: Command) {
     .option('--script-path <path>', '自动化脚本文件相对路径（仅单条）')
     .option('--script-scenario <name>', '脚本内场景名（仅单条）')
     .option('--clear-script', '清除脚本路径与场景名（仅单条）')
+    .option('--automation <value>', '自动化评估：READY|PARTIAL|MANUAL_ONLY')
+    .option('--automation-note <text>', '自动化评估说明（可多条共用同一说明）')
     .option('--dry-run', '只显示将修改的内容，不回写')
     .option('--json', '输出 JSON')
     .action(async (ids: string[], o) => {
