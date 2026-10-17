@@ -36,6 +36,7 @@ import { registerGithubCommands } from './commands/github';
 import { registerUiCommands } from './commands/ui';
 import { registerProgressCommands } from './commands/progress';
 import { registerEstimateCommands } from './commands/estimate';
+import { registerEvalCommands } from './commands/eval';
 import { registerArtifactCommands } from './commands/artifact';
 
 const program = new Command();
@@ -76,6 +77,7 @@ registerHeartbeatCommands(program);
 registerUiCommands(program);
 registerProgressCommands(program);
 registerEstimateCommands(program);
+registerEvalCommands(program);
 registerArtifactCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
