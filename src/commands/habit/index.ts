@@ -1,12 +1,11 @@
 import { writeFileSync } from 'fs';
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { AI_REQUEST_CONFIG, InputError, emit, guarded, parseId, withTimeoutHint } from '../../utils/cliHelpers';
+import { InputError, emit, guarded, parseId } from '../../utils/cliHelpers';
 import {
-  AI_TIMEOUT_HINT, HABIT_ERROR_CODES, SCOPES, buildFilters, buildHabitBody, confirmOrThrow, hasHabitEdits, oneOf,
-  parseDays, parseSources, parseVersion, precheckHabitEdits,
+  HABIT_ERROR_CODES, SCOPES, buildFilters, buildHabitBody, confirmOrThrow, hasHabitEdits, oneOf, parseVersion, precheckHabitEdits,
 } from './input';
-import { Habit, flatten, renderHabit, renderHabits, renderUsage } from './render';
+import { Habit, flatten, renderHabit, renderHabits } from './render';
 import { registerWorkflowCommands } from './workflow';
 
 /**
@@ -41,13 +40,14 @@ async function findHabit(id: number, status?: string): Promise<Habit> {
 }
 
 export function registerHabitCommands(program: Command) {
-  const habit = program.command('habit').description('我的工作习惯与个人工作流（子命令: list add edit enable disable remove export candidates confirm reject extract workflow）');
+  const habit = program.command('habit').description('我的工作习惯与个人工作流（子命令: list add edit enable disable remove export candidates confirm reject workflow）');
 
   withFilters(habit.command('list'))
     .description('列出习惯（默认含启用与停用，不含待确认候选）')
     .option('--status <s>', 'ENABLED | DISABLED')
     .option('--json', '输出 JSON')
     .action((o) => run('读取习惯列表失败', async () => {
+      if (o.status) oneOf(o.status, ['ENABLED', 'DISABLED'], '--status'); // 待确认候选请用 habit candidates
       const data = await apiClient.get(BASE, buildFilters(o));
       emit(o.json, data, () => renderHabits(data));
     }));
@@ -103,16 +103,20 @@ export function registerHabitCommands(program: Command) {
     .option('--status <s>', '仅 --scope filtered 生效')
     .option('--scope <scope>', 'enabled（全部启用条目，默认）| filtered（按筛选条件）', 'enabled')
     .option('--include-workflows', '追加「工作流」章节（本人全部启用的工作流）')
-    .option('--out <file>', '写入文件')
+    .option('--workflows', '同 --include-workflows')
+    .option('--out <file>', '写入文件（已存在则覆盖）')
+    .option('--file <file>', '同 --out')
     .option('--json', '输出接口返回的 JSON（含 markdown / habitCount / workflowCount / filename）')
     .action((o) => run('导出习惯失败', async () => {
+      const withWorkflows = o.includeWorkflows || o.workflows;
+      const out: string | undefined = o.out ?? o.file;
       const scope = oneOf(o.scope, SCOPES.map((s) => s.toUpperCase()), '--scope').toLowerCase();
-      const params = { scope, includeWorkflows: o.includeWorkflows ? 'true' : undefined, ...(scope === 'filtered' ? buildFilters(o) : {}) };
+      const params = { scope, includeWorkflows: withWorkflows ? 'true' : undefined, ...(scope === 'filtered' ? buildFilters(o) : {}) };
       const data = await apiClient.get(`${BASE}/export`, Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined)));
       const md: string = data?.markdown ?? '';
-      if (o.out) {
-        writeFileSync(o.out, md.endsWith('\n') ? md : `${md}\n`);
-        return emit(o.json, data, () => `✓ 已写入 ${o.out}（习惯 ${data.habitCount} 条，工作流 ${data.workflowCount ?? 0} 个）`);
+      if (out) {
+        writeFileSync(out, md.endsWith('\n') ? md : `${md}\n`);
+        return emit(o.json, data, () => `✓ 已写入 ${out}（习惯 ${data.habitCount} 条，工作流 ${data.workflowCount ?? 0} 个）`);
       }
       // 标准输出保持原样（不过滤控制字符），便于 > file 重定向
       console.log(o.json ? JSON.stringify(data, null, 2) : md.replace(/\n$/, ''));
@@ -146,24 +150,6 @@ export function registerHabitCommands(program: Command) {
       const current = await findHabit(id, 'PENDING');
       await apiClient.post(`${BASE}/${id}/reject`, { version: current.version });
       emit(o.json, { id, rejected: true }, () => `✓ 已拒绝候选 #${id}`);
-    }));
-
-  habit.command('extract')
-    .description('触发 AI 从你的工作日志 / 提交 / 任务记录提取习惯候选（同步等待；消耗 AI 额度，自带 Key 时不扣费）')
-    .option('--days <n>', '回看天数 1～90', '30')
-    .option('--sources <list>', '逗号分隔：WORK_LOG,COMMIT,TASK（默认全选）')
-    .option('--json', '输出 JSON')
-    .action((o) => run('提取习惯候选失败', async () => {
-      const body = { days: parseDays(o.days), sources: parseSources(o.sources, 'extract') };
-      console.error('正在调用 AI 提取习惯候选，会消耗 AI 额度（自带 API Key 时不扣费），请稍候…');
-      const res = await apiClient.post(`${BASE}/extract`, body, AI_REQUEST_CONFIG).catch((e: unknown) => {
-        throw withTimeoutHint(e, AI_TIMEOUT_HINT);
-      });
-      emit(o.json, res, () => {
-        const text = renderHabits({ groups: [{ items: res?.candidates ?? [] }] }, true);
-        return `✓ 新增候选 ${res?.createdCount ?? 0} 条，过滤重复 ${res?.filteredCount ?? 0} 条，待确认共 ${res?.pendingTotal ?? 0} 条。${renderUsage(res?.usage)}\n${
-          res?.createdCount ? text : '没有发现新的习惯'}\n下一步：good7ob habit confirm <id> | reject <id>`;
-      });
     }));
 
   registerWorkflowCommands(habit);

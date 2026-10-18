@@ -42,6 +42,10 @@ describe('habit list', () => {
   it.each([['--category', 'x'], ['--level', 'x'], ['--source', 'x'], ['--status', 'x']])('rejects bad %s', (f, v) => rejects(['list', f, v], f));
 });
 
+describe('habit list --status', () => {
+  it('PENDING is not a list status (use candidates)', () => rejects(['list', '--status', 'PENDING'], '--status'));
+});
+
 describe('habit add', () => {
   const ok1 = { title: '汇报用中文', content: '一律用中文。', category: 'communication' };
   const flags = ['add', '--title', ok1.title, '--content', ok1.content, '--category', ok1.category];
@@ -161,6 +165,12 @@ describe('habit export', () => {
     expect(r.exitCode).toBe(1);
     expect(r.stderr).toContain('没有可导出的习惯');
   });
+  it('--workflows and --file are aliases of --include-workflows and --out', async () => {
+    const out = join(mkdtempSync(join(tmpdir(), 'habit-')), 'a.md');
+    const r = await cli(['export', '--workflows', '--file', out], ok(data));
+    expect(r.http.get).toHaveBeenCalledWith(`${B}/export`, { params: { scope: 'enabled', includeWorkflows: 'true' } });
+    expect(readFileSync(out, 'utf8')).toBe(data.markdown);
+  });
   it('rejects a bad scope', () => rejects(['export', '--scope', 'all'], '--scope'));
 });
 
@@ -196,34 +206,5 @@ describe('habit candidates / confirm / reject', () => {
   it('1007 maps to a status hint', async () => {
     const r = await cli(['confirm', '301'], (m) => (m === 'get' ? ok(grouped(cand)) : bizError(1007, '该条目不是待确认状态')));
     expect(r.stderr).toContain('当前状态不支持');
-  });
-});
-
-describe('habit extract', () => {
-  const res = { candidates: [habit({ id: 301, status: 'PENDING', confidence: 'MEDIUM', evidence: [] })], createdCount: 1, filteredCount: 3, pendingTotal: 7, usage: { billed: true, credits: 120 } };
-  it('POSTs days/sources with the long AI timeout and warns about cost on stderr', async () => {
-    const r = await cli(['extract', '--days', '7', '--sources', 'work_log,commit'], ok(res));
-    expect(r.http.post).toHaveBeenCalledWith(`${B}/extract`, { days: 7, sources: ['WORK_LOG', 'COMMIT'] }, { timeout: 180000 });
-    expect(r.stderr).toContain('消耗 AI 额度');
-    expect(r.stdout).toContain('新增候选 1 条');
-    expect(r.stdout).toContain('已扣除 120');
-  });
-  it('defaults to 30 days and all sources; BYOK shown as unbilled; nothing new', async () => {
-    const r = await cli(['extract'], ok({ candidates: [], createdCount: 0, filteredCount: 2, pendingTotal: 0, usage: { billed: false, credits: 0 } }));
-    expect(lastCall(r.http.post)[1]).toEqual({ days: 30, sources: undefined });
-    expect(r.stdout).toContain('没有发现新的习惯');
-    expect(r.stdout).toContain('未扣费');
-  });
-  it.each([['--days', '0'], ['--days', '91'], ['--days', 'x'], ['--sources', 'EMAIL']])('rejects %s %s', (f, v) => rejects(['extract', f, v], f));
-  it('maps 4015 / 9011 / 1016 / 1017 / 1007', async () => {
-    const msgs: Record<number, string> = { 4015: 'AI 余额不足', 9011: 'AI 服务暂时不可用', 1016: '不要重复提交', 1017: '数量上限', 1007: '当前状态不支持' };
-    for (const [code, needle] of Object.entries(msgs)) {
-      const r = await cli(['extract'], bizError(Number(code), 'x'));
-      expect(r.exitCode).toBe(1);
-      expect(r.stderr).toContain(needle);
-    }
-  });
-  it('--json passes the data through', async () => {
-    expect(JSON.parse((await cli(['extract', '--json'], ok(res))).stdout).createdCount).toBe(1);
   });
 });

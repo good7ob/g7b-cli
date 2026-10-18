@@ -13,11 +13,8 @@ export const LEVELS = ['STABLE', 'LOCAL'] as const;
 export const SOURCES = ['MANUAL', 'AI_EXTRACTED'] as const;
 export const STATUSES = ['ENABLED', 'DISABLED', 'PENDING'] as const;
 export const SCOPES = ['enabled', 'filtered'] as const;
-export const MODES = ['replace', 'save-as-new'] as const;
 /** CLI 场景词 -> 接口枚举 */
 export const SCENES: Record<string, string> = { daily: 'EVERY_DAY', task: 'SINGLE_TASK' };
-const EXTRACT_SOURCES = ['WORK_LOG', 'COMMIT', 'TASK'] as const;
-const GENERATE_SOURCES = ['WORK_LOG', 'TASK'] as const;
 
 /** 后端错误码 -> 中文提示（服务端原文附在方括号里）。 */
 export const HABIT_ERROR_CODES: ErrorCodeMap = {
@@ -26,14 +23,9 @@ export const HABIT_ERROR_CODES: ErrorCodeMap = {
   1006: '已存在同名数据，或该建议已有未处理的修订草稿',
   1007: '当前状态不支持该操作',
   1009: '内容已被其他窗口修改，请刷新（重新读取）后重试',
-  1016: '请不要重复提交，上一次请求仍在处理',
   1017: '已达数量上限，请先清理',
   2000: '暂无权限（AI 员工身份不能使用本功能）',
-  4015: 'AI 余额不足，请充值或配置自己的 API Key 后重试（本次未生成）',
-  9011: 'AI 服务暂时不可用或超时，请稍后重试（本次未扣费）',
 };
-
-export const AI_TIMEOUT_HINT = '服务端可能仍在处理并已计费，先用 list / candidates / workflow draft list 核对，不要盲目重试';
 
 const cpLen = (s: string) => Array.from(s).length;
 
@@ -108,34 +100,11 @@ export function parseVersion(raw: string | undefined): number | undefined {
   return raw === undefined ? undefined : parseIntInRange(raw, '--version', 1, 2_000_000_000);
 }
 
-export function parseDays(raw: string | undefined): number {
-  return raw === undefined ? 30 : parseIntInRange(raw, '--days', 1, 90);
-}
-
-export function parseSources(raw: string | undefined, kind: 'extract' | 'generate'): string[] | undefined {
-  if (raw === undefined) return undefined;
-  const allowed = kind === 'extract' ? EXTRACT_SOURCES : GENERATE_SOURCES;
-  const list = Array.from(new Set(raw.split(',').map((s) => oneOf(s, allowed, '--sources'))));
-  return list;
-}
-
 export function parseScene(raw: string, label = '--scene'): string {
   const key = raw.trim();
   const scene = SCENES[key.toLowerCase()] ?? Object.values(SCENES).find((v) => v === key.toUpperCase());
   if (!scene) throw new InputError(`${label} 取值无效: ${raw}（可选: ${Object.keys(SCENES).join(' | ')}）`);
   return scene;
-}
-
-export function parseMode(raw: string | undefined): 'REPLACE' | 'SAVE_AS_NEW' | undefined {
-  if (raw === undefined) return undefined;
-  const mode = requireOneOf(raw.trim().toLowerCase(), MODES, '--mode');
-  return mode === 'replace' ? 'REPLACE' : 'SAVE_AS_NEW';
-}
-
-export function parseSuggestions(raw: string): number[] {
-  const nos = Array.from(new Set(raw.split(',').map((p) => parseId(p, '--suggestions 的每一项'))));
-  if (nos.length === 0) throw new InputError('--suggestions 不能为空（逗号分隔的建议编号，如 1,3）');
-  return nos;
 }
 
 // ── 工作流 ──
