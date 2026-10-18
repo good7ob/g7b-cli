@@ -13,7 +13,8 @@ export function registerTaskCommands(pmCommand: Command) {
   taskCommand
     .command('list [project-id]')
     .description('List tasks in a project')
-    .option('--status <status>', 'Filter by status (not_started|in_progress|completed|blocked|cancelled)')
+    .option('--status <status>', 'Filter by status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
+    .option('--include-on-hold', 'Include on_hold tasks (hidden by default; --status on_hold also shows them)')
     .option('--priority <priority>', 'Filter by priority (high|medium|low)')
     .option('--tags <tags>', 'Filter by tag names (comma-separated)')
     .option('--parent-task-id <id>', 'List sub-tasks of a parent task')
@@ -26,6 +27,8 @@ export function registerTaskCommands(pmCommand: Command) {
         const projectId = currentProjectId(projectArg);
         const params: any = { sort: options.sort, order: options.order };
         if (options.status) params.status = options.status;
+        // on_hold tasks are ignored unless asked for
+        params.includeOnHold = Boolean(options.includeOnHold) || options.status === 'on_hold';
         if (options.priority) params.priority = options.priority;
         if (options.tags) params.tags = options.tags;
         if (options.parentTaskId) params.parentTaskId = options.parentTaskId;
@@ -162,7 +165,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--name <name>', 'Task name')
     .option('--description <desc>', 'Task description')
     .option('--priority <priority>', 'Priority (high|medium|low)')
-    .option('--status <status>', 'Status (not_started|in_progress|completed|blocked|cancelled)')
+    .option('--status <status>', 'Status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID')
