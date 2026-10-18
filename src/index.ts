@@ -37,6 +37,7 @@ import { registerUiCommands } from './commands/ui';
 import { registerProgressCommands } from './commands/progress';
 import { registerEstimateCommands } from './commands/estimate';
 import { registerEvalCommands } from './commands/eval';
+import { registerHabitCommands } from './commands/habit';
 import { registerArtifactCommands } from './commands/artifact';
 
 const program = new Command();
@@ -78,6 +79,7 @@ registerUiCommands(program);
 registerProgressCommands(program);
 registerEstimateCommands(program);
 registerEvalCommands(program);
+registerHabitCommands(program);
 registerArtifactCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root

@@ -263,6 +263,25 @@ good7ob whoami
 
 Who the configured API key acts as: a user, or an AI employee (id, nickname, org, role, capabilities, product scope). See `FEATURES.md`.
 
+### `habit`
+
+My work habits and personal workflows (prd-0127 FP-7; endpoints `/api/v1/me/work-habits`, `/me/work-workflows`). Acts as the logged-in user only. Starting a workflow run is not a CLI command — runs are started only by an Agent / AI employee via MCP. `--json` prints the raw `data` (`remove` prints `{id, removed:true}`, `reject` prints `{id, rejected:true}`).
+
+```bash
+good7ob habit list [--category PROCESS|CODE|COMMUNICATION|TOOL|OTHER] [--level STABLE|LOCAL] [--source MANUAL|AI_EXTRACTED] [--status ENABLED|DISABLED] [--keyword <text>]
+good7ob habit add --title "汇报用中文" --content "回复和完成汇报一律用中文" --category COMMUNICATION [--level STABLE]
+good7ob habit edit <id> [--title ..] [--content ..] [--category ..] [--level ..] [--version <n>]
+good7ob habit enable <id> | disable <id> | remove <id> [--yes]
+good7ob habit export [--out habits.md] [--scope enabled|filtered] [--include-workflows|--workflows]   # Markdown to stdout or file (--out/--file overwrites)
+good7ob habit candidates | confirm <id> [--title ..] | reject <id>
+
+good7ob habit workflow list [--scene daily|task] | show <id> | enable <id> | disable <id> | default <id> | remove <id> [--yes]
+good7ob habit workflow add --name 每日开工 --scene daily --step 看待办 --step 定三件事   # or --from-file steps.json|yaml
+good7ob habit workflow edit <id> [--name ..] [--step ..] [--from-file ..] [--version <n>]
+```
+
+See `FEATURES.md` (habit) for the file format, error codes and rules.
+
 ### `agent`
 
 Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine (`~/.good7ob/agent-state.json`): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.

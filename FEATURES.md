@@ -1380,6 +1380,69 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 
 ---
 
+## habit — 我的工作习惯与个人工作流
+
+API 端点：`/api/v1/me/work-habits`、`/api/v1/me/work-workflows`（prd-0127 FP-7，`rp-user-habit-0047~0051 / 0079`；契约 api-0122 / api-0124）。只操作本人数据（身份取自 API Key，接口不接收用户 ID）；规则（重名、上限、乐观锁）由后端保证，CLI 只做参数校验与展示。**CLI 不提供启动运行命令**，运行只由 Agent / AI 员工经 MCP 启动。内容只打印到终端或 `--out` 指定的文件，不写日志文件。时间按 JST 显示。`--json` 输出接口返回的原始 `data`（接口无返回数据的 `remove` / `reject` 输出 `{id, removed:true}` / `{id, rejected:true}`）。**本期不含** `extract` / `workflow generate` / 修订 / 草稿 / 示例子命令（api-0124 §13 不在 CLI 范围），AI 提取与生成请用页面。
+
+### 习惯
+
+| 命令 | 说明 |
+|------|------|
+| `habit list [--category --level --source --status --keyword]` | 列出习惯，按分类分组；默认含启用与停用，不含待确认候选。枚举取英文码（不区分大小写）：category `PROCESS CODE COMMUNICATION TOOL OTHER`，level `STABLE LOCAL`，source `MANUAL AI_EXTRACTED`，status `ENABLED DISABLED` |
+| `habit add --title --content --category [--level]` | 新增；标题 ≤50 字、内容 ≤500 字（按字符数），level 缺省 `LOCAL` |
+| `habit edit <id> [--title --content --category --level] [--version n]` | 只改给出的字段，其余取当前值整体提交；version 自动取当前值，`--version` 指定你看到的版本，不一致返回 1009 |
+| `habit enable <id>` / `habit disable <id>` | 启用 / 停用（取当前 version） |
+| `habit remove <id> [--yes]` | 软删除；交互终端二次确认，非交互环境必须 `--yes` |
+| `habit export [--out f] [--scope enabled\|filtered] [--include-workflows] [筛选项]` | 导出启用的习惯为 Markdown，默认标准输出（原样、可 `> file`），`--out` 写文件（已存在则覆盖）；`--file` / `--workflows` 分别是 `--out` / `--include-workflows` 的别名；`--scope filtered` 才应用筛选；没有可导出内容时服务端返回 1002 |
+| `habit candidates [筛选项]` | 待确认的 AI 提取候选（置信度、证据摘要）。需后端 P2 已部署 |
+| `habit confirm <id> [--title --content --category --level]` | 确认候选；带任一编辑项则四项整体校验提交，缺项取候选原值；不带则原样确认 |
+| `habit reject <id>` | 拒绝候选 |
+
+### 工作流 `habit workflow`
+
+| 命令 | 说明 |
+|------|------|
+| `list [--scene daily\|task] [--status]` / `show <id>` | 列表（不含草稿）/ 详情（步骤、步骤 ID、关联的启用习惯） |
+| `add --name --scene (--step <标题>... \| --from-file f)` | 新增（启用、非默认）；`--step` 可重复，按顺序，仅标题；需要步骤说明、关联习惯（`habitIds`，每步 ≤5）时用文件。1～20 步，名称 ≤50 字、说明 ≤200 字、步骤标题 ≤50 字、步骤说明 ≤300 字 |
+| `edit <id> [--name --description --scene --step... --from-file] [--version n]` | 整体保存：给出的覆盖当前值；`--step` 会替换全部步骤（步骤 ID 与关联习惯丢失），要保留请用 `--from-file` 并写上 `id` |
+| `enable <id>` / `disable <id>` / `default <id>` / `remove <id> [--yes]` | 启停（取当前 version）/ 设为场景默认（须已启用）/ 软删除 |
+
+**步骤文件**（`--from-file`，扩展名 `.yml/.yaml` 按 YAML，其余按 JSON）：步骤数组，或对象；命令行 `--name/--scene/...` 优先于文件；`--step` 与 `--from-file` 不能同时用。
+
+```yaml
+name: 缺陷修复流程
+description: 先复现再修
+scene: task            # daily | task
+steps:
+  - id: 31             # 仅 edit：沿用已有步骤 ID
+    title: 复现问题
+    description: 先写失败用例
+    habitIds: [101]
+  - 补回归测试          # 纯字符串 = 只有标题
+```
+
+### 错误码
+
+| code | 提示 |
+|------|------|
+| 1001 | 参数不合法 |
+| 1002 | 数据不存在或不属于你 |
+| 1006 | 已存在同名数据 |
+| 1007 | 当前状态不支持该操作 |
+| 1009 | 内容已被其他窗口修改，请刷新后重试 |
+| 1017 | 已达数量上限（习惯 200 / 工作流 10） |
+| 2000 | 暂无权限（AI 员工身份不能使用） |
+
+退出码：成功 0，参数错误或接口失败 1。服务端原始提示附在中文提示后的方括号内。
+
+```bash
+good7ob habit add --title "一主题一分支一 PR" --content "每个主题单独建分支、单独提 PR" --category PROCESS --level STABLE
+good7ob habit export --include-workflows --out my-habits.md
+good7ob habit workflow add --name 每日开工 --scene daily --step 看待办 --step 定三件事
+```
+
+---
+
 ## 输出格式
 
 所有列表命令均支持多种输出格式：
@@ -1413,6 +1476,7 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 | `commander` | ^9.4.1 | CLI 命令解析 |
 | `form-data` | ^4.0.5 | 文件上传 |
 | `table` | ^6.8.1 | 表格格式化 |
+| `yaml` | ^2.5.1 | 工作流步骤文件（YAML） |
 | `ts-node` | ^10.9.1 | TypeScript 运行时 |
 
 ### 开发依赖
