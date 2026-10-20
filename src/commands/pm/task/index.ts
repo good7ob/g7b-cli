@@ -133,6 +133,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID (for sub-tasks)')
+    .option('--estimated-hours <hours>', 'Estimated hours')
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
@@ -146,6 +147,7 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.deadline) body.deadline = options.deadline;
         if (options.ownerId) body.ownerId = parseInt(options.ownerId);
         if (options.parentTaskId) body.parentTaskId = parseInt(options.parentTaskId);
+        if (options.estimatedHours) body.estimatedHours = parseFloat(options.estimatedHours);
 
         const task = await apiClient.post('/progress/tasks', body);
         if (options.json) {
@@ -171,6 +173,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--parent-task-id <id>', 'Parent task ID')
     .option('--project-id <id>', 'Move the task to another project (no pre-flight checks — prefer `pm task move`)')
     .option('--estimated-hours <hours>', 'Estimated hours')
+    .option('--actual-hours <hours>', 'Actual hours spent')
     .action(async (id, options) => {
       try {
         const body: any = {};
@@ -185,6 +188,7 @@ export function registerTaskCommands(pmCommand: Command) {
         // g7b #1093 - MCP update_task already had this field in its schema; the CLI's
         // `pm task update` never exposed it, so add the matching numeric option here.
         if (options.estimatedHours) body.estimatedHours = parseFloat(options.estimatedHours);
+        if (options.actualHours) body.actualHours = parseFloat(options.actualHours);
 
         await apiClient.put(`/progress/tasks/${id}`, body);
         console.log(`✓ 任务已更新: ${id}`);
