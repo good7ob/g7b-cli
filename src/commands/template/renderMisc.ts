@@ -53,8 +53,8 @@ export function renderReviewSaved(r: ReviewVo, templateId: number): string {
 interface PackageItemVo {
   templateId?: number; templateName?: string | null; templateType?: string | null; templateStatus?: string | null;
   publishedVersion?: string | null; versionConstraint?: string | null;
-  // 1.2.0: set by the backend when a member can no longer be instantiated (field names assumed: backend in progress)
-  invalid?: boolean | null; invalidReason?: string | null;
+  // 1.2.0 (backend #737): invalidReason is a code, invalidMessage the Chinese text
+  invalid?: boolean | null; invalidReason?: string | null; invalidMessage?: string | null;
 }
 export interface PackageVo {
   id: number; name?: string | null; description?: string | null; visibility?: string | null; status?: string | null;
@@ -71,6 +71,11 @@ export function renderPackageList(result: unknown, pageNum: number, pageSize: nu
   );
   return `${renderTable(rows, { 5: { truncate: 40 } })}\n${pageFooter(result, records, pageNum, pageSize)}`;
 }
+
+const INVALID_REASON_TEXT: Record<string, string> = {
+  NOT_FOUND: '模板不存在', DELETED: '已删除', NOT_PUBLISHED: '未发布', ARCHIVED: '已归档', SUSPENDED: '已下架', SCOPE_TOO_NARROW: '可见范围过窄',
+};
+const invalidText = (i: PackageItemVo): string => i.invalidMessage || (i.invalidReason ? INVALID_REASON_TEXT[i.invalidReason] ?? i.invalidReason : '');
 
 export function renderPackage(p: PackageVo): string {
   const items = p.items ?? [];
@@ -89,7 +94,7 @@ export function renderPackage(p: PackageVo): string {
   const rows = [['模板', '名称', '类型', '状态', '已发布版本', '版本约束']].concat(
     items.map((i) => [`#${dash(i.templateId)}`, dash(i.templateName), dash(i.templateType), i.invalid ? '已失效' : dash(i.templateStatus), dash(i.publishedVersion), dash(i.versionConstraint)])
   );
-  const invalid = items.filter((i) => i.invalid).map((i) => `⚠ 模板 #${dash(i.templateId)} 已失效${i.invalidReason ? `：${i.invalidReason}` : ''}`);
+  const invalid = items.filter((i) => i.invalid).map((i) => `⚠ 模板 #${dash(i.templateId)} 已失效${invalidText(i) ? `：${invalidText(i)}` : ''}`);
   return [...lines, `条目 (${items.length})`, renderTable(rows), ...invalid].join('\n');
 }
 
