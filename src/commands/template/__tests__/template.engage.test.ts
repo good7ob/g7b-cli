@@ -130,9 +130,11 @@ describe('template package', () => {
   });
 
   it('get marks members the backend reports as invalid (invalid / invalidReason)', async () => {
-    const r = await tpl(['package', 'get', '5'], ok({ ...pkg, items: [{ ...pkg.items[0], invalid: true, invalidReason: '模板已下架' }, pkg.items[1]] }));
+    const r = await tpl(['package', 'get', '5'], ok({ ...pkg, items: [{ ...pkg.items[0], invalid: true, invalidReason: 'ARCHIVED', invalidMessage: '已归档' }, pkg.items[1]] }));
     expect(r.stdout).toMatch(/#4\s+登录\s+TASK\s+已失效\s+1\.0\.0/);
-    expect(r.stdout).toContain('⚠ 模板 #4 已失效：模板已下架');
+    expect(r.stdout).toContain('⚠ 模板 #4 已失效：已归档');
+    const fb = await tpl(['package', 'get', '5'], ok({ ...pkg, items: [{ ...pkg.items[0], invalid: true, invalidReason: 'SUSPENDED' }] }));
+    expect(fb.stdout).toContain('⚠ 模板 #4 已失效：已下架'); // no invalidMessage -> code mapping
     expect((await tpl(['package', 'get', '5'], ok(pkg))).stdout).not.toContain('已失效');
   });
 
