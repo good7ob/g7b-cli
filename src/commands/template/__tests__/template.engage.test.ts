@@ -40,7 +40,7 @@ describe('template review', () => {
 
   it('maps 2000 (not installed / own template) and 1002', async () => {
     const args = ['review', 'add', '4', '--rating', '4'];
-    expect((await tpl(args, bizError(2000, '只有安装或使用过该模板的用户可以评价'))).stderr).toContain('未安装使用就评价');
+    expect((await tpl(args, bizError(2000, '只有安装或使用过该模板的用户可以评价'))).stderr).toContain('未指定使用就评价');
     expect((await tpl(args, bizError(1002, 'nf'))).stderr).toContain('不存在，或对你不可见');
   });
 
@@ -123,10 +123,17 @@ describe('template package', () => {
     const r = await tpl(['package', 'get', '5'], ok(pkg));
     expect(r.http.get).toHaveBeenCalledWith('/templates/packages/5', { params: undefined });
     expect(r.stdout).toContain('模板包 #5  Web 起步包');
-    expect(r.stdout).toContain('热度:     安装 0  实例化 —');
+    expect(r.stdout).toContain('热度:     指定 0  实例化 —');
     expect(r.stdout).toMatch(/#4\s+登录\s+TASK\s+PUBLISHED\s+1\.0\.0\s+\^1\.0\.0/);
     expect(r.stdout).toMatch(/#9\s+—\s+—\s+—\s+—\s+\*/);
     expect((await tpl(['package', 'get', '5'], ok({ ...pkg, items: [] }))).stdout).toContain('条目: —');
+  });
+
+  it('get marks members the backend reports as invalid (invalid / invalidReason)', async () => {
+    const r = await tpl(['package', 'get', '5'], ok({ ...pkg, items: [{ ...pkg.items[0], invalid: true, invalidReason: '模板已下架' }, pkg.items[1]] }));
+    expect(r.stdout).toMatch(/#4\s+登录\s+TASK\s+已失效\s+1\.0\.0/);
+    expect(r.stdout).toContain('⚠ 模板 #4 已失效：模板已下架');
+    expect((await tpl(['package', 'get', '5'], ok(pkg))).stdout).not.toContain('已失效');
   });
 
   it('update sends only what changed; --item replaces all items; --clear-items sends []', async () => {

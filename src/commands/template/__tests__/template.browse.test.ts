@@ -27,7 +27,7 @@ describe('template search', () => {
   it('GETs /templates with defaults and renders the table', async () => {
     const r = await tpl(['search'], ok(page([card])));
     expect(r.http.get).toHaveBeenCalledWith('/templates', { params: { pageNum: 1, pageSize: 20 } });
-    expect(r.stdout).toMatch(/ID\s+类型\s+状态\s+可见\s+版本\s+评分\s+安装\s+名称/);
+    expect(r.stdout).toMatch(/ID\s+类型\s+状态\s+可见\s+版本\s+评分\s+指定\s+名称/);
     expect(r.stdout).toMatch(/4\s+TASK\s+PUBLISHED\s+PUBLIC\s+1\.0\.0\s+4\.5 \(2\)\s+0\s+★ 登录功能开发/);
     expect(r.stdout).toContain('共 1 条，第 1/1 页');
   });
@@ -102,18 +102,17 @@ describe('template get', () => {
     version: {
       id: 4, templateId: 4, version: '1.0.0', status: 'PUBLISHED', content: { tasks: [{ name: '建表' }] },
       variables: [{ name: 'project_name', label: '项目名称', type: 'string', required: true, default: 'good7ob' }],
-      dependencies: [{ id: 1, versionId: 4, requiredTemplateId: 7, requiredTemplateName: null, minVersion: '1.0.0', kind: 'requires' }],
     },
   };
 
-  it('GETs /templates/{id} and renders header, variables, dependencies and content', async () => {
+  it('GETs /templates/{id} and renders header, variables and content', async () => {
     const r = await tpl(['get', '4'], ok(detail));
     expect(r.http.get).toHaveBeenCalledWith('/templates/4', { params: undefined });
     expect(r.stdout).toContain('模板 #4  ★ 登录功能开发');
     expect(r.stdout).toContain('评分: 4.5 (2)');
     expect(r.stdout).toContain('标签:     Vue');
     expect(r.stdout).toMatch(/project_name\s+string\s+是\s+good7ob\s+项目名称/);
-    expect(r.stdout).toMatch(/#7\s+—\s+1\.0\.0\s+requires/); // name hidden -> "—"
+    expect(r.stdout).not.toContain('依赖');
     expect(r.stdout).toContain('"name": "建表"');
     expect(r.stdout).toContain('更新 —'); // updatedAt null
   });

@@ -1,42 +1,8 @@
-/** Renderers for dependency checks and the version-upgrade prompt / preview (api-0091 §16, §18). */
+/** Renderers for the version-upgrade prompt / preview (api-0091 §16, §18). */
 
 import { DASH, dash, renderTable } from '../../utils/cliHelpers';
 import { resultLines } from './renderBody';
 import { DiffVo, renderDiff } from './renderVersion';
-
-export interface DependencyCheckItem {
-  templateId?: number; templateName?: string | null; kind?: string | null; minVersion?: string | null;
-  installedVersion?: string | null; publishedVersion?: string | null; status?: string | null; installable?: boolean | null;
-  depth?: number | null; requiredBy?: number | null;
-}
-
-export interface DependencyCheckVo {
-  templateId?: number; version?: string | null; satisfied?: boolean | null; missingRequired?: number | null;
-  items?: DependencyCheckItem[] | null; warnings?: string[] | null;
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  OK: 'OK', MISSING: '缺失', OUTDATED: '过旧', UNAVAILABLE: '不可用',
-};
-
-/** Table of the resolved dependency tree; `installable` items are what `--with-deps` would install. */
-export function renderDependencyCheck(check: DependencyCheckVo): string[] {
-  const items = check.items ?? [];
-  const verdict = check.satisfied
-    ? '✓ 必需依赖全部满足'
-    : `✗ 缺少 ${dash(check.missingRequired)} 个必需依赖（--with-deps 可自动安装其中「可安装」的）`;
-  const rows = [['模板', '类型', '最低版本', '已装版本', '最新发布', '状态', '可安装', '深度', '被依赖于']].concat(
-    items.map((i) => [
-      `#${dash(i.templateId)} ${dash(i.templateName)}`, dash(i.kind), dash(i.minVersion), dash(i.installedVersion), dash(i.publishedVersion),
-      i.status ? STATUS_LABEL[i.status] ?? i.status : DASH, i.installable ? '是' : '否', dash(i.depth), `#${dash(i.requiredBy)}`,
-    ])
-  );
-  return [
-    `依赖检查: 模板 #${dash(check.templateId)} v${dash(check.version)}  ${verdict}`,
-    ...(items.length ? [renderTable(rows, { 0: { truncate: 36 } })] : ['（没有依赖）']),
-    ...(check.warnings ?? []).map((w) => `⚠ ${w}`),
-  ];
-}
 
 export interface UpgradeVo {
   instanceId?: number; templateId?: number; templateName?: string | null; currentVersion?: string | null;
