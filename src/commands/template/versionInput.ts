@@ -1,18 +1,16 @@
 /**
- * CLI-boundary validation for template versions, dependencies, reviews and admin decisions.
- * Limits mirror TemplateVersionService / TemplateDependencyService / TemplateReviewService / TemplateModerationService.
+ * CLI-boundary validation for template versions, reviews and admin decisions.
+ * Limits mirror TemplateVersionService / TemplateReviewService / TemplateModerationService.
  */
 
-import { InputError, checkMaxLength, parseId, parseIntInRange, requireOneOf, requireText } from '../../utils/cliHelpers';
+import { InputError, checkMaxLength, parseIntInRange, requireText } from '../../utils/cliHelpers';
 import {
-  checkCompatibility, checkContent, checkVariables, loadJson, parseJsonText, readJsonFile,
+  checkCompatibility, checkContent, checkVariables, loadJson,
 } from './jsonInput';
 
 const SEMVER = /^[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}$/;
 export const MAX_CHANGELOG = 5000;
 export const MAX_COMMENT = 1000;
-export const MAX_DEPENDENCIES = 20;
-export const DEPENDENCY_KINDS = ['requires', 'optional'] as const;
 
 type Body = Record<string, unknown>;
 
@@ -58,46 +56,6 @@ export function buildVersionUpdateBody(o: PayloadFlags): Body {
     throw new InputError('没有要修改的字段：至少指定 --changelog / --content-file / --content / --variables-file / --compatibility-file 之一');
   }
   return { ...payload };
-}
-
-/** deps.json: an array, or `{ "dependencies": [...] }`; each `{requiredTemplateId, minVersion?, kind?}`. */
-export function loadDependencies(file: string): DependencyBody[] {
-  const parsed = parseJsonText(readJsonFile(file, '--file'), 'dependencies');
-  const list = Array.isArray(parsed) ? parsed : (parsed as { dependencies?: unknown } | null)?.dependencies;
-  if (!Array.isArray(list)) throw new InputError('dependencies: 文件必须是数组，或形如 {"dependencies": [...]} 的对象');
-  if (list.length > MAX_DEPENDENCIES) throw new InputError(`dependencies: 最多 ${MAX_DEPENDENCIES} 个，当前 ${list.length} 个`);
-  const entries = list.map((item, i) => parseDependency(item, `dependencies[${i}]`));
-  const ids = entries.map((e) => e.requiredTemplateId);
-  if (new Set(ids).size !== ids.length) throw new InputError('dependencies: requiredTemplateId 不能重复');
-  return entries;
-}
-
-function parseDependency(item: unknown, at: string): DependencyBody {
-  if (item === null || typeof item !== 'object' || Array.isArray(item)) throw new InputError(`${at}: 必须是对象`);
-  const raw = item as Record<string, unknown>;
-  const extra = Object.keys(raw).filter((k) => !['requiredTemplateId', 'minVersion', 'kind'].includes(k));
-  if (extra.length) throw new InputError(`${at}: 不支持的字段 ${extra.join(', ')}（可用: requiredTemplateId, minVersion, kind）`);
-  const text = (v: unknown) => (v === undefined || v === null ? undefined : String(v));
-  return buildDependency(
-    { template: text(raw.requiredTemplateId), minVersion: text(raw.minVersion), kind: text(raw.kind) },
-    { template: `${at}.requiredTemplateId`, minVersion: `${at}.minVersion`, kind: `${at}.kind` },
-  );
-}
-
-export interface DependencyBody extends Body {
-  requiredTemplateId: number;
-}
-
-const FLAG_LABELS = { template: '--template', minVersion: '--min-version', kind: '--kind' };
-
-export function buildDependency(
-  o: { template?: string; minVersion?: string; kind?: string },
-  labels = FLAG_LABELS,
-): DependencyBody {
-  const dep: DependencyBody = { requiredTemplateId: parseId(o.template, labels.template) };
-  if (o.minVersion !== undefined) dep.minVersion = requireSemver(o.minVersion, labels.minVersion);
-  if (o.kind !== undefined) dep.kind = requireOneOf(o.kind.trim().toLowerCase(), DEPENDENCY_KINDS, labels.kind);
-  return dep;
 }
 
 export function buildReviewBody(o: { rating?: string; comment?: string }): Body {

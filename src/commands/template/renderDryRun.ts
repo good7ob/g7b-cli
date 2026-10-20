@@ -1,6 +1,5 @@
 import { DASH, dash, renderTable } from '../../utils/cliHelpers';
 import { DryRunReport } from './dryRun';
-import { renderDependencyCheck } from './renderCheck';
 import { resultLines } from './renderBody';
 
 const TARGET_LABELS: Record<string, string> = {
@@ -13,8 +12,7 @@ export function renderDryRun(r: DryRunReport, writtenTo?: string): string {
   return [
     'DRY-RUN 预演：没有创建任何对象，没有写入任何数据（服务端只被读取）',
     `模板 #${r.templateId} ${dash(r.templateName)} (${dash(r.templateType)})  版本 ${dash(r.version)}  目标: ${target || DASH}`,
-    '', ...renderDependencyCheck(r.dependencies),
-    '', ...(vars.length ? [`变量 (${vars.length}，已按版本定义校验并补全默认值)`, renderTable([['名称', '值']].concat(vars.map(([k, v]) => [k, dash(v)])), { 1: { truncate: 80 } })] : [`变量: ${DASH}`]),
+        '', ...(vars.length ? [`变量 (${vars.length}，已按版本定义校验并补全默认值)`, renderTable([['名称', '值']].concat(vars.map(([k, v]) => [k, dash(v)])), { 1: { truncate: 80 } })] : [`变量: ${DASH}`]),
     '', `将创建: ${r.plan.join('；')}`,
     '', ...resultLines(r.renderedContent, writtenTo),
     '', ...r.notes.map((n) => `注: ${n}`),

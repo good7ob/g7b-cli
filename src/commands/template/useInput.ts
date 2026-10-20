@@ -1,5 +1,5 @@
 /**
- * CLI-boundary validation for the Template Center part 2 commands (install / use / instances / deps / package use /
+ * CLI-boundary validation for the Template Center part 2 commands (install / use / instances / package use /
  * upgrade). Field names and limits mirror InstallDto, InstantiateDto, PackageInstantiateDto and UpgradePreviewDto
  * (com.remostudio.template); everything is checked here before the first request.
  */
@@ -19,9 +19,14 @@ export const USE_ERROR_CODES: ErrorCodeMap = {
   1001: '参数值不合法：变量缺失 / 未知 / 类型不符；目标模块或用例目录不属于该产品；渲染结果不合法或超过 2 MB；超出数量上限',
   1002: '模板 / 版本 / 包 / 实例不存在或对你不可见；或产品不存在 / 不属于该组织',
   1006: '已存在（如 RELEASE 渲染出的版本号在该产品下已有）',
-  1007: '当前状态不允许：模板未发布 / 已下架 / 已归档；缺必需依赖（可加 --with-deps）；包条目不满足版本约束；该类型暂无实例化处理器',
+  1007: '当前状态不允许：模板未发布 / 已下架 / 已归档；包条目不满足版本约束；该类型暂无实例化处理器',
   2000: '你不是目标组织的活跃成员',
 };
+
+/** `package use`: a 1007 carries the server's own reason (a failed member, an invalid member...), shown verbatim. */
+export const PACKAGE_USE_ERROR_CODES: ErrorCodeMap = Object.fromEntries(
+  Object.entries(USE_ERROR_CODES).filter(([code]) => code !== '1007')
+);
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_.:-]{1,64}$/;
 
@@ -43,7 +48,7 @@ export const timeoutHint = (key: string): string => `服务端可能已执行；
 export const INSTANTIATE_REQUEST = { timeout: 120_000 } as const;
 
 export interface TargetFlags {
-  org?: string; product?: string; module?: string; suite?: string; start?: string; end?: string; withDeps?: boolean;
+  org?: string; product?: string; module?: string; suite?: string; start?: string; end?: string;
 }
 
 /** Which of the per-type target options a template type actually uses (the server ignores the rest). */
@@ -67,7 +72,7 @@ function dateRange(start: string | undefined, end: string | undefined): { planne
   return { plannedStartDate, plannedEndDate };
 }
 
-/** orgId / productId are mandatory; module / suite / dates / installDependencies only when given. */
+/** orgId / productId are mandatory; module / suite / dates only when given. */
 export function buildTarget(o: TargetFlags): Body {
   return withoutUndefined({
     orgId: parseId(o.org, '--org'),
@@ -75,7 +80,6 @@ export function buildTarget(o: TargetFlags): Body {
     moduleId: optionalId(o.module, '--module'),
     suiteId: optionalId(o.suite, '--suite'),
     ...dateRange(o.start, o.end),
-    installDependencies: o.withDeps ? true : undefined,
   });
 }
 
@@ -156,24 +160,16 @@ export function buildPackageUseBody(o: PackageUseFlags): Body {
   });
 }
 
-export function buildInstallBody(o: { org?: string; version?: string; withDeps?: boolean }): Body {
+export function buildInstallBody(o: { org?: string; version?: string; }): Body {
   return withoutUndefined({
     orgId: optionalId(o.org, '--org'),
     version: o.version === undefined ? undefined : requireSemver(o.version, '--version'),
-    installDependencies: o.withDeps ? true : undefined,
   });
 }
 
-/** `template installed` / `template deps` query. */
+/** `template installed` query. */
 export function buildInstalledParams(o: { org?: string; page?: string; pageSize?: string }): Record<string, number> {
   return withoutUndefined({ ...pageParams(o), orgId: optionalId(o.org, '--org') }) as Record<string, number>;
-}
-
-export function buildDepsParams(o: { org?: string; version?: string }): Record<string, string | number> {
-  return withoutUndefined({
-    orgId: optionalId(o.org, '--org'),
-    version: o.version === undefined ? undefined : requireSemver(o.version, '--version'),
-  }) as Record<string, string | number>;
 }
 
 export interface InstanceListFlags {

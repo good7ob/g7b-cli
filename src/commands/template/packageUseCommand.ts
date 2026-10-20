@@ -3,7 +3,7 @@ import apiClient from '../../services/ApiClient';
 import { collect, emit, guarded, parseId, withTimeoutHint } from '../../utils/cliHelpers';
 import { PackageInstantiationVo, renderPackageInstantiation } from './renderUse';
 import { withTargetFlags, withVarFlags } from './useFlags';
-import { IDEMPOTENCY_OPTION, INSTANTIATE_REQUEST, USE_ERROR_CODES as CODES, buildPackageUseBody, resolveIdempotencyKey, timeoutHint } from './useInput';
+import { IDEMPOTENCY_OPTION, INSTANTIATE_REQUEST, PACKAGE_USE_ERROR_CODES as CODES, buildPackageUseBody, resolveIdempotencyKey, timeoutHint } from './useInput';
 
 /** `template package use`: instantiate every template of a package (in `sort_order`) in ONE transaction. */
 export function registerPackageUse(pkg: Command): void {

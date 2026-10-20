@@ -61,7 +61,7 @@ export function pageFooter(result: unknown, records: unknown[], pageNum: number,
 export function renderTemplateList(result: unknown, pageNum: number, pageSize: number, empty = '没有符合条件的模板。'): string {
   const records = extractRecords<TemplateCard>(result);
   if (!records.length) return empty;
-  const rows = [['ID', '类型', '状态', '可见', '版本', '评分', '安装', '名称']].concat(
+  const rows = [['ID', '类型', '状态', '可见', '版本', '评分', '指定', '名称']].concat(
     records.map((t) => [
       String(t.id), dash(t.templateType), dash(t.status), dash(t.visibility), dash(t.publishedVersion),
       fmtRating(t), dash(t.installCount), `${flag(t.isOfficial, '★ ')}${dash(t.name)}`,
@@ -77,7 +77,7 @@ export function renderTemplateHeader(t: TemplateCard): string[] {
     '─'.repeat(60),
     `类型:     ${dash(t.templateType)}    状态: ${dash(t.status)}    可见性: ${dash(t.visibility)}    所有者: ${owner}`,
     `版本:     ${dash(t.publishedVersion)}    评分: ${fmtRating(t)}    许可: ${dash(t.licenseType)}    定价: ${dash(t.pricingType)}`,
-    `热度:     安装 ${dash(t.installCount)}  实例化 ${dash(t.instantiateCount)}  收藏 ${dash(t.favoriteCount)}  浏览 ${dash(t.viewCount)}`,
+    `热度:     指定 ${dash(t.installCount)}  实例化 ${dash(t.instantiateCount)}  收藏 ${dash(t.favoriteCount)}  浏览 ${dash(t.viewCount)}`,
     `标签:     ${t.tags?.length ? t.tags.map((g) => dash(g.name)).join(', ') : DASH}    分类: ${dash(t.categoryId)}`,
     `我的:     ${t.favorited ? '已收藏' : '未收藏'}    ${t.canManage ? '可管理' : '只读'}`,
     ...(t.suspendReason ? [`下架原因: ${t.suspendReason}`] : []),

@@ -222,16 +222,14 @@ Directed trace links between product objects (idea → PRD → task → test). S
 
 ```bash
 good7ob template search -k login --type TASK --tag Vue --sort popular
-good7ob template get 4                                # published version: content, variables, dependencies
+good7ob template get 4                                # published version: content, variables
 good7ob template create --name "Login flow" --type TASK --tags vue,auth --content-file tasks.json --version 1.0.0
 good7ob template version add 21 --version 1.1.0 --content-file tasks.json --variables-file vars.json --changelog "add estimates"
 good7ob template diff 21 1.0.0 1.1.0
 good7ob template version submit 21 1.1.0              # PRIVATE/ORG publish at once, PUBLIC goes to platform review
-good7ob template dependency set 21 1.1.0 --file deps.json
 good7ob template favorite 4 && good7ob template review add 4 --rating 5 --comment "saved a day"
 good7ob template package create --name "Web starter" --item 4:^1.0.0 --item 9
-good7ob template install 4 --org 3 --with-deps         # my installs: `template installed`, `template uninstall 4`
-good7ob template deps 4 --org 3                        # missing / outdated / unavailable dependencies
+good7ob template install 4 --org 3                     # 指定模版 (specify); list: `template installed`, cancel: `template uninstall 4`
 good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login --dry-run   # preview, creates nothing
 good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login             # tasks / module / release / test cases / PRD / workflow
 good7ob template use 8 --org 3 --product 9 --var title=Login --out ./api.md            # document templates: body to a file

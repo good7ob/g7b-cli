@@ -64,7 +64,7 @@ export function registerAdminCommands(tpl: Command): void {
 
   admin
     .command('show <versionId>')
-    .description('Review detail: the template plus that version\'s content, variables and dependencies')
+    .description('Review detail: the template plus that version\'s content and variables')
     .option('--json', 'Output as JSON')
     .action((versionId, o) => adminGuarded('获取审核详情失败', async () => {
       const detail: TemplateDetail = await apiClient.get(`${BASE}/versions/${parseId(versionId, 'versionId')}`);

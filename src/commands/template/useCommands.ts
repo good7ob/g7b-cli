@@ -19,7 +19,7 @@ export function registerUseCommands(tpl: Command): void {
   withOutFlags(withVarFlags(withTargetFlags(tpl.command('use <id>'))), 'the rendered document body (or rendered JSON)')
     .description('Instantiate a template into your product (one transaction; idempotent with --idempotency-key, so a retry after a timeout never creates twice)')
     .option('--version <x.y.z>', 'Version to use (must have been published; default the current published one)')
-    .option('--dry-run', 'Preview only: check dependencies and variables, render locally, create nothing')
+    .option('--dry-run', 'Preview only: check variables, render locally, create nothing')
     .option(...IDEMPOTENCY_OPTION)
     .option('--json', 'Output as JSON')
     .action((id, o) => guarded('实例化模板失败', CODES, async () => {

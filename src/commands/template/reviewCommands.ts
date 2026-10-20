@@ -7,13 +7,13 @@ import { buildReviewBody } from './versionInput';
 
 const url = (id: string) => `/templates/${parseId(id, 'id')}/reviews`;
 
-/** `template review add|list|rm`: 1-5 star reviews (only users who installed / used the template may write one). */
+/** `template review add|list|rm`: 1-5 star reviews (only users who specified / used the template may write one). */
 export function registerReviewCommands(tpl: Command): void {
   const review = tpl.command('review').description('Template reviews (1-5 stars + comment)');
 
   review
     .command('add <id>')
-    .description('Rate a template (a second call overwrites your review; you must have installed or used it, and not own it)')
+    .description('Rate a template (a second call overwrites your review; you must have specified (installed) or used it, and not own it)')
     .requiredOption('--rating <1-5>', 'Star rating 1-5')
     .option('--comment <text>', 'Comment (max 1000 chars)')
     .option('--json', 'Output as JSON')

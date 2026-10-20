@@ -1,6 +1,6 @@
 /** Option groups shared by `use`, `package use` and `upgrade --preview`. */
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { collect } from '../../utils/cliHelpers';
 
 /** --org / --product (required) and the per-type target options. */
@@ -12,7 +12,7 @@ export function withTargetFlags(cmd: Command): Command {
     .option('--suite <suiteId>', 'TEST: case suite (optional)')
     .option('--start <yyyy-MM-dd>', 'RELEASE: planned start date (optional)')
     .option('--end <yyyy-MM-dd>', 'RELEASE: planned end date (optional, not before --start)')
-    .option('--with-deps', 'Install missing / outdated installable dependencies in the same transaction');
+    .addOption(new Option('--with-deps', 'Deprecated, ignored (template dependencies were removed in 1.2.0)').hideHelp());
 }
 
 export function withVarFlags(cmd: Command): Command {
