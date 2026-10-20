@@ -23,7 +23,7 @@ export function registerVerifyCommand(featCommand: Command) {
 
         const prdTask = subtasks.find((t: any) => t.name?.includes('PRD') || t.name?.toLowerCase().includes('prd'));
         const wfTask = subtasks.find((t: any) => t.name?.includes('Wireframe') || t.name?.includes('画面'));
-        const dsnTask = subtasks.find((t: any) => t.name?.includes('详细设计') || t.name?.includes('设计'));
+        const dsnTask = subtasks.find((t: any) => t.name?.includes('详细设计') || (!t.name?.includes('PRD') && t.name?.includes('架构设计')));
         const testTask = subtasks.find((t: any) => t.name?.includes('测试') || t.name?.toLowerCase().includes('e2e'));
 
         const checkPr = (t?: any, repoKeyword?: string) => {

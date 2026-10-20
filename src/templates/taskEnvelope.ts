@@ -140,21 +140,53 @@ export function parseTaskEnvelope(description: string): TaskEnvelopeParsed {
       val = val.slice(1, -1);
     }
 
-    if (key === 'envelopeVersion') meta.envelopeVersion = val;
-    else if (key === 'deliveryLevel') meta.deliveryLevel = val as any;
-    else if (key === 'targetRepo') meta.targetRepo = val;
+    if (key === 'envelopeVersion' || key === 'version') meta.envelopeVersion = val;
+    else if (key === 'deliveryLevel' || key === 'level') meta.deliveryLevel = val as any;
+    else if (key === 'targetRepo' || key === 'repo') meta.targetRepo = val;
     else if (key === 'slug') meta.slug = val;
     else if (key === 'executorStrategy') meta.executorStrategy = val as any;
     else if (key === 'upstreamAgent') meta.upstreamAgent = val;
+    else if (key === 'kind' && val.includes('task-envelope')) meta.envelopeVersion = meta.envelopeVersion || '1.0.0';
   }
+
+  // Fallbacks from rawFrontmatter if not parsed in flat key-value
+  if (!meta.envelopeVersion && rawFrontmatter.includes('task-envelope')) {
+    meta.envelopeVersion = '1.0.0';
+  }
+  if (!meta.targetRepo && rawFrontmatter.match(/repo:\s*["']?([a-zA-Z0-9_\/-]+)["']?/i)) {
+    const repoMatch = rawFrontmatter.match(/repo:\s*["']?([a-zA-Z0-9_\/-]+)["']?/i);
+    if (repoMatch) {
+      meta.targetRepo = repoMatch[1].replace(/^good7ob\//, '');
+    }
+  }
+  if (!meta.slug && rawFrontmatter.match(/slug:\s*["']?([a-z0-9-]+)["']?/i)) {
+    const slugMatch = rawFrontmatter.match(/slug:\s*["']?([a-z0-9-]+)["']?/i);
+    if (slugMatch) {
+      meta.slug = slugMatch[1];
+    }
+  }
+
+  // Extract ACs from both frontmatter and body
+  const bodyAcs = extractAcceptanceCriteria(body);
+  const fmAcs: string[] = [];
+  const acMatches = rawFrontmatter.match(/acceptance_criteria:\s*\n((?:\s*-\s*.*(?:\n|$))+)/);
+  if (acMatches) {
+    const acLines = acMatches[1].split(/\r?\n/);
+    for (const l of acLines) {
+      const item = l.replace(/^\s*-\s*["']?/, '').replace(/["']?\s*$/, '').trim();
+      if (item && item.length > 5) fmAcs.push(item);
+    }
+  }
+
+  const allAcs = fmAcs.length > 0 ? fmAcs : bodyAcs;
 
   return {
     hasEnvelope: !!meta.envelopeVersion,
     meta,
     rawFrontmatter,
     body,
-    acceptanceCriteria: extractAcceptanceCriteria(body),
-    deliverables: extractDeliverables(body),
+    acceptanceCriteria: allAcs,
+    deliverables: extractDeliverables(body + '\n' + rawFrontmatter),
   };
 }
 
