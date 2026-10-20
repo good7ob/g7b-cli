@@ -338,6 +338,11 @@ good7ob pm project get 123
 
 # List tasks in a project
 good7ob pm task list 123
+
+# Task dependencies (same project, no cycles; types finish_to_start | start_to_start)
+good7ob pm task dep list 1851
+good7ob pm task dep add 1851 --on 1850            # 1851 depends on 1850
+good7ob pm task dep remove 1851 --on 1850
 ```
 
 ### Infrastructure
