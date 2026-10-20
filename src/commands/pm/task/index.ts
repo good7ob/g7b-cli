@@ -3,6 +3,7 @@ import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
+import { registerDepCommands } from './dep';
 import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
 
 export function registerTaskCommands(pmCommand: Command) {
@@ -374,6 +375,8 @@ export function registerTaskCommands(pmCommand: Command) {
         process.exit(1);
       }
     });
+
+  registerDepCommands(taskCommand);
 
   return taskCommand;
 }
