@@ -341,7 +341,21 @@ good7ob pm task list 123
 good7ob pm task dep list 1851
 good7ob pm task dep add 1851 --on 1850            # 1851 depends on 1850
 good7ob pm task dep remove 1851 --on 1850
+
+# Set expected completion day (independent of the deadline)
+good7ob pm task update 456 --planned-end-date 2026-10-25
+
+# Set both planned dates, on update or create
+good7ob pm task update 456 --planned-start-date 2026-10-20 --planned-end-date 2026-10-25
+good7ob pm task create --project-id 123 --name "Scheduled task" --planned-end-date 2026-10-25
+
+# View planned dates
+good7ob pm task get 456
 ```
+
+Task planned dates use `YYYY-MM-DD` (Asia/Tokyo), with day precision. Invalid dates
+and reversed ranges are rejected. Omitted dates remain unchanged on update; when
+only one date is provided, the server validates it against the existing other date.
 
 ### Infrastructure
 
