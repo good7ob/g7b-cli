@@ -4,7 +4,17 @@ import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
 import { registerDepCommands } from './dep';
-import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
+import { fmtDate, fmtDateTime, InputError, parseDate } from '../../../utils/cliHelpers';
+
+function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: string }): Record<string, string> {
+  const dates: Record<string, string> = {};
+  if (options.plannedStartDate !== undefined) dates.plannedStartDate = parseDate(options.plannedStartDate, '--planned-start-date');
+  if (options.plannedEndDate !== undefined) dates.plannedEndDate = parseDate(options.plannedEndDate, '--planned-end-date');
+  if (dates.plannedStartDate && dates.plannedEndDate && dates.plannedEndDate < dates.plannedStartDate) {
+    throw new InputError('--planned-end-date 不能早于 --planned-start-date');
+  }
+  return dates;
+}
 
 export function registerTaskCommands(pmCommand: Command) {
   const taskCommand = pmCommand
@@ -105,6 +115,8 @@ export function registerTaskCommands(pmCommand: Command) {
         console.log(`描述:       ${task.description || '-'}`);
         console.log(`负责人:     ${task.ownerName || task.ownerId || '-'}`);
         console.log(`截止日期:   ${fmtDate(task.deadline, '-')}`);
+        console.log(`计划开始:   ${fmtDate(task.plannedStartDate, '-')}`);
+        console.log(`预计完成:   ${fmtDate(task.plannedEndDate, '-')}`);
         console.log(`父任务ID:   ${task.parentTaskId || '-'}`);
         console.log(`项目ID:     ${task.projectId}`);
         console.log(`执行者类型: ${task.executorType || '-'}`);
@@ -132,6 +144,8 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--priority <priority>', 'Priority (high|medium|low)', 'medium')
     .option('--status <status>', 'Initial status', 'not_started')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
+    .option('--planned-start-date <date>', 'Planned start date (YYYY-MM-DD)')
+    .option('--planned-end-date <date>', 'Expected completion / planned end date (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID (for sub-tasks)')
     .option('--json', 'Output result as JSON')
@@ -142,6 +156,7 @@ export function registerTaskCommands(pmCommand: Command) {
           name: options.name,
           priority: options.priority,
           status: options.status,
+          ...plannedDates(options),
         };
         if (options.description) body.description = options.description;
         if (options.deadline) body.deadline = options.deadline;
@@ -168,13 +183,15 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--priority <priority>', 'Priority (high|medium|low)')
     .option('--status <status>', 'Status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
+    .option('--planned-start-date <date>', 'Planned start date (YYYY-MM-DD)')
+    .option('--planned-end-date <date>', 'Expected completion / planned end date (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID')
     .option('--project-id <id>', 'Move the task to another project (no pre-flight checks — prefer `pm task move`)')
     .option('--estimated-hours <hours>', 'Estimated hours')
     .action(async (id, options) => {
       try {
-        const body: any = {};
+        const body: any = { ...plannedDates(options) };
         if (options.name) body.name = options.name;
         if (options.description) body.description = options.description;
         if (options.priority) body.priority = options.priority;
