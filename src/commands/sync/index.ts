@@ -1,5 +1,5 @@
 /**
- * `good7ob sync` — incremental pull of what changed for me (prd-0121 FP-2 rp-gjob-0009..0015, g7b #1601).
+ * `good7ob sync` — incremental pull of what changed for me (prd-0121 FP-2 rp-gjob-sync-0009..0015, g7b #1601).
  * Backed by GET /api/v1/orgs/{orgId}/activities/sync (backend api-0120). Read-only: it never writes to the platform,
  * only to its own state file under ~/.good7ob/sync.
  */
@@ -73,7 +73,7 @@ export function registerSyncCommands(program: Command) {
         let next = previous?.cursor ?? '';
         let truncated = false;
 
-        // Fetch everything first and write state only after the whole run succeeded (rp-gjob-0015):
+        // Fetch everything first and write state only after the whole run succeeded (rp-gjob-sync-0015):
         // a failure on page N must leave the cursor where it was, so the next run starts from the same place.
         for (let pages = 1; ; pages++) {
           const feed: FeedPage = await apiClient.get(`/api/v1/orgs/${orgId}/activities/sync`, { limit, ...(cursor ? { cursor } : {}) });
