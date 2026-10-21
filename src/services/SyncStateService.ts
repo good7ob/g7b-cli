@@ -1,5 +1,5 @@
 /**
- * Local state of `good7ob sync`: `~/.good7ob/sync/<identity>-org<orgId>.json` (prd-0121 rp-gjob-0011, g7b #1601).
+ * Local state of `good7ob sync`: `~/.good7ob/sync/<identity>-org<orgId>.json` (prd-0121 rp-gjob-sync-0011, g7b #1601).
  *
  * One file per identity + organization, so switching account or organization never reuses another cursor and two
  * identities never overwrite each other. The cursor is opaque (the server decides its format) and is only
