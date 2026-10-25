@@ -342,6 +342,17 @@ good7ob pm task dep list 1851
 good7ob pm task dep add 1851 --on 1850            # 1851 depends on 1850
 good7ob pm task dep remove 1851 --on 1850
 
+# Estimate vs actual (time / tokens / cost; cost only shown when you may see it)
+good7ob pm task time 1950
+good7ob pm task estimate set 1950 --hours 1.5 --tokens 400000 --reason "re-estimate"   # also --seconds, --model, --source
+good7ob pm task estimate list 1950
+good7ob pm task estimate clear 1950 --reason "cancelled"
+good7ob pm task effort add --task 1950:2 --task 1951:1 --work 1h30m --note "pairing"   # one session over several tasks (weights)
+good7ob pm task effort list 1950
+good7ob pm task effort void 301 --reason "duplicate"
+good7ob pm task effort reallocate manual:<session-id> --task 1950:1 --task 1952:1 --reason "missed a task"
+good7ob pm project time-deviation 12 --executor-type AGENT --only-completed
+
 # Set expected completion day (independent of the deadline)
 good7ob pm task update 456 --planned-end-date 2026-10-25
 

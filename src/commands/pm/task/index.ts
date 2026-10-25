@@ -4,6 +4,7 @@ import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
 import { registerDepCommands } from './dep';
+import { registerTimeCommands } from './time';
 import { fmtDate, fmtDateTime, InputError, parseDate } from '../../../utils/cliHelpers';
 
 function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: string }): Record<string, string> {
@@ -394,6 +395,7 @@ export function registerTaskCommands(pmCommand: Command) {
     });
 
   registerDepCommands(taskCommand);
+  registerTimeCommands(taskCommand);
 
   return taskCommand;
 }
