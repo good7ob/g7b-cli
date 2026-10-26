@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
-import { emit, guarded, parseId } from '../../utils/cliHelpers';
+import { emit, guarded, parseId, parseIntInRange } from '../../utils/cliHelpers';
 import { saveUrlTo } from './download';
 import { FILE_ERROR_CODES as CODES, buildListParams, checkUploadFiles, parseObjectType, resolveOutPath } from './input';
-import { ObjectFilePage, ObjectFileVo, fmtSize, renderList, renderVersions } from './render';
+import { AccessEntry, ObjectFilePage, ObjectFileVo, fmtSize, renderAccess, renderList, renderVersions } from './render';
 
 /**
  * Object file commands (prd-0132, api-0130): the files that hang on an organization / product / project / task / PRD.
@@ -13,6 +13,8 @@ import { ObjectFilePage, ObjectFileVo, fmtSize, renderList, renderVersions } fro
 
 export function registerFileCommands(program: Command) {
   const file = program.command('file').description('Object files — files on an org / product / project / task / PRD document');
+  // the server's access log tells the CLI from the web page by this header
+  file.hook('preAction', () => apiClient.setDefaultHeader('X-Client-Channel', 'cli'));
 
   file
     .command('list <objectType> <id>')
@@ -97,6 +99,32 @@ export function registerFileCommands(program: Command) {
         if (Boolean(o.on) === Boolean(o.off)) throw new Error('--on 与 --off 必须二选一');
         await apiClient.put(`/files/${parseId(fileId, '<fileId>')}/kb`, { enabled: Boolean(o.on) });
         console.log(o.on ? '已存入知识库' : '已移出知识库');
+      })
+    );
+
+  file
+    .command('confidential <fileId>')
+    .description('Mark a file (all versions) confidential, or not: it never reaches an AI context and leaves the knowledge base')
+    .option('--on', 'Mark as confidential')
+    .option('--off', 'Remove the mark')
+    .action(async (fileId: string, o) =>
+      guarded('更新机密标记失败', CODES, async () => {
+        if (Boolean(o.on) === Boolean(o.off)) throw new Error('--on 与 --off 必须二选一');
+        await apiClient.put(`/files/${parseId(fileId, '<fileId>')}/confidential`, { value: Boolean(o.on) });
+        console.log(o.on ? '已标记为机密（已入库的副本已移出知识库）' : '已取消机密标记');
+      })
+    );
+
+  file
+    .command('history <fileId>')
+    .description('Who uploaded, downloaded, deleted ... a file (organization owner / admin)')
+    .option('--limit <n>', 'Newest entries to show, 1-200 (default 100)')
+    .option('--json', 'Output as JSON')
+    .action(async (fileId: string, o) =>
+      guarded('读取访问记录失败', CODES, async () => {
+        const limit = o.limit === undefined ? 100 : parseIntInRange(o.limit, '--limit', 1, 200);
+        const entries: AccessEntry[] = await apiClient.get(`/files/${parseId(fileId, '<fileId>')}/access`, { limit });
+        emit(o.json, entries, () => renderAccess(entries));
       })
     );
 

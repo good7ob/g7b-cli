@@ -139,3 +139,38 @@ describe('file kb / delete / versions', () => {
     expect(ver.stdout).toContain('v2');
   });
 });
+
+describe('file confidential / history / channel', () => {
+  it('needs exactly one of --on and --off, then sets the flag', async () => {
+    const none = await file(['confidential', '5']);
+    expect(none.exitCode).toBe(1);
+    expect(noHttpCalls(none)).toBe(true);
+    const on = await file(['confidential', '5', '--on']);
+    expect(on.http.put).toHaveBeenCalledWith('/files/5/confidential', { value: true });
+    expect(on.stdout).toContain('机密');
+    const off = await file(['confidential', '5', '--off']);
+    expect(off.http.put).toHaveBeenCalledWith('/files/5/confidential', { value: false });
+  });
+
+  it('shows the access history with actions, versions and channel; limit is checked', async () => {
+    const entries = [
+      { id: 2, fileId: 5, versionNo: 1, action: 'download', actorId: 9, channel: 'cli', createdAt: '2026-10-26T10:00:00' },
+      { id: 1, fileId: 5, versionNo: null, action: 'scan_infected', actorId: null, channel: 'system', createdAt: '2026-10-26T09:00:00' },
+    ];
+    const r = await file(['history', '5', '--limit', '20'], ok(entries));
+    expect(r.http.get).toHaveBeenCalledWith('/files/5/access', { params: { limit: 20 } });
+    expect(r.stdout).toContain('下载');
+    expect(r.stdout).toContain('v1');
+    expect(r.stdout).toContain('#9');
+    expect(r.stdout).toContain('系统');
+
+    const bad = await file(['history', '5', '--limit', '500']);
+    expect(bad.exitCode).toBe(1);
+    expect(noHttpCalls(bad)).toBe(true);
+  });
+
+  it('marks every file command as coming from the CLI', async () => {
+    await file(['versions', '5'], ok([]));
+    expect(apiClient['instance'].defaults.headers.common['X-Client-Channel']).toBe('cli');
+  });
+});

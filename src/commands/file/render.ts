@@ -71,3 +71,29 @@ export function renderVersions(versions: ObjectFileVo[]): string {
   }
   return table(rows);
 }
+
+export interface AccessEntry {
+  id: number;
+  fileId: number;
+  versionNo: number | null;
+  action: string;
+  actorId: number | null;
+  channel: string;
+  createdAt: unknown;
+}
+
+const ACTIONS: Record<string, string> = {
+  upload: '上传', download: '下载', delete: '删除', restore: '恢复', reference: '引用', unreference: '取消引用',
+  scan_infected: '扫描命中病毒', set_current: '设为当前版本', kb_on: '存入知识库', kb_off: '移出知识库',
+  keep: '永久保留', confidential: '机密标记',
+};
+
+export function renderAccess(entries: AccessEntry[]): string {
+  if (!entries || entries.length === 0) return '没有访问记录';
+  const rows = [['时间', '操作', '版本', '操作者', '来源']];
+  for (const e of entries) {
+    rows.push([fmtDateTime(e.createdAt), ACTIONS[e.action] ?? e.action, e.versionNo === null ? DASH : `v${e.versionNo}`,
+      e.actorId === null ? '系统' : `#${e.actorId}`, dash(e.channel)]);
+  }
+  return table(rows);
+}
