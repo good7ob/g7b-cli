@@ -84,7 +84,7 @@ describe('file download', () => {
     const out = path.join(dir, 'out') + path.sep;
     const r = await file(['download', '5', '--out', out], (m: string, url: string) =>
       url.endsWith('/versions') ? ok(versions) : ok({ url: 'https://signed.example/x?sig=secret' }));
-    expect(saveUrlTo).toHaveBeenCalledWith('https://signed.example/x?sig=secret', path.join(dir, 'out', 'spec.pdf'));
+    expect(saveUrlTo).toHaveBeenCalledWith('https://signed.example/x?sig=secret', path.join(dir, 'out', 'spec.pdf'), false);
     expect(r.stdout).toContain('已保存');
     expect(r.stdout).not.toContain('signed.example');
     expect(r.stderr).not.toContain('signed.example');
@@ -94,7 +94,7 @@ describe('file download', () => {
     const r = await file(['download', '5', '--version', '3', '--out', path.join(dir, 'v3.pdf')], (m: string, url: string) =>
       url.endsWith('/versions') ? ok(versions) : ok({ url: 'https://signed.example/y' }));
     expect(r.http.get).toHaveBeenCalledWith('/files/5/download-url', { params: { version: 3 } });
-    expect(saveUrlTo).toHaveBeenCalledWith('https://signed.example/y', path.join(dir, 'v3.pdf'));
+    expect(saveUrlTo).toHaveBeenCalledWith('https://signed.example/y', path.join(dir, 'v3.pdf'), false);
   });
 
   it('keeps an existing file unless --force and asks for no address in that case', async () => {
