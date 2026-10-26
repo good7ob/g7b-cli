@@ -12,6 +12,7 @@ import { ObjectFileVo, fmtSize } from '../file/render';
  */
 
 const FORMATS = ['md', 'html', 'pdf', 'docx', 'pptx'] as const;
+const IMAGE_FORMATS = ['png', 'svg'] as const;
 
 const EXPORT_ERROR_CODES: ErrorCodeMap = {
   999: '未登录',
@@ -77,8 +78,10 @@ interface StartOptions {
   json?: boolean;
 }
 
-async function start(body: Record<string, unknown>, o: StartOptions): Promise<void> {
-  const format = requireOneOf(o.format.trim().toLowerCase(), FORMATS, '--format');
+async function start(body: Record<string, unknown>, o: StartOptions, image = false): Promise<void> {
+  const format = image
+    ? requireOneOf(o.format.trim().toLowerCase(), IMAGE_FORMATS, '--format')
+    : requireOneOf(o.format.trim().toLowerCase(), FORMATS, '--format');
   const request: Record<string, unknown> = { ...body, format };
   if (o.cover) request.cover = true;
   if (o.toc) request.toc = true;
@@ -129,6 +132,25 @@ export function registerExportCommands(program: Command) {
       return start(body, o);
     })
   );
+
+  exp
+    .command('preview <previewId>')
+    .description('Export a UI design preview as a picture: png (whole page), svg (only if the design is SVG)')
+    .requiredOption('--format <fmt>', 'png|svg')
+    .option('--version <id>', 'A version id (default: the current version)')
+    .option('--width <px>', 'png viewport width 320-1920 (default 1280)')
+    .option('--wait', 'Wait for the picture to be ready (up to 5 minutes)')
+    .option('--out <path>', 'Download the result to this file or directory (implies --wait)')
+    .option('--force', 'Overwrite an existing file with --out')
+    .option('--json', 'Output as JSON')
+    .action(async (previewId: string, o: StartOptions & { version?: string; width?: string }) =>
+      guarded('导出失败', EXPORT_ERROR_CODES, () => {
+        const body: Record<string, unknown> = { objectType: 'UI_PREVIEW', objectId: parseId(previewId, '<previewId>') };
+        if (o.version !== undefined) body.versionId = parseId(o.version, '--version');
+        if (o.width !== undefined) body.width = parseIntInRange(o.width, '--width', 320, 1920);
+        return start(body, o, true);
+      })
+    );
 
   exp
     .command('job <jobId>')

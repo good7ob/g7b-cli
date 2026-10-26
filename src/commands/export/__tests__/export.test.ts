@@ -92,3 +92,21 @@ describe('export deliverables / job / cancel', () => {
     expect(c.stdout).toContain('已取消');
   });
 });
+
+describe('export preview', () => {
+  it('asks for a picture of a version at a width and rejects document formats or a bad width first', async () => {
+    const r = await exp(['preview', '31', '--format', 'png', '--version', '70', '--width', '1024'], ok(job('queued')));
+    expect(r.http.post).toHaveBeenCalledWith('/export/jobs', { objectType: 'UI_PREVIEW', objectId: 31, versionId: 70, width: 1024, format: 'png' });
+    for (const args of [['preview', '31', '--format', 'pdf'], ['preview', '31', '--format', 'png', '--width', '100']]) {
+      const bad = await exp(args);
+      expect(bad.exitCode).toBe(1);
+      expect(noHttpCalls(bad)).toBe(true);
+    }
+  });
+
+  it('keeps document formats away from pictures: png is refused for a PRD', async () => {
+    const r = await exp(['prd', '9', '--format', 'png']);
+    expect(r.exitCode).toBe(1);
+    expect(noHttpCalls(r)).toBe(true);
+  });
+});
