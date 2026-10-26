@@ -100,6 +100,12 @@ async function start(body: Record<string, unknown>, o: StartOptions, image = fal
   if (job.status === 'failed') process.exitCode = 1;
 }
 
+/** One id exports that object; several ids ask for a zip. */
+function objectsBody(objectType: string, raw: string[], label: string): Record<string, unknown> {
+  const ids = raw.map((r) => parseId(r, label));
+  return ids.length === 1 ? { objectType, objectId: ids[0] } : { objectType, objectIds: ids };
+}
+
 export function registerExportCommands(program: Command) {
   const exp = program.command('export').description('Export a PRD document or a deliverable list (md|html|pdf|docx|pptx)');
 
@@ -114,8 +120,9 @@ export function registerExportCommands(program: Command) {
       .option('--force', 'Overwrite an existing file with --out')
       .option('--json', 'Output as JSON');
 
-  common(exp.command('prd <prdId>').description('Export the current document of a PRD')).action(async (prdId: string, o: StartOptions) =>
-    guarded('导出失败', EXPORT_ERROR_CODES, () => start({ objectType: 'PRD_DOCUMENT', objectId: parseId(prdId, '<prdId>') }, o))
+  common(exp.command('prd <prdIds...>').description('Export the current document of a PRD; several ids become one zip with an index.md (up to 30)')).action(
+    async (prdIds: string[], o: StartOptions) =>
+      guarded('导出失败', EXPORT_ERROR_CODES, () => start(objectsBody('PRD_DOCUMENT', prdIds, '<prdIds>'), o))
   );
 
   common(
@@ -134,20 +141,25 @@ export function registerExportCommands(program: Command) {
   );
 
   exp
-    .command('preview <previewId>')
-    .description('Export a UI design preview as a picture: png (whole page), svg (only if the design is SVG)')
+    .command('preview <previewIds...>')
+    .description('Export UI design previews as pictures: png (whole page), svg (only if the design is SVG); several ids become one zip (up to 10)')
     .requiredOption('--format <fmt>', 'png|svg')
     .option('--version <id>', 'A version id (default: the current version)')
     .option('--width <px>', 'png viewport width 320-1920 (default 1280)')
+    .option('--scale <n>', 'png device pixels per CSS px: 1, 2 or 3 (default 1)')
     .option('--wait', 'Wait for the picture to be ready (up to 5 minutes)')
     .option('--out <path>', 'Download the result to this file or directory (implies --wait)')
     .option('--force', 'Overwrite an existing file with --out')
     .option('--json', 'Output as JSON')
-    .action(async (previewId: string, o: StartOptions & { version?: string; width?: string }) =>
+    .action(async (previewIds: string[], o: StartOptions & { version?: string; width?: string; scale?: string }) =>
       guarded('导出失败', EXPORT_ERROR_CODES, () => {
-        const body: Record<string, unknown> = { objectType: 'UI_PREVIEW', objectId: parseId(previewId, '<previewId>') };
-        if (o.version !== undefined) body.versionId = parseId(o.version, '--version');
+        const body = objectsBody('UI_PREVIEW', previewIds, '<previewIds>');
+        if (o.version !== undefined) {
+          if (previewIds.length > 1) throw new Error('--version 只能用于单个预览');
+          body.versionId = parseId(o.version, '--version');
+        }
         if (o.width !== undefined) body.width = parseIntInRange(o.width, '--width', 320, 1920);
+        if (o.scale !== undefined) body.scale = parseIntInRange(o.scale, '--scale', 1, 3);
         return start(body, o, true);
       })
     );

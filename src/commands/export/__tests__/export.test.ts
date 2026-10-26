@@ -109,4 +109,16 @@ describe('export preview', () => {
     expect(r.exitCode).toBe(1);
     expect(noHttpCalls(r)).toBe(true);
   });
+
+  it('turns several ids into one bundle request and takes a scale', async () => {
+    const r = await exp(['prd', '3', '4', '5', '--format', 'pdf'], ok(job('queued')));
+    expect(r.http.post).toHaveBeenCalledWith('/export/jobs', { objectType: 'PRD_DOCUMENT', objectIds: [3, 4, 5], format: 'pdf' });
+    const p = await exp(['preview', '31', '32', '--format', 'png', '--scale', '2'], ok(job('queued')));
+    expect(p.http.post).toHaveBeenCalledWith('/export/jobs', { objectType: 'UI_PREVIEW', objectIds: [31, 32], scale: 2, format: 'png' });
+    for (const args of [['preview', '31', '--format', 'png', '--scale', '4'], ['preview', '31', '32', '--format', 'png', '--version', '5']]) {
+      const bad = await exp(args);
+      expect(bad.exitCode).toBe(1);
+      expect(noHttpCalls(bad)).toBe(true);
+    }
+  });
 });
