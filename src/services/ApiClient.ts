@@ -79,6 +79,11 @@ export class ApiClient {
     );
   }
 
+  /** Send a header with every later request of this process (the file commands mark themselves as the CLI). */
+  setDefaultHeader(name: string, value: string): void {
+    this.instance.defaults.headers.common[name] = value;
+  }
+
   /**
    * Make GET request
    */
