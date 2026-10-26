@@ -41,7 +41,11 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 export function renderJob(job: ExportJob): string {
   const head = `#${job.id} ${job.objectTitle ?? ''} → ${job.format}  ${job.status}`;
-  if (job.status === 'done') return `${head}\n结果文件 #${job.resultFileId}（good7ob file download ${job.resultFileId} 下载）`;
+  if (job.status === 'done') {
+    // a bundle that left objects out is done, with the reason in the note
+    const note = job.errorMessage ? `\n注意：${job.errorMessage}` : '';
+    return `${head}\n结果文件 #${job.resultFileId}（good7ob file download ${job.resultFileId} 下载）${note}`;
+  }
   if (job.status === 'failed') return `${head}\n失败：${job.errorMessage ?? '未知原因'}`;
   return head;
 }
@@ -63,7 +67,7 @@ async function downloadResult(fileId: number, out: string | undefined, force: bo
   if (!picked) throw new Error('结果文件不存在');
   const dest = resolveOutPath(out, picked.fileName, force);
   const signed: { url: string } = await apiClient.get(`/files/${fileId}/download-url`);
-  const bytes = await saveUrlTo(signed.url, dest);
+  const bytes = await saveUrlTo(signed.url, dest, force);
   return `已保存 ${dest}（${fmtSize(bytes)}）`;
 }
 
@@ -97,7 +101,9 @@ async function start(body: Record<string, unknown>, o: StartOptions, image = fal
     saved = '未下载：导出还没有完成，稍后用 good7ob export job <id> 查看';
   }
   emit(o.json, job, () => [renderJob(job), saved].filter(Boolean).join('\n'));
-  if (job.status === 'failed') process.exitCode = 1;
+  // asked to wait but it did not finish (failed, cancelled, still running at the limit): a script must see that
+  const waited = Boolean(o.wait || o.out);
+  if (job.status === 'failed' || (waited && job.status !== 'done')) process.exitCode = 1;
 }
 
 /** One id exports that object; several ids ask for a zip. */

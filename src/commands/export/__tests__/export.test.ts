@@ -60,7 +60,7 @@ describe('export prd', () => {
       return ok({ url: 'https://signed.example/z?sig=secret' });
     });
     const r = await run;
-    expect(saveUrlTo).toHaveBeenCalledWith('https://signed.example/z?sig=secret', path.join(dir, 'x', FILE.fileName));
+    expect(saveUrlTo).toHaveBeenCalledWith('https://signed.example/z?sig=secret', path.join(dir, 'x', FILE.fileName), false);
     expect(r.stdout).toContain('结果文件 #501');
     expect(r.stdout).toContain('已保存');
     expect(r.stdout).not.toContain('signed.example');
@@ -120,5 +120,31 @@ describe('export preview', () => {
       expect(bad.exitCode).toBe(1);
       expect(noHttpCalls(bad)).toBe(true);
     }
+  });
+
+  it('exits non-zero when asked to wait and the job ended cancelled or is still running at the limit', async () => {
+    waitSettings.limitMs = 5;
+    waitSettings.pollMs = 1;
+    const cancelled = await exp(['prd', '9', '--format', 'md', '--wait'], ok(job('cancelled')));
+    expect(cancelled.stdout).toContain('cancelled');
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+
+    const running = await exp(['prd', '9', '--format', 'pdf', '--wait'], ok(job('running')));
+    expect(running.stdout).toContain('running');
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+    waitSettings.limitMs = 5 * 60 * 1000;
+
+    const queuedNoWait = await exp(['prd', '9', '--format', 'pdf'], ok(job('queued')));
+    expect(queuedNoWait.stdout).toContain('queued');
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('shows the note of a bundle that left objects out', async () => {
+    const r = await exp(['prd', '3', '4', '--format', 'md', '--wait'], ok(job('done', { resultFileId: 7, errorMessage: '有 1 项未导出，原因见 index.md' })));
+    expect(r.stdout).toContain('结果文件 #7');
+    expect(r.stdout).toContain('注意：有 1 项未导出');
+    expect(process.exitCode).toBeUndefined();
   });
 });

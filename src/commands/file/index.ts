@@ -84,7 +84,7 @@ export function registerFileCommands(program: Command) {
         if (!picked) throw new Error('文件不存在');
         const dest = resolveOutPath(o.out, picked.fileName, Boolean(o.force));
         const signed: { url: string } = await apiClient.get(`/files/${id}/download-url`, version === undefined ? undefined : { version });
-        const bytes = await saveUrlTo(signed.url, dest);
+        const bytes = await saveUrlTo(signed.url, dest, Boolean(o.force));
         console.log(`已保存 ${dest}（${fmtSize(bytes)}）`);
       })
     );

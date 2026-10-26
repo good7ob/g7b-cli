@@ -55,4 +55,30 @@ describe('saveUrlTo', () => {
     await expect(pending).rejects.toThrow('connection reset');
     expect(fs.existsSync(dest)).toBe(false);
   });
+
+  it('with force it replaces the file only after the whole body arrived', async () => {
+    const existing = path.join(dir, 'replace.txt');
+    fs.writeFileSync(existing, 'old');
+    vi.spyOn(axios, 'get').mockResolvedValue({ data: Readable.from([Buffer.from('brand new')]) });
+
+    const size = await saveUrlTo('https://signed.example/x', existing, true);
+
+    expect(size).toBe(9);
+    expect(fs.readFileSync(existing, 'utf8')).toBe('brand new');
+    expect(fs.readdirSync(dir)).toEqual(['replace.txt']);
+  });
+
+  it('with force a broken transfer leaves the old file and no side file', async () => {
+    const existing = path.join(dir, 'keep2.txt');
+    fs.writeFileSync(existing, 'old');
+    const broken = new PassThrough();
+    vi.spyOn(axios, 'get').mockResolvedValue({ data: broken });
+    const pending = saveUrlTo('https://signed.example/x', existing, true);
+    broken.write('partial');
+    setImmediate(() => broken.destroy(new Error('connection reset')));
+
+    await expect(pending).rejects.toThrow('connection reset');
+    expect(fs.readFileSync(existing, 'utf8')).toBe('old');
+    expect(fs.readdirSync(dir)).toEqual(['keep2.txt']);
+  });
 });
