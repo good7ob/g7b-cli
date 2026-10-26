@@ -28,7 +28,7 @@ describe('kb', () => {
   it('sync-prd fetches the PRD then posts title/content', async () => {
     const r = await runCli(registerKbCommands, ['kb', 'sync-prd', '5', '--product-id', '2'], (m, url) =>
       url.startsWith('/forge/prd/')
-        ? { code: 200, data: { title: 'T', content: 'C' } }
+        ? { code: 200, data: { title: 'T', contentMd: 'C' } }
         : (({ id: 9, status: 'processing' }) as never));
     expect(r.http.post).toHaveBeenCalledWith('/forge/kb/sync/prd', { prdId: 5, productId: 2, title: 'T', content: 'C' }, expect.anything());
     expect(r.stdout).toContain('已同步');
