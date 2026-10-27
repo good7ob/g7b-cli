@@ -222,16 +222,14 @@ Directed trace links between product objects (idea → PRD → task → test). S
 
 ```bash
 good7ob template search -k login --type TASK --tag Vue --sort popular
-good7ob template get 4                                # published version: content, variables, dependencies
+good7ob template get 4                                # published version: content, variables
 good7ob template create --name "Login flow" --type TASK --tags vue,auth --content-file tasks.json --version 1.0.0
 good7ob template version add 21 --version 1.1.0 --content-file tasks.json --variables-file vars.json --changelog "add estimates"
 good7ob template diff 21 1.0.0 1.1.0
 good7ob template version submit 21 1.1.0              # PRIVATE/ORG publish at once, PUBLIC goes to platform review
-good7ob template dependency set 21 1.1.0 --file deps.json
 good7ob template favorite 4 && good7ob template review add 4 --rating 5 --comment "saved a day"
 good7ob template package create --name "Web starter" --item 4:^1.0.0 --item 9
-good7ob template install 4 --org 3 --with-deps         # my installs: `template installed`, `template uninstall 4`
-good7ob template deps 4 --org 3                        # missing / outdated / unavailable dependencies
+good7ob template install 4 --org 3                     # 指定模版 (specify); list: `template installed`, cancel: `template uninstall 4`
 good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login --dry-run   # preview, creates nothing
 good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login             # tasks / module / release / test cases / PRD / workflow
 good7ob template use 8 --org 3 --product 9 --var title=Login --out ./api.md            # document templates: body to a file
@@ -338,7 +336,37 @@ good7ob pm project get 123
 
 # List tasks in a project
 good7ob pm task list 123
+
+# Task dependencies (same project, no cycles; types finish_to_start | start_to_start)
+good7ob pm task dep list 1851
+good7ob pm task dep add 1851 --on 1850            # 1851 depends on 1850
+good7ob pm task dep remove 1851 --on 1850
+
+# Estimate vs actual (time / tokens / cost; cost only shown when you may see it)
+good7ob pm task time 1950
+good7ob pm task estimate set 1950 --hours 1.5 --tokens 400000 --reason "re-estimate"   # also --seconds, --model, --source
+good7ob pm task estimate list 1950
+good7ob pm task estimate clear 1950 --reason "cancelled"
+good7ob pm task effort add --task 1950:2 --task 1951:1 --work 1h30m --note "pairing"   # one session over several tasks (weights)
+good7ob pm task effort list 1950
+good7ob pm task effort void 301 --reason "duplicate"
+good7ob pm task effort reallocate manual:<session-id> --task 1950:1 --task 1952:1 --reason "missed a task"
+good7ob pm project time-deviation 12 --executor-type AGENT --only-completed
+
+# Set expected completion day (independent of the deadline)
+good7ob pm task update 456 --planned-end-date 2026-10-25
+
+# Set both planned dates, on update or create
+good7ob pm task update 456 --planned-start-date 2026-10-20 --planned-end-date 2026-10-25
+good7ob pm task create --project-id 123 --name "Scheduled task" --planned-end-date 2026-10-25
+
+# View planned dates
+good7ob pm task get 456
 ```
+
+Task planned dates use `YYYY-MM-DD` (Asia/Tokyo), with day precision. Invalid dates
+and reversed ranges are rejected. Omitted dates remain unchanged on update; when
+only one date is provided, the server validates it against the existing other date.
 
 ### Infrastructure
 

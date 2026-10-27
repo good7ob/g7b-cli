@@ -30,12 +30,19 @@ const packageResult = {
 };
 
 describe('template package use', () => {
-  it('POSTs shared variables, per-item overrides, target options and installDependencies to the package endpoint', async () => {
+  it('a 1007 is shown with the backend message verbatim (no generic wording in front)', async () => {
+    const r = await tpl(PKG, bizError(1007, '模板包成员「登录」已失效：模板已下架'));
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('模板包成员「登录」已失效：模板已下架');
+    expect(r.stderr).not.toContain('当前状态不允许');
+  });
+
+  it('POSTs shared variables, per-item overrides, target options (never installDependencies) to the package endpoint', async () => {
     const r = await tpl([...PKG, '--module', '55', '--suite', '12', '--start', '2026-10-01', '--end', '2026-10-31',
       '--var', 'project_name=商城', '--item', '4:feature=登录', '--item', '9:lang=zh', '--item', '4:owner=张三', '--with-deps'], ok(packageResult));
     expect(r.http.post).toHaveBeenCalledWith('/templates/packages/5/instantiate', {
       orgId: 3, productId: 9, moduleId: 55, suiteId: 12, plannedStartDate: '2026-10-01', plannedEndDate: '2026-10-31',
-      installDependencies: true, variables: { project_name: '商城' }, idempotencyKey: expect.any(String),
+      variables: { project_name: '商城' }, idempotencyKey: expect.any(String),
       items: [{ templateId: 4, variables: { feature: '登录', owner: '张三' } }, { templateId: 9, variables: { lang: 'zh' } }],
     }, REQUEST);
     expect(r.stdout).toContain('✓ 已实例化模板包 #5 Web 起步包: 2 个实例，共创建 3 个对象（整包一个事务）');

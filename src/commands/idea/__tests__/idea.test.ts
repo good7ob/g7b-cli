@@ -248,3 +248,14 @@ describe('idea select', () => {
     expect(auth.stderr).toContain('未登录');
   });
 });
+
+// task #2067: an AI employee Key is refused (2000) until its owner switches 想法 on in the employee editor
+describe('idea access denied (2000)', () => {
+  it('says where an AI employee gets access and keeps the server message', async () => {
+    const denied = '该 AI 员工无权访问该接口: GET /forge/ideas。可在 AI 员工编辑中开启「允许访问想法模块」';
+    const r = await idea(['list', '--product', '10'], bizError(2000, denied));
+    expect(r.stderr).toContain('无权访问');
+    expect(r.stderr).toContain('允许访问想法模块');
+    expect(r.stderr).toContain('GET /forge/ideas');
+  });
+});

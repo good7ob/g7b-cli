@@ -41,20 +41,19 @@ const docInstance = {
 };
 
 describe('template install / uninstall / installed', () => {
-  it('install POSTs org, version and installDependencies; nothing else', async () => {
+  it('install (指定模版) POSTs org and version only; the deprecated --with-deps is accepted but never sent', async () => {
     const r = await tpl(['install', '4', '--org', '3', '--version', '1.0.0', '--with-deps'], ok({
       id: 7, templateId: 4, templateName: '登录功能开发', orgId: 3, version: '1.0.0', publishedVersion: '1.1.0', upgradeAvailable: true, created: true,
-      dependencies: { templateId: 4, version: '1.0.0', satisfied: true, missingRequired: 0, items: [], warnings: [] },
     }));
-    expect(r.http.post).toHaveBeenCalledWith('/templates/4/install', { orgId: 3, version: '1.0.0', installDependencies: true });
-    expect(r.stdout).toContain('✓ 已安装: 模板 #4 登录功能开发 v1.0.0  组织 #3');
+    expect(r.http.post).toHaveBeenCalledWith('/templates/4/install', { orgId: 3, version: '1.0.0' });
+    expect(r.stdout).toContain('✓ 已指定: 模板 #4 登录功能开发 v1.0.0  组织 #3');
     expect(r.stdout).toContain('有新版本 1.1.0 可用');
   });
 
   it('install with no flags is personal scope, and an unchanged re-install says so', async () => {
     const r = await tpl(['install', '4'], ok({ id: 7, templateId: 4, version: '1.0.0', orgId: null, created: false }));
     expect(r.http.post).toHaveBeenCalledWith('/templates/4/install', {});
-    expect(r.stdout).toContain('已是安装状态（未变化）: 模板 #4 v1.0.0  个人范围');
+    expect(r.stdout).toContain('已是指定状态（未变化）: 模板 #4 v1.0.0  个人范围');
     expect(JSON.parse((await tpl(['install', '4', '--json'], ok({ id: 7 }))).stdout)).toEqual({ id: 7 });
   });
 
@@ -73,10 +72,10 @@ describe('template install / uninstall / installed', () => {
   it('uninstall DELETEs with the org in the query string and reports removed / not installed', async () => {
     const r = await tpl(['uninstall', '4', '--org', '3'], ok({ templateId: 4, orgId: 3, installed: false, removed: true }));
     expect(r.http.delete).toHaveBeenCalledWith('/templates/4/install?orgId=3', undefined);
-    expect(r.stdout).toContain('✓ 已卸载模板 #4（组织 #3）；已有实例保留');
+    expect(r.stdout).toContain('✓ 已取消指定模板 #4（组织 #3）；已有实例保留');
     const none = await tpl(['uninstall', '4'], ok({ templateId: 4, orgId: null, installed: false, removed: false }));
     expect(none.http.delete).toHaveBeenCalledWith('/templates/4/install', undefined);
-    expect(none.stdout).toContain('本来就没有安装（未变化）');
+    expect(none.stdout).toContain('本来就没有指定（未变化）');
     await expectRejected(['uninstall', '4', '--org', 'x'], '--org 必须是正整数');
   });
 
@@ -90,37 +89,21 @@ describe('template install / uninstall / installed', () => {
     expect(r.stdout).toMatch(/7\s+#4 登录功能开发\s+TASK\s+组织 #3\s+1\.0\.0\s+1\.1\.0\s+是\s+2026-09-20 10:00:00/);
     expect(r.stdout).toMatch(/8\s+#9 （已不可见）\s+—\s+个人\s+1\.0\.0\s+—\s+否\s+—/);
     expect(r.stdout).toContain('共 25 条，第 2/3 页');
-    expect((await tpl(['installed'], ok(page([])))).stdout).toContain('还没有安装任何模板');
+    expect((await tpl(['installed'], ok(page([])))).stdout).toContain('还没有指定任何模板');
     await expectRejected(['installed', '--page-size', '51'], '--page-size');
   });
 });
 
-describe('template deps', () => {
-  const check = {
-    templateId: 4, version: '1.0.0', satisfied: false, missingRequired: 1, warnings: ['可选依赖 AWS 部署 Skill 未安装'],
-    items: [
-      { templateId: 7, templateName: 'SaaS PRD 模板', kind: 'requires', minVersion: '2.0.0', installedVersion: null, publishedVersion: '2.1.0', status: 'MISSING', installable: true, depth: 1, requiredBy: 4 },
-      { templateId: 8, templateName: null, kind: 'optional', minVersion: null, installedVersion: '1.0.0', publishedVersion: null, status: 'UNAVAILABLE', installable: false, depth: 2, requiredBy: 7 },
-    ],
-  };
-
-  it('GETs the check with org and version and renders status / installable / requiredBy', async () => {
-    const r = await tpl(['deps', '4', '--org', '3', '--version', '1.0.0'], ok(check));
-    expect(r.http.get).toHaveBeenCalledWith('/templates/4/dependencies/check', { params: { orgId: 3, version: '1.0.0' } });
-    expect(r.stdout).toContain('依赖检查: 模板 #4 v1.0.0  ✗ 缺少 1 个必需依赖');
-    expect(r.stdout).toMatch(/#7 SaaS PRD 模板\s+requires\s+2\.0\.0\s+—\s+2\.1\.0\s+缺失\s+是\s+1\s+#4/);
-    expect(r.stdout).toMatch(/#8 —\s+optional\s+—\s+1\.0\.0\s+—\s+不可用\s+否\s+2\s+#7/);
-    expect(r.stdout).toContain('⚠ 可选依赖 AWS 部署 Skill 未安装');
+describe('template deps (removed in 1.2.0)', () => {
+  it('the deps command no longer exists and nothing is requested', async () => {
+    const r = await tpl(['deps', '4'], ok(null));
+    expect(r.exitCode).toBeDefined();
+    expect(r.http.get).not.toHaveBeenCalled();
   });
 
-  it('satisfied / no dependencies, --json, and validation', async () => {
-    const r = await tpl(['deps', '4'], ok({ templateId: 4, version: '1.0.0', satisfied: true, missingRequired: 0, items: [], warnings: [] }));
-    expect(r.http.get).toHaveBeenCalledWith('/templates/4/dependencies/check', { params: {} });
-    expect(r.stdout).toContain('✓ 必需依赖全部满足');
-    expect(r.stdout).toContain('（没有依赖）');
-    expect(JSON.parse((await tpl(['deps', '4', '--json'], ok(check))).stdout).missingRequired).toBe(1);
-    await expectRejected(['deps', '4', '--version', 'latest'], '--version 必须是 x.y.z');
-    expect((await tpl(['deps', '4', '--org', '3'], bizError(2000, 'no'))).stderr).toContain('你不是目标组织的活跃成员');
+  it('the deprecated --with-deps is accepted on use but never sent', async () => {
+    const r = await tpl([...USE, '--module', '55', '--with-deps'], ok(taskInstance));
+    expect(JSON.stringify(r.http.post.mock.calls)).not.toContain('installDependencies');
   });
 });
 
@@ -168,7 +151,7 @@ describe('template use', () => {
   it('POSTs orgId / productId / options / variables with the long instantiate timeout and renders created objects', async () => {
     const r = await tpl([...USE, '--module', '55', '--version', '1.0.0', '--var', 'feature=登录', '--var', 'note=a=b', '--with-deps'], ok(taskInstance));
     expect(r.http.post).toHaveBeenCalledWith('/templates/4/instantiate', {
-      orgId: 3, productId: 9, moduleId: 55, version: '1.0.0', variables: { feature: '登录', note: 'a=b' }, installDependencies: true, idempotencyKey: expect.any(String),
+      orgId: 3, productId: 9, moduleId: 55, version: '1.0.0', variables: { feature: '登录', note: 'a=b' }, idempotencyKey: expect.any(String),
     }, REQUEST);
     expect(r.stdout).toContain('✓ 已实例化: 实例 #31 [COMPLETED]  模板 #4 登录功能开发 (TASK v1.0.0)');
     expect(r.stdout).toContain('产出: TASK_BATCH #55');
@@ -236,7 +219,7 @@ describe('template use', () => {
   it('maps the business codes with T2 wording', async () => {
     const codes: Array<[number, string]> = [
       [1000, 'TASK 类型必须带 --module'], [1001, '变量缺失 / 未知 / 类型不符'], [1002, '产品不存在 / 不属于该组织'],
-      [1003, '商业化未开放'], [1006, 'RELEASE 渲染出的版本号'], [1007, '缺必需依赖（可加 --with-deps）'], [2000, '你不是目标组织的活跃成员'],
+      [1003, '商业化未开放'], [1006, 'RELEASE 渲染出的版本号'], [1007, '模板未发布 / 已下架 / 已归档'], [2000, '你不是目标组织的活跃成员'],
     ];
     for (const [code, needle] of codes) {
       const r = await tpl(USE, bizError(code, 'server says no'));

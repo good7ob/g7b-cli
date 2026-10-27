@@ -23,17 +23,10 @@ const version = {
   ] },
 };
 const detail = { id: 4, name: '登录功能开发', templateType: 'TASK', status: 'PUBLISHED', publishedVersion: '1.0.0', version };
-const depsOk = { templateId: 4, version: '1.0.0', satisfied: true, missingRequired: 0, items: [], warnings: [] };
-const depsMissing = {
-  templateId: 4, version: '1.0.0', satisfied: false, missingRequired: 1, warnings: [],
-  items: [{ templateId: 7, templateName: 'SaaS PRD 模板', kind: 'requires', minVersion: '2.0.0', status: 'MISSING', installable: true, depth: 1, requiredBy: 4 }],
-};
-
-interface World { detail?: unknown; version?: unknown; deps?: unknown; failDeps?: Envelope }
+interface World { detail?: unknown; version?: unknown }
 
 const world = (w: World = {}) => (method: string, url: string): Envelope => {
   if (method !== 'get') throw new Error(`dry-run must not ${method.toUpperCase()} ${url}`);
-  if (url.endsWith('/dependencies/check')) return w.failDeps ?? ok(w.deps ?? depsOk);
   if (url.includes('/versions/')) return ok(w.version ?? version);
   return ok(w.detail ?? detail);
 };
@@ -49,12 +42,13 @@ function expectReadOnly(r: Awaited<ReturnType<typeof dry>>) {
 }
 
 describe('template use --dry-run', () => {
-  it('reads the template + dependency check, renders locally, and makes no write request', async () => {
+  it('reads the template, renders locally, and makes no write request', async () => {
     const r = await dry(['--module', '55', '--var', 'feature=登录', '--var', 'due=2026-10-01']);
     expectReadOnly(r);
     expect(r.exitCode).toBeUndefined();
     expect(r.http.get).toHaveBeenCalledWith('/templates/4', { params: undefined });
-    expect(r.http.get).toHaveBeenCalledWith('/templates/4/dependencies/check', { params: { orgId: 3 } });
+    expect(r.http.get).not.toHaveBeenCalledWith(expect.stringContaining('/dependencies'), expect.anything()); // 1.2.0: no dependency endpoint
+    expect(r.stdout).not.toContain('依赖');
     expect(r.stdout).toContain('DRY-RUN 预演：没有创建任何对象');
     expect(r.stdout).toContain('模板 #4 登录功能开发 (TASK)  版本 1.0.0');
     expect(r.stdout).toContain('组织 #3  产品 #9  模块 #55');
@@ -143,22 +137,9 @@ describe('template use --dry-run', () => {
     expect(good.stdout).toContain('预检: ✓');
   });
 
-  it('missing required dependencies fail the pre-check unless --with-deps can install them', async () => {
-    const missing = await dry(['--module', '55', '--var', 'feature=x'], { deps: depsMissing });
-    expect(missing.stdout).toContain('✗ 缺少 1 个必需依赖');
-    expect(missing.stdout).toMatch(/缺少 1 个必需依赖（服务端 1007）：先安装，或加 --with-deps/);
-    const withDeps = await dry(['--module', '55', '--var', 'feature=x', '--with-deps'], { deps: depsMissing });
-    expect(withDeps.stdout).toContain('预检: ✓');
-    const stuck = { ...depsMissing, items: [{ ...depsMissing.items[0], status: 'UNAVAILABLE', installable: false }] };
-    const hopeless = await dry(['--module', '55', '--var', 'feature=x', '--with-deps'], { deps: stuck });
-    expect(hopeless.stdout).toContain('装不上，即使 --with-deps 也会失败');
-    expectReadOnly(withDeps);
-  });
-
-  it('--version reads that version and checks it against the dependency endpoint', async () => {
+  it('--version reads that version', async () => {
     const r = await dry(['--module', '55', '--var', 'feature=x', '--version', '1.0.0'], { version: { ...version, version: '1.0.0' } });
     expect(r.http.get).toHaveBeenCalledWith('/templates/4/versions/1.0.0', { params: undefined });
-    expect(r.http.get).toHaveBeenCalledWith('/templates/4/dependencies/check', { params: { orgId: 3, version: '1.0.0' } });
     const draft = await dry(['--module', '55', '--var', 'feature=x', '--version', '1.0.0'], { version: { ...version, status: 'DRAFT' } });
     expect(draft.stdout).toContain('版本 1.0.0 没有发布过');
   });
@@ -171,8 +152,7 @@ describe('template use --dry-run', () => {
     expect(none.stderr).toContain('没有已发布版本');
   });
 
-  it('server errors while reading map to the T2 wording (1002 not visible, 2000 not a member)', async () => {
-    expect((await dry(['--module', '55', '--var', 'feature=x'], { failDeps: bizError(2000, 'no') })).stderr).toContain('你不是目标组织的活跃成员');
+  it('server errors while reading map to the T2 wording (1002 not visible)', async () => {
     const notVisible = await runCli(registerTemplateCommands, ['template', 'use', '4', '--org', '3', '--product', '9', '--dry-run'], () => bizError(1002, 'nf'));
     expect(notVisible.stderr).toContain('不存在或对你不可见');
   });

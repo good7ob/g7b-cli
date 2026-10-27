@@ -13,6 +13,7 @@ import { registerContentCommands } from './commands/content';
 import { registerQcCommands } from './commands/qc';
 import { registerConfigCommands } from './commands/config';
 import { registerPrdCommands } from './commands/prd';
+import { registerKbCommands } from './commands/kb';
 import { registerReqCommands } from './commands/req';
 import { registerLogCommands } from './commands/log';
 import { registerCaseCommands } from './commands/case';
@@ -29,6 +30,8 @@ import { registerBlogCommands } from './commands/blog';
 import { registerWorktreeCommands } from './commands/worktree';
 import { registerAgentCommands } from './commands/agent';
 import { registerDevInfoCommands } from './commands/devInfo';
+import { registerFileCommands } from './commands/file';
+import { registerExportCommands } from './commands/export';
 import { registerHeartbeatCommands } from './commands/heartbeat';
 import { registerQuestionCommands } from './commands/question';
 import { registerSyncCommands } from './commands/sync';
@@ -40,6 +43,7 @@ import { registerEvalCommands } from './commands/eval';
 import { registerHabitCommands } from './commands/habit';
 import { registerArtifactCommands } from './commands/artifact';
 import { registerFeatCommands } from './commands/feat';
+import { registerDeliverableCommands } from './commands/deliverable';
 
 const program = new Command();
 
@@ -56,6 +60,7 @@ registerContentCommands(program);
 registerQcCommands(program);
 registerConfigCommands(program);
 registerPrdCommands(program);
+registerKbCommands(program);
 registerReqCommands(program);
 registerLogCommands(program);
 registerCaseCommands(program);
@@ -75,6 +80,8 @@ registerBlogCommands(program);
 registerWorktreeCommands(program);
 registerAgentCommands(program);
 registerDevInfoCommands(program);
+registerFileCommands(program);
+registerExportCommands(program);
 registerHeartbeatCommands(program);
 registerUiCommands(program);
 registerProgressCommands(program);
@@ -83,6 +90,7 @@ registerEvalCommands(program);
 registerHabitCommands(program);
 registerArtifactCommands(program);
 registerFeatCommands(program);
+registerDeliverableCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would

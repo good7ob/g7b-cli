@@ -78,6 +78,20 @@ export function parseId(raw: string | undefined, label: string): number {
   return parseInt(raw.trim(), 10);
 }
 
+const MAX_LONG = BigInt('9223372036854775807');
+
+/**
+ * A positive 64-bit id (Java Long). Bug and activity ids are snowflakes beyond 2^53, which a JS
+ * number would round, so those are returned as the exact decimal string; smaller ids stay numbers.
+ */
+export function parseLongId(raw: string | undefined, label: string): number | string {
+  const v = raw?.trim() ?? '';
+  if (!/^[1-9][0-9]{0,18}$/.test(v) || BigInt(v) > MAX_LONG) {
+    throw new InputError(`${label} 必须是正整数（最大 ${MAX_LONG}），收到: ${raw === undefined ? '(空)' : raw}`);
+  }
+  return Number.isSafeInteger(Number(v)) ? Number(v) : v;
+}
+
 /** `1,2,3` -> [1,2,3]: positive integers, de-duplicated (as the backend does), 1..max entries. */
 export function parseIdList(raw: string | undefined, label: string, max: number): number[] {
   if (raw === undefined || !raw.trim()) {

@@ -12,10 +12,24 @@ const STATUS_CN: Record<string, string> = {
   reopen: '已重开', closed: '已关闭', rejected: '已拒绝',
 };
 
+/** 把 `qc bug update` 的命令行选项转成 PUT /qc/bugs/{id} 的请求体，只带用户显式给出的字段。 */
+export function buildBugUpdateBody(options: Record<string, string | undefined>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (options.productId) body.productId = parseInt(options.productId, 10);
+  if (options.title)     body.title       = options.title;
+  if (options.module)    body.moduleName  = options.module;
+  if (options.severity)  body.severity    = options.severity;
+  if (options.priority)  body.priority    = options.priority;
+  if (options.desc)      body.description = options.desc;
+  if (options.stage)     body.foundStage  = options.stage;
+  if (options.source)    body.sourceType  = options.source;
+  return body;
+}
+
 export function registerBugCommands(qcCommand: Command) {
   const bugCmd = qcCommand
     .command('bug')
-    .description('Bug 追踪 — 创建、列表、详情、状态流转、分配');
+    .description('Bug 追踪 — 创建、列表、详情、修改、状态流转、分配');
 
   // ── list ──────────────────────────────────────────────────────────────
 
@@ -193,6 +207,36 @@ export function registerBugCommands(qcCommand: Command) {
         console.log(`✓ Bug ${id} 状态已更新 → ${STATUS_CN[newStatus] ?? newStatus}  (${newStatus})`);
       } catch (e) {
         console.error('✗ 状态流转失败:', e instanceof Error ? e.message : String(e));
+        process.exit(1);
+      }
+    });
+
+  // ── update ────────────────────────────────────────────────────────────
+
+  bugCmd
+    .command('update <id>')
+    .description('修改 Bug 基础信息（含所属产品）；已关闭/已拒绝的 Bug 不可编辑')
+    .option('--product-id <id>', '所属产品 ID')
+    .option('--title <title>', 'Bug 标题')
+    .option('--module <module>', '模块名称')
+    .option('--severity <severity>', '严重度 (blocker|critical|major|minor|trivial)')
+    .option('--priority <priority>', '优先级 (high|medium|low)')
+    .option('--desc <desc>', 'Bug 描述')
+    .option('--stage <stage>', '发现阶段 (dev_test|sit|uat|production)')
+    .option('--source <source>', '来源 (tester|developer|customer|monitor|system|user)')
+    .option('--json', '输出 JSON')
+    .action(async (id, options) => {
+      try {
+        const body = buildBugUpdateBody(options);
+        if (Object.keys(body).length === 0) {
+          console.error('✗ 至少指定一个要修改的字段（如 --product-id）');
+          process.exit(1);
+        }
+        const result = await apiClient.put(`/qc/bugs/${id}`, body);
+        if (options.json) { console.log(JSON.stringify(result, null, 2)); return; }
+        console.log(`✓ Bug ${id} 已更新: ${Object.keys(body).join(', ')}`);
+      } catch (e) {
+        console.error('✗ 更新 Bug 失败:', e instanceof Error ? e.message : String(e));
         process.exit(1);
       }
     });

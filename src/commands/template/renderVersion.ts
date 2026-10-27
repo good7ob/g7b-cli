@@ -1,15 +1,6 @@
 import { ApiDate, DASH, dash, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
 
-export interface DependencyVo {
-  id?: number | null;
-  versionId?: number | null;
-  requiredTemplateId?: number | null;
-  requiredTemplateName?: string | null;
-  minVersion?: string | null;
-  kind?: string | null;
-}
-
 export interface VariableDef {
   name?: string | null;
   label?: string | null;
@@ -38,7 +29,6 @@ export interface VersionVo {
   createdBy?: number | null;
   createdAt?: ApiDate;
   updatedAt?: ApiDate;
-  dependencies?: DependencyVo[] | null;
 }
 
 /** Content can be up to 1 MB: show the head in a terminal, the whole thing is in `--json`. */
@@ -59,18 +49,6 @@ export function renderVariables(variables: VariableDef[] | null | undefined): st
     variables.map((v) => [dash(v.name), dash(v.type), v.required ? '是' : '否', dash(v.default), dash(v.label)])
   );
   return [`变量 (${variables.length})`, renderTable(rows, { 3: { truncate: 30 }, 4: { truncate: 30 } })];
-}
-
-export function renderDependencies(deps: DependencyVo[] | null | undefined): string[] {
-  if (!deps?.length) return [`依赖: ${DASH}`];
-  const rows = [['ID', '被依赖模板', '名称', '最低版本', '类型']].concat(
-    deps.map((d) => [dash(d.id), `#${dash(d.requiredTemplateId)}`, dash(d.requiredTemplateName), dash(d.minVersion), dash(d.kind)])
-  );
-  return [`依赖 (${deps.length})`, renderTable(rows)];
-}
-
-export function renderDependencyList(result: unknown): string {
-  return renderDependencies(extractRecords<DependencyVo>(result)).join('\n');
 }
 
 function reviewLine(v: VersionVo): string[] {
@@ -95,13 +73,11 @@ export function renderVersion(v: VersionVo): string {
     '',
     ...renderVariables(v.variables),
     '',
-    ...renderDependencies(v.dependencies),
-    '',
     ...renderContent(v.content),
   ].join('\n');
 }
 
-/** The list endpoint carries no content / variables / dependencies. */
+/** The list endpoint carries no content / variables. */
 export function renderVersionList(result: unknown): string {
   const records = extractRecords<VersionVo>(result);
   if (!records.length) return '没有可见的版本。';

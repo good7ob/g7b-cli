@@ -20,7 +20,7 @@ import { renderVersion, VersionVo } from './renderVersion';
 /**
  * Template Center commands (api-0091, backend `/templates`): browse the catalog, manage my / my org's templates
  * and their versions, publish, favorite, review, bundle templates into packages, and (platform admins only)
- * moderate submissions. Versions, dependencies and diff live in versionCommands.ts, reviews in reviewCommands.ts,
+ * moderate submissions. Versions and diff live in versionCommands.ts, reviews in reviewCommands.ts,
  * packages in packageCommands.ts, the admin group in adminCommands.ts, and (part 2) install / instances in
  * installCommands.ts, `use` in useCommands.ts, `package use` in packageUseCommand.ts and `upgrade` in upgradeCommands.ts.
  *
@@ -71,7 +71,7 @@ function registerBrowse(tpl: Command): void {
 
   tpl
     .command('get <id>')
-    .description('Show a template with its published version (content + variables + dependencies); --version shows that version instead')
+    .description('Show a template with its published version (content + variables); --version shows that version instead')
     .option('--version <x.y.z>', 'Show this version (like `template version get`)')
     .option('--json', 'Output as JSON')
     .action((id, o) => guarded('获取模板失败', CODES, async () => {
@@ -202,7 +202,7 @@ function registerManage(tpl: Command): void {
 export function registerTemplateCommands(program: Command) {
   const tpl = program
     .command('template')
-    .description('Template Center — browse, create, version, publish, review, bundle, install and instantiate templates');
+    .description('Template Center — browse, create, version, publish, review, bundle, specify and instantiate templates');
 
   registerBrowse(tpl);
   registerManage(tpl);

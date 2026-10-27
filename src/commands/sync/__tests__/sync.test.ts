@@ -1,5 +1,5 @@
 /**
- * prd-0121 FP-2 rp-gjob-0009..0015 (g7b #1601). Every test runs against a throwaway home dir so the real
+ * prd-0121 FP-2 rp-gjob-sync-0009..0015 (g7b #1601). Every test runs against a throwaway home dir so the real
  * ~/.good7ob is never read or written (os.homedir() is mocked, see worktree.test.ts for why).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -111,7 +111,7 @@ describe('sync — incremental', () => {
   });
 });
 
-describe('sync — failure leaves the cursor alone (rp-gjob-0015)', () => {
+describe('sync — failure leaves the cursor alone (rp-gjob-sync-0015)', () => {
   it('does not advance when a later page fails', async () => {
     await sync(['--org-id', '58'], server(USER, [page([activity(1)], 'a1.c0.w100')]));
     let n = 0;

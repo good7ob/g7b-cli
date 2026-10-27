@@ -145,3 +145,36 @@ describe('trace delete', () => {
     await expectRejected(['delete', 'abc'], 'id');
   });
 });
+
+describe('trace with 64-bit ids (bug ids are snowflakes)', () => {
+  const BUG = '2114603713357754370';
+  const create = ['create', '--product', '10', '--source-type', 'BUG', '--source-id', BUG,
+    '--target-type', 'TASK', '--target-id', '2018', '--link-type', 'derived_from'];
+
+  it('sends an id beyond 2^53 as the exact string and keeps small ids numeric', async () => {
+    const r = await trace(create, ok({ ...LINK, sourceType: 'BUG', sourceId: Number(BUG), targetType: 'TASK', targetId: 2018 }));
+    expect(r.exitCode).toBeUndefined();
+    expect(r.http.post).toHaveBeenCalledWith('/forge/trace-links', expect.objectContaining({ sourceId: BUG, targetId: 2018 }));
+  });
+
+  it('echoes the id that was sent, not the rounded response number', async () => {
+    const r = await trace(create, ok({ ...LINK, sourceType: 'BUG', sourceId: Number(BUG), targetType: 'TASK', targetId: 2018 }));
+    expect(r.stdout).toContain(`BUG#${BUG}`);
+  });
+
+  it('accepts a 64-bit id as a list filter', async () => {
+    const r = await trace(['list', '--product', '10', '--source-type', 'BUG', '--source-id', BUG], ok({ records: [], total: 0 }));
+    expect(r.exitCode).toBeUndefined();
+    expect(r.http.get).toHaveBeenCalledWith('/forge/trace-links', { params: expect.objectContaining({ sourceType: 'BUG', sourceId: BUG }) });
+  });
+
+  it('rejects an id beyond the Java Long range', async () => {
+    await expectRejected(['create', '--product', '10', '--source-type', 'BUG', '--source-id', '9223372036854775808',
+      '--target-type', 'TASK', '--target-id', '2018', '--link-type', 'derived_from'], '--source-id');
+  });
+
+  it('still treats the same big id on both ends as the same object', async () => {
+    await expectRejected(['create', '--product', '10', '--source-type', 'BUG', '--source-id', BUG,
+      '--target-type', 'BUG', '--target-id', BUG, '--link-type', 'impacts'], '同一个对象');
+  });
+});

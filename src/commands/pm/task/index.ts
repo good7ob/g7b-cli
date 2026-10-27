@@ -3,7 +3,56 @@ import apiClient from '../../../services/ApiClient';
 import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
-import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
+import { registerDepCommands } from './dep';
+import { registerTimeCommands } from './time';
+import { fmtDate, fmtDateTime, InputError, parseDate, parseId } from '../../../utils/cliHelpers';
+
+function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: string }): Record<string, string> {
+  const dates: Record<string, string> = {};
+  if (options.plannedStartDate !== undefined) dates.plannedStartDate = parseDate(options.plannedStartDate, '--planned-start-date');
+  if (options.plannedEndDate !== undefined) dates.plannedEndDate = parseDate(options.plannedEndDate, '--planned-end-date');
+  if (dates.plannedStartDate && dates.plannedEndDate && dates.plannedEndDate < dates.plannedStartDate) {
+    throw new InputError('--planned-end-date 不能早于 --planned-start-date');
+  }
+  return dates;
+}
+
+const EXECUTOR_TYPES = ['HUMAN', 'AGENT'];
+
+/**
+ * An AI employee only owns a task whose executor is AGENT + `emp:<employeeId>` (prd-0089 rp-ws-ai-0002),
+ * so `--ai-employee 5` is the short form of `--executor-type AGENT --executor-id emp:5`.
+ */
+export function executorFields(options: {
+  aiEmployee?: string;
+  executorType?: string;
+  executorId?: string;
+}): Record<string, string> {
+  if (options.aiEmployee !== undefined) {
+    if (options.executorType !== undefined || options.executorId !== undefined) {
+      throw new InputError('--ai-employee 不能与 --executor-type / --executor-id 同时使用');
+    }
+    return { executorType: 'AGENT', executorId: `emp:${parseId(options.aiEmployee, '--ai-employee')}` };
+  }
+  if (options.executorType === undefined) {
+    if (options.executorId !== undefined) throw new InputError('--executor-id 需要同时指定 --executor-type');
+    return {};
+  }
+  const executorType = options.executorType.trim().toUpperCase();
+  if (!EXECUTOR_TYPES.includes(executorType)) {
+    throw new InputError(`--executor-type 只能是 ${EXECUTOR_TYPES.join('|')}，收到: ${options.executorType}`);
+  }
+  if (options.executorId === undefined) return { executorType };
+  const raw = options.executorId.trim();
+  if (executorType === 'HUMAN') {
+    return { executorType, executorId: String(parseId(raw, '--executor-id')) };
+  }
+  // A bare number is an AI employee id; other agent ids (e.g. hermes-v1) pass through unchanged.
+  const employee = /^(?:emp:)?([0-9]+)$/.exec(raw);
+  if (employee) return { executorType, executorId: `emp:${parseId(employee[1], '--executor-id')}` };
+  if (!raw) throw new InputError('--executor-id 不能为空');
+  return { executorType, executorId: raw };
+}
 
 export function registerTaskCommands(pmCommand: Command) {
   const taskCommand = pmCommand
@@ -104,9 +153,12 @@ export function registerTaskCommands(pmCommand: Command) {
         console.log(`描述:       ${task.description || '-'}`);
         console.log(`负责人:     ${task.ownerName || task.ownerId || '-'}`);
         console.log(`截止日期:   ${fmtDate(task.deadline, '-')}`);
+        console.log(`计划开始:   ${fmtDate(task.plannedStartDate, '-')}`);
+        console.log(`预计完成:   ${fmtDate(task.plannedEndDate, '-')}`);
         console.log(`父任务ID:   ${task.parentTaskId || '-'}`);
         console.log(`项目ID:     ${task.projectId}`);
         console.log(`执行者类型: ${task.executorType || '-'}`);
+        console.log(`执行者:     ${task.executorId || '-'}`);
         console.log(`阻塞原因:   ${task.blockedReason || '-'}`);
         console.log(`创建时间:   ${fmtDateTime(task.createdAt, '-')}`);
         if (task.tags?.length) {
@@ -131,9 +183,14 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--priority <priority>', 'Priority (high|medium|low)', 'medium')
     .option('--status <status>', 'Initial status', 'not_started')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
+    .option('--planned-start-date <date>', 'Planned start date (YYYY-MM-DD)')
+    .option('--planned-end-date <date>', 'Expected completion / planned end date (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID (for sub-tasks)')
     .option('--estimated-hours <hours>', 'Estimated hours')
+    .option('--ai-employee <id>', 'Hand the task to this AI employee (executor AGENT, emp:<id>)')
+    .option('--executor-type <type>', 'Executor type (HUMAN|AGENT)')
+    .option('--executor-id <id>', 'Executor: user ID for HUMAN; AI employee ID / emp:<id> or agent id for AGENT')
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
@@ -142,6 +199,8 @@ export function registerTaskCommands(pmCommand: Command) {
           name: options.name,
           priority: options.priority,
           status: options.status,
+          ...plannedDates(options),
+          ...executorFields(options),
         };
         if (options.description) body.description = options.description;
         if (options.deadline) body.deadline = options.deadline;
@@ -169,14 +228,19 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--priority <priority>', 'Priority (high|medium|low)')
     .option('--status <status>', 'Status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
+    .option('--planned-start-date <date>', 'Planned start date (YYYY-MM-DD)')
+    .option('--planned-end-date <date>', 'Expected completion / planned end date (YYYY-MM-DD)')
     .option('--owner-id <id>', 'Owner user ID')
     .option('--parent-task-id <id>', 'Parent task ID')
     .option('--project-id <id>', 'Move the task to another project (no pre-flight checks — prefer `pm task move`)')
     .option('--estimated-hours <hours>', 'Estimated hours')
     .option('--actual-hours <hours>', 'Actual hours spent')
+    .option('--ai-employee <id>', 'Hand the task to this AI employee (executor AGENT, emp:<id>)')
+    .option('--executor-type <type>', 'Executor type (HUMAN|AGENT)')
+    .option('--executor-id <id>', 'Executor: user ID for HUMAN; AI employee ID / emp:<id> or agent id for AGENT')
     .action(async (id, options) => {
       try {
-        const body: any = {};
+        const body: any = { ...plannedDates(options), ...executorFields(options) };
         if (options.name) body.name = options.name;
         if (options.description) body.description = options.description;
         if (options.priority) body.priority = options.priority;
@@ -378,6 +442,9 @@ export function registerTaskCommands(pmCommand: Command) {
         process.exit(1);
       }
     });
+
+  registerDepCommands(taskCommand);
+  registerTimeCommands(taskCommand);
 
   return taskCommand;
 }

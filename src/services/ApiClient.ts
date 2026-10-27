@@ -79,6 +79,11 @@ export class ApiClient {
     );
   }
 
+  /** Send a header with every later request of this process (the file commands mark themselves as the CLI). */
+  setDefaultHeader(name: string, value: string): void {
+    this.instance.defaults.headers.common[name] = value;
+  }
+
   /**
    * Make GET request
    */
@@ -137,6 +142,29 @@ export class ApiClient {
     try {
       const response = await this.instance.delete<ApiResponse<T>>(url, data ? { data } : undefined);
       return this.unwrap(response.data);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Request an endpoint that returns the bare body (no `{code,data}` envelope), e.g. /forge/kb/*.
+   * HTTP errors still surface through handleError via their `message`.
+   */
+  async requestRaw<T = any>(method: 'get' | 'post', url: string, opts: { params?: Record<string, any>; data?: any; headers?: Record<string, string> } = {}): Promise<T> {
+    try {
+      const response = method === 'get'
+        ? await this.instance.get<T>(url, { params: opts.params, headers: opts.headers })
+        : await this.instance.post<T>(url, opts.data, { headers: opts.headers });
+      const body: any = response.data;
+      // success bodies are bare, but failures come back as an envelope (e.g. code 2000 on 200)
+      if (body && typeof body === 'object' && !Array.isArray(body) && body.success === false) {
+        const err: any = new Error(body.msg || body.message || '请求失败');
+        err.code = body.code;
+        err.payload = body;
+        throw err;
+      }
+      return body as T;
     } catch (error) {
       throw this.handleError(error);
     }

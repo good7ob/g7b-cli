@@ -28,7 +28,6 @@ const version = {
   id: 9, templateId: 4, version: '1.1.0', changelog: '加了描述', status: 'DRAFT', content: { tasks: [{ name: 'a' }] },
   variables: [], previousVersionId: 8, submittedAt: null, publishedAt: null, reviewResult: 'REJECTED', reviewComment: '缺少描述',
   reviewedBy: 900, reviewedAt: '2026-09-20 11:00:00', createdBy: 11, createdAt: '2026-09-20 10:00:00',
-  dependencies: [{ id: 1, versionId: 9, requiredTemplateId: 7, requiredTemplateName: 'Base', minVersion: '1.0.0', kind: 'requires' }],
 };
 
 describe('template version add / update', () => {
@@ -102,14 +101,14 @@ describe('template version list / get / delete / submit', () => {
     expect((await tpl(['version', 'list', '4'], ok([]))).stdout).toContain('没有可见的版本');
   });
 
-  it('get renders review outcome, dependencies and content; null fields become "—"', async () => {
+  it('get renders review outcome and content; null fields become "—"', async () => {
     const r = await tpl(['version', 'get', '4', '1.1.0'], ok(version));
     expect(r.http.get).toHaveBeenCalledWith('/templates/4/versions/1.1.0', { params: undefined });
     expect(r.stdout).toContain('版本 1.1.0  [DRAFT]');
     expect(r.stdout).toContain('审核:     REJECTED by 900 @ 2026-09-20 11:00:00 — 缺少描述');
     expect(r.stdout).toContain('提交 —    发布 —');
     expect(r.stdout).toContain('变量: —');
-    expect(r.stdout).toMatch(/#7\s+Base\s+1\.0\.0\s+requires/);
+    expect(r.stdout).not.toContain('依赖');
     expect((await tpl(['version', 'get', '4', '9.9.9'], bizError(1002, 'nf'))).stderr).toContain('不存在，或对你不可见');
     await expectRejected(['version', 'get', '4', 'latest'], 'version 必须是 x.y.z');
   });
@@ -175,57 +174,10 @@ describe('template diff', () => {
   });
 });
 
-describe('template dependency', () => {
-  const dep = { id: 1, versionId: 9, requiredTemplateId: 7, requiredTemplateName: null, minVersion: null, kind: 'optional' };
-
-  it('set PUTs the whole list from a file (array or {dependencies})', async () => {
-    const arr = write('d1.json', '[{"requiredTemplateId":7,"minVersion":"1.0.0","kind":"requires"},{"requiredTemplateId":8}]');
-    const r = await tpl(['dependency', 'set', '4', '1.1.0', '--file', arr], ok([dep]));
-    expect(r.http.put).toHaveBeenCalledWith('/templates/4/versions/1.1.0/dependencies', {
-      dependencies: [{ requiredTemplateId: 7, minVersion: '1.0.0', kind: 'requires' }, { requiredTemplateId: 8 }],
-    });
-    expect(r.stdout).toContain('✓ 依赖已替换: 模板 #4 1.1.0，共 2 个');
-    const wrapped = write('d2.json', '{"dependencies":[{"requiredTemplateId":7}]}');
-    expect((await tpl(['dependency', 'set', '4', '1.1.0', '--file', wrapped], ok([]))).http.put).toHaveBeenCalledWith(
-      '/templates/4/versions/1.1.0/dependencies', { dependencies: [{ requiredTemplateId: 7 }] });
-    const empty = write('d3.json', '[]');
-    expect((await tpl(['dependency', 'set', '4', '1.1.0', '--file', empty], ok([]))).http.put).toHaveBeenCalledWith(
-      '/templates/4/versions/1.1.0/dependencies', { dependencies: [] });
-  });
-
-  it('set validates the file: shape, ids, kind, versions, unknown keys, duplicates, >20, bombs', async () => {
-    const run = (name: string, text: string) => ['dependency', 'set', '4', '1.1.0', '--file', write(name, text)];
-    await expectRejected(run('e1.json', '{"x":1}'), '数组，或形如');
-    await expectRejected(run('e2.json', '[1]'), 'dependencies[0]: 必须是对象');
-    await expectRejected(run('e3.json', '[{"minVersion":"1.0.0"}]'), 'dependencies[0].requiredTemplateId 必须是正整数');
-    await expectRejected(run('e4.json', '[{"requiredTemplateId":7,"kind":"hard"}]'), 'dependencies[0].kind 取值无效');
-    await expectRejected(run('e5.json', '[{"requiredTemplateId":7,"minVersion":"1.0"}]'), 'dependencies[0].minVersion 必须是 x.y.z');
-    await expectRejected(run('e6.json', '[{"requiredTemplateId":7,"extra":1}]'), '不支持的字段 extra');
-    await expectRejected(run('e7.json', '[{"requiredTemplateId":7},{"requiredTemplateId":7}]'), 'requiredTemplateId 不能重复');
-    await expectRejected(run('e8.json', JSON.stringify(Array.from({ length: 21 }, (_, i) => ({ requiredTemplateId: i + 1 })))), '最多 20 个');
-    await expectRejected(run('e9.json', '['.repeat(1000) + ']'.repeat(1000)), '嵌套超过 32 层');
-    await expectRejected(['dependency', 'set', '4', '1.1.0', '--file', path.join(dir, 'none.json')], '无法读取');
-  });
-
-  it('add POSTs one dependency; kind is case-insensitive; validation first', async () => {
-    const r = await tpl(['dependency', 'add', '4', '1.1.0', '--template', '7', '--min-version', '1.2.0', '--kind', 'Optional'], ok([dep]));
-    expect(r.http.post).toHaveBeenCalledWith('/templates/4/versions/1.1.0/dependencies', { requiredTemplateId: 7, minVersion: '1.2.0', kind: 'optional' });
-    expect(r.stdout).toContain('✓ 依赖已添加: 模板 #4 1.1.0 → #7');
-    await expectRejected(['dependency', 'add', '4', '1.1.0', '--template', 'x'], '--template 必须是正整数');
-    await expectRejected(['dependency', 'add', '4', '1.1.0', '--template', '7', '--kind', 'soft'], '--kind 取值无效');
-    await expectRejected(['dependency', 'add', '4', '1.1.0', '--template', '7', '--min-version', '2'], '--min-version 必须是 x.y.z');
-    expect((await tpl(['dependency', 'add', '4', '1.1.0', '--template', '7'], bizError(1001, '依赖会形成环'))).stderr).toContain('依赖会形成环');
-    expect((await tpl(['dependency', 'add', '4', '1.1.0', '--template', '7'], bizError(1006, 'dup'))).stderr).toContain('依赖或包条目重复');
-  });
-
-  it('list renders the table with "—" for hidden names / null min version; rm DELETEs by id', async () => {
-    const r = await tpl(['dependency', 'list', '4', '1.1.0'], ok([dep]));
-    expect(r.http.get).toHaveBeenCalledWith('/templates/4/versions/1.1.0/dependencies', { params: undefined });
-    expect(r.stdout).toMatch(/1\s+#7\s+—\s+—\s+optional/);
-    expect((await tpl(['dependency', 'list', '4', '1.1.0'], ok([]))).stdout).toContain('依赖: —');
-    const rm = await tpl(['dependency', 'rm', '4', '1.1.0', '1'], ok(null));
-    expect(rm.http.delete).toHaveBeenCalledWith('/templates/4/versions/1.1.0/dependencies/1', undefined);
-    expect(rm.stdout).toContain('✓ 依赖已删除: #1');
-    await expectRejected(['dependency', 'rm', '4', '1.1.0', '0'], 'dependencyId 必须是正整数');
+describe('template dependency (removed in 1.2.0)', () => {
+  it('the dependency command no longer exists and nothing is requested', async () => {
+    const r = await tpl(['dependency', 'list', '4', '1.1.0'], ok([]));
+    expect(r.exitCode).toBeDefined();
+    expect(r.http.get).not.toHaveBeenCalled();
   });
 });

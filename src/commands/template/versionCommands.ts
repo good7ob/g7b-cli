@@ -3,10 +3,10 @@ import apiClient from '../../services/ApiClient';
 import { emit, guarded, parseId } from '../../utils/cliHelpers';
 import { TEMPLATE_ERROR_CODES as CODES } from './input';
 import {
-  DiffVo, VersionVo, renderDependencyList, renderDiff, renderVersion, renderVersionList,
+  DiffVo, VersionVo, renderDiff, renderVersion, renderVersionList,
 } from './renderVersion';
 import {
-  DEPENDENCY_KINDS, buildDependency, buildVersionAddBody, buildVersionUpdateBody, loadDependencies, requireSemver,
+  buildVersionAddBody, buildVersionUpdateBody, requireSemver,
 } from './versionInput';
 
 const BASE = '/templates';
@@ -62,7 +62,7 @@ function registerVersion(tpl: Command): void {
 
   version
     .command('get <id> <version>')
-    .description('Show one version with content, variables and dependencies')
+    .description('Show one version with content and variables')
     .option('--json', 'Output as JSON')
     .action((id, ver, o) => guarded('获取版本失败', CODES, async () => {
       const detail: VersionVo = await apiClient.get(versionUrl(id, ver));
@@ -89,58 +89,8 @@ function registerVersion(tpl: Command): void {
     }));
 }
 
-function registerDependency(tpl: Command): void {
-  const dep = tpl.command('dependency').description('Dependencies of a DRAFT version (max 20, no cycles; PUBLIC templates may only depend on PUBLIC ones)');
-
-  dep
-    .command('list <id> <version>')
-    .description('List the dependencies of a version')
-    .option('--json', 'Output as JSON')
-    .action((id, ver, o) => guarded('获取依赖失败', CODES, async () => {
-      const result = await apiClient.get(`${versionUrl(id, ver)}/dependencies`);
-      emit(o.json, result, () => renderDependencyList(result));
-    }));
-
-  dep
-    .command('set <id> <version>')
-    .description('Replace ALL dependencies of a DRAFT version from a JSON file: [{"requiredTemplateId":7,"minVersion":"1.0.0","kind":"requires"}]')
-    .requiredOption('--file <deps.json>', 'Dependencies file (an array, or {"dependencies": [...]}; max 20)')
-    .option('--json', 'Output as JSON')
-    .action((id, ver, o) => guarded('设置依赖失败', CODES, async () => {
-      const url = versionUrl(id, ver);
-      const dependencies = loadDependencies(o.file);
-      const result = await apiClient.put(`${url}/dependencies`, { dependencies });
-      emit(o.json, result, () => `✓ 依赖已替换: 模板 #${id} ${ver}，共 ${dependencies.length} 个\n${renderDependencyList(result)}`);
-    }));
-
-  dep
-    .command('add <id> <version>')
-    .description('Add one dependency to a DRAFT version')
-    .requiredOption('--template <id>', 'Required template id')
-    .option('--min-version <x.y.z>', 'Minimum version of the required template')
-    .option('--kind <kind>', `Dependency kind (${DEPENDENCY_KINDS.join('|')}, default requires)`)
-    .option('--json', 'Output as JSON')
-    .action((id, ver, o) => guarded('添加依赖失败', CODES, async () => {
-      const url = versionUrl(id, ver);
-      const result = await apiClient.post(`${url}/dependencies`, buildDependency(o));
-      emit(o.json, result, () => `✓ 依赖已添加: 模板 #${id} ${ver} → #${o.template}`);
-    }));
-
-  dep
-    .command('rm <id> <version> <dependencyId>')
-    .description('Remove one dependency (dependencyId from `dependency list`)')
-    .option('--json', 'Output as JSON')
-    .action((id, ver, depId, o) => guarded('删除依赖失败', CODES, async () => {
-      const url = versionUrl(id, ver);
-      const did = parseId(depId, 'dependencyId');
-      const result = await apiClient.delete(`${url}/dependencies/${did}`);
-      emit(o.json, result ?? { deleted: true, id: did }, () => `✓ 依赖已删除: #${did}`);
-    }));
-}
-
 export function registerVersionCommands(tpl: Command): void {
   registerVersion(tpl);
-  registerDependency(tpl);
 
   tpl
     .command('diff <id> <from> <to>')

@@ -4,6 +4,7 @@ import { extractRecords } from '../../../utils/extractRecords';
 import { currentProjectId } from '../../../utils/resolveProjectId';
 import configService from '../../../services/ConfigService';
 import { fmtDate, fmtDateTime } from '../../../utils/cliHelpers';
+import { registerTimeDeviationCommand } from '../task/time';
 
 export function registerProjectCommands(pmCommand: Command) {
   const projectCommand = pmCommand
@@ -348,6 +349,8 @@ export function registerProjectCommands(pmCommand: Command) {
         process.exit(1);
       }
     });
+
+  registerTimeDeviationCommand(projectCommand);
 
   return projectCommand;
 }

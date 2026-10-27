@@ -53,6 +53,8 @@ export function renderReviewSaved(r: ReviewVo, templateId: number): string {
 interface PackageItemVo {
   templateId?: number; templateName?: string | null; templateType?: string | null; templateStatus?: string | null;
   publishedVersion?: string | null; versionConstraint?: string | null;
+  // 1.2.0 (backend #737): invalidReason is a code, invalidMessage the Chinese text
+  invalid?: boolean | null; invalidReason?: string | null; invalidMessage?: string | null;
 }
 export interface PackageVo {
   id: number; name?: string | null; description?: string | null; visibility?: string | null; status?: string | null;
@@ -64,11 +66,16 @@ export interface PackageVo {
 export function renderPackageList(result: unknown, pageNum: number, pageSize: number): string {
   const records = extractRecords<PackageVo>(result);
   if (!records.length) return '没有模板包。';
-  const rows = [['ID', '状态', '可见', '安装', '创建时间', '名称']].concat(
+  const rows = [['ID', '状态', '可见', '指定', '创建时间', '名称']].concat(
     records.map((p) => [String(p.id), dash(p.status), dash(p.visibility), dash(p.installCount), fmtDateTime(p.createdAt), `${p.isOfficial ? '★ ' : ''}${dash(p.name)}`])
   );
   return `${renderTable(rows, { 5: { truncate: 40 } })}\n${pageFooter(result, records, pageNum, pageSize)}`;
 }
+
+const INVALID_REASON_TEXT: Record<string, string> = {
+  NOT_FOUND: '模板不存在', DELETED: '已删除', NOT_PUBLISHED: '未发布', ARCHIVED: '已归档', SUSPENDED: '已下架', SCOPE_TOO_NARROW: '可见范围过窄',
+};
+const invalidText = (i: PackageItemVo): string => i.invalidMessage || (i.invalidReason ? INVALID_REASON_TEXT[i.invalidReason] ?? i.invalidReason : '');
 
 export function renderPackage(p: PackageVo): string {
   const items = p.items ?? [];
@@ -77,7 +84,7 @@ export function renderPackage(p: PackageVo): string {
     `模板包 #${p.id}  ${p.isOfficial ? '★ ' : ''}${dash(p.name)}`,
     '─'.repeat(60),
     `状态:     ${dash(p.status)}    可见性: ${dash(p.visibility)}    所有者: ${owner}    定价: ${dash(p.pricingType)}`,
-    `热度:     安装 ${dash(p.installCount)}  实例化 ${dash(p.instantiateCount)}    ${p.canManage ? '可管理' : '只读'}`,
+    `热度:     指定 ${dash(p.installCount)}  实例化 ${dash(p.instantiateCount)}    ${p.canManage ? '可管理' : '只读'}`,
     `时间:     创建 ${fmtDateTime(p.createdAt)} by ${dash(p.createdBy)}    更新 ${fmtDateTime(p.updatedAt)}`,
     ...(p.description ? ['', '描述:', p.description] : []),
     '',
@@ -85,9 +92,10 @@ export function renderPackage(p: PackageVo): string {
   if (!items.length) return [...lines, `条目: ${DASH}`].join('\n');
   // name / type / status / version are null when the caller cannot see that template in the library
   const rows = [['模板', '名称', '类型', '状态', '已发布版本', '版本约束']].concat(
-    items.map((i) => [`#${dash(i.templateId)}`, dash(i.templateName), dash(i.templateType), dash(i.templateStatus), dash(i.publishedVersion), dash(i.versionConstraint)])
+    items.map((i) => [`#${dash(i.templateId)}`, dash(i.templateName), dash(i.templateType), i.invalid ? '已失效' : dash(i.templateStatus), dash(i.publishedVersion), dash(i.versionConstraint)])
   );
-  return [...lines, `条目 (${items.length})`, renderTable(rows)].join('\n');
+  const invalid = items.filter((i) => i.invalid).map((i) => `⚠ 模板 #${dash(i.templateId)} 已失效${invalidText(i) ? `：${invalidText(i)}` : ''}`);
+  return [...lines, `条目 (${items.length})`, renderTable(rows), ...invalid].join('\n');
 }
 
 // ── admin ──

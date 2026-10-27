@@ -6,7 +6,6 @@
 import { ApiDate, DASH, dash, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 import { extractRecords } from '../../utils/extractRecords';
 import { pageFooter } from './render';
-import { DependencyCheckVo, renderDependencyCheck } from './renderCheck';
 import { documentBody, resultLines } from './renderBody';
 
 export interface CreatedObject {
@@ -25,7 +24,6 @@ export interface InstallationVo {
   id?: number; templateId?: number; templateName?: string | null; templateType?: string | null; templateStatus?: string | null;
   orgId?: number | null; versionId?: number | null; version?: string | null; publishedVersion?: string | null;
   upgradeAvailable?: boolean | null; installedAt?: ApiDate; updatedAt?: ApiDate; created?: boolean | null;
-  dependencies?: DependencyCheckVo | null;
 }
 
 export interface PackageInstantiationVo {
@@ -114,18 +112,17 @@ export function renderPackageInstantiation(v: PackageInstantiationVo): string {
 
 export function renderInstalled(v: InstallationVo): string {
   const name = v.templateName ? `${v.templateName} ` : '';
-  const state = v.created ? '已安装' : '已是安装状态（未变化）';
+  const state = v.created ? '已指定' : '已是指定状态（未变化）';
   return [
     `✓ ${state}: 模板 #${dash(v.templateId)} ${name}v${dash(v.version)}  ${scope(v.orgId)}`,
     ...(v.upgradeAvailable ? [`  有新版本 ${dash(v.publishedVersion)} 可用（再次 install --version ${dash(v.publishedVersion)} 切换）`] : []),
-    ...(v.dependencies?.items?.length ? ['', ...renderDependencyCheck(v.dependencies)] : []),
   ].join('\n');
 }
 
 export function renderInstalledList(result: unknown, pageNum: number, pageSize: number): string {
   const records = extractRecords<InstallationVo>(result);
-  if (!records.length) return '还没有安装任何模板。';
-  const rows = [['ID', '模板', '类型', '范围', '已装版本', '最新版本', '可升级', '安装时间']].concat(
+  if (!records.length) return '还没有指定任何模板。';
+  const rows = [['ID', '模板', '类型', '范围', '已指定版本', '最新版本', '可升级', '指定时间']].concat(
     records.map((v) => [
       dash(v.id), `#${dash(v.templateId)} ${v.templateStatus === 'UNAVAILABLE' ? '（已不可见）' : dash(v.templateName)}`, dash(v.templateType),
       v.orgId ? `组织 #${v.orgId}` : '个人', dash(v.version), dash(v.publishedVersion), v.upgradeAvailable ? '是' : '否', fmtDateTime(v.installedAt),
