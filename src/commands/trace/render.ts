@@ -5,15 +5,15 @@ export interface TraceLink {
   id: number;
   productId?: number;
   sourceType?: string | null;
-  sourceId?: number | null;
+  sourceId?: number | string | null;
   targetType?: string | null;
-  targetId?: number | null;
+  targetId?: number | string | null;
   linkType?: string | null;
   createdBy?: number | null;
   createdAt?: ApiDate;
 }
 
-const end = (type?: string | null, id?: number | null) => `${dash(type)}#${dash(id)}`;
+const end = (type?: string | null, id?: number | string | null) => `${dash(type)}#${dash(id)}`;
 
 export function renderTraceList(result: unknown, pageNum: number, pageSize: number): string {
   const records = extractRecords<TraceLink>(result);

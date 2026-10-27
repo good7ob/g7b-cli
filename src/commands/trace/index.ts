@@ -33,8 +33,11 @@ export function registerTraceCommands(program: Command) {
     .option('--json', 'Output as JSON')
     .action(async (o) => {
       try {
-        const created: TraceLink = await apiClient.post(BASE, buildCreateBody(o));
-        emit(o.json, created, () => `✓ 追溯关系已创建: #${created?.id ?? '-'} ${describeLink(created ?? {} as TraceLink)}`);
+        const body = buildCreateBody(o);
+        const created: TraceLink = await apiClient.post(BASE, body);
+        // The response carries ids as JSON numbers, which round beyond 2^53; echo the ids that were sent.
+        const shown = { ...(created ?? {}), sourceId: body.sourceId, targetId: body.targetId } as TraceLink;
+        emit(o.json, created, () => `✓ 追溯关系已创建: #${created?.id ?? '-'} ${describeLink(shown)}`);
       } catch (error) {
         fail('创建追溯关系失败', error, TRACE_ERROR_CODES);
       }
