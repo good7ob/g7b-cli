@@ -3,3 +3,6 @@ node_modules
 dist/
 .worktrees/
 .worktrees-run/
+
+# Claude Code local state (settings.local.json, session traces)
+.claude/
