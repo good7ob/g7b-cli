@@ -18,7 +18,7 @@ const tenantHeaders = (orgOption: string | undefined, extra: Record<string, stri
 
 /** /forge/kb/* answers with the bare entity (no envelope), hence apiClient.requestRaw. */
 export function registerKbCommands(program: Command) {
-  const kb = program.command('kb').description('知识库 — 列表、上传文件、把 PRD 同步进知识库');
+  const kb = program.command('kb').description('知识库 — 列表、检索、上传文件、把 PRD 同步进知识库');
 
   kb
     .command('list')
@@ -75,6 +75,32 @@ export function registerKbCommands(program: Command) {
           headers: tenantHeaders(o.orgId),
         });
         emit(o.json, doc, () => `✓ PRD ${prdId}「${dash(prd.title)}」已同步（知识库文档 ID ${dash(doc.id)}，状态 ${dash(doc.status)}）`);
+      })
+    );
+
+  kb
+    .command('search <query...>')
+    .description('在产品知识库里做混合检索，打印命中的片段')
+    .requiredOption('--product-id <id>', '产品 ID')
+    .option('-l, --limit <num>', '最多返回条数', '10')
+    .option(ORG_OPTION, ORG_DESC)
+    .option('--json', '输出 JSON')
+    .action((queryParts: string[], o) =>
+      guarded('知识库检索失败', {}, async () => {
+        const productId = parseId(o.productId, '--product-id');
+        const q = queryParts.join(' ').trim();
+        if (!q) throw new InputError('查询内容不能为空');
+        const result = await apiClient.requestRaw('get', '/forge/kb/search', {
+          params: { q, productId, limit: parseInt(o.limit, 10) || 10 },
+          headers: tenantHeaders(o.orgId),
+        });
+        const hits: any[] = result?.results ?? [];
+        emit(o.json, result, () => {
+          if (!hits.length) return '没有命中。';
+          return hits
+            .map((h, i) => `[${i + 1}] 相关度 ${typeof h.score === 'number' ? h.score.toFixed(3) : '—'}  ${dash(h.documentName)}（文档 ${dash(h.documentId)}）\n${'─'.repeat(60)}\n${h.content || '（仅名称命中，无正文）'}`)
+            .join('\n\n');
+        });
       })
     );
 }

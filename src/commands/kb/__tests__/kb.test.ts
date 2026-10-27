@@ -39,4 +39,21 @@ describe('kb', () => {
     expect(r.exitCode).toBe(1);
     expect(r.stderr).toContain('文件不存在');
   });
+
+  it('search sends q/productId/limit and prints hits', async () => {
+    const r = await runCli(registerKbCommands, ['kb', 'search', '登录', '流程', '--product-id', '10', '--org-id', '58'],
+      { query: '登录 流程', results: [{ documentId: '9', documentName: 'PRD-认证', content: '正文片段', score: 0.8123 }] } as never);
+    expect(r.http.get).toHaveBeenCalledWith('/forge/kb/search', expect.objectContaining({
+      params: { q: '登录 流程', productId: 10, limit: 10 },
+      headers: expect.objectContaining({ 'X-Tenant-Id': '58' }),
+    }));
+    expect(r.stdout).toContain('0.812');
+    expect(r.stdout).toContain('正文片段');
+  });
+
+  it('search requires --product-id', async () => {
+    const r = await runCli(registerKbCommands, ['kb', 'search', 'x']);
+    expect(r.exitCode).toBe(1);
+    expect(r.http.get).not.toHaveBeenCalled();
+  });
 });
