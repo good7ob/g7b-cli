@@ -18,7 +18,8 @@ export const REVIEW_ERROR_CODES: ErrorCodeMap = {
   1002: 'Idea 不存在，或还没有效果复盘（先 idea review start）',
   1007: '当前状态不允许该操作（start：Idea 须为 planning/developing/released 且复盘未完成；complete：Idea 须为 released 且复盘为草稿；已完成的复盘不可再修改）',
   1009: '并发冲突（状态刚被他人改变），请重试',
-  2000: '无权访问：你不是该 Idea 所属产品的组织成员',
+  // task #2067: an AI employee Key is refused with 2000 until its owner switches 想法 on
+  2000: '无权访问：你不是该 Idea 所属产品的组织成员；使用 AI 员工 Key 时，需在 AI 员工编辑中开启「允许访问想法模块」',
 };
 
 export interface MetricInput {

@@ -39,7 +39,8 @@ export const IDEA_ERROR_CODES: ErrorCodeMap = {
   1007: '当前状态不允许该操作（非法状态流转、字段已锁定、附件已达 20 个上限、合并 / 恢复条件不满足；选定方案要求 Idea 处于 evaluating 且尚未生成 PRD 会话）',
   1008: '缺少 id',
   1009: '并发冲突（其他人刚刚修改了它），请重试',
-  2000: '无权访问：你不是该 Idea 所属产品的组织成员',
+  // task #2067: an AI employee Key is refused with 2000 until its owner switches 想法 on
+  2000: '无权访问：你不是该 Idea 所属产品的组织成员；使用 AI 员工 Key 时，需在 AI 员工编辑中开启「允许访问想法模块」',
 };
 
 /** Raw commander options -> validated request pieces. All throw before any HTTP call. */
