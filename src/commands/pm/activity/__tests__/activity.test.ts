@@ -96,10 +96,10 @@ describe('pm activity post', () => {
     expect(r.exitCode).toBeUndefined();
   });
 
-  it('POSTs REPORT_UPLOADED with metadata.url', async () => {
+  it('POSTs REPORT_UPLOADED with a top-level url (the backend stores it as metadata.url)', async () => {
     const r = await activity(['post', '--task', '7', '--summary', '报告', '--type', 'report_uploaded', '--url', 'https://x.test/r.pdf']);
     expect(r.http.post).toHaveBeenCalledWith('/progress/tasks/7/activities', {
-      type: 'REPORT_UPLOADED', summary: '报告', metadata: { url: 'https://x.test/r.pdf' },
+      type: 'REPORT_UPLOADED', summary: '报告', url: 'https://x.test/r.pdf',
     });
   });
 
