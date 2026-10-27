@@ -8,8 +8,8 @@ import {
   ErrorCodeMap,
   InputError,
   normalizeTypeCode,
-  parseId,
   parseIntInRange,
+  parseLongId,
   requireOneOf,
   resolveProductId,
 } from '../../utils/cliHelpers';
@@ -28,12 +28,13 @@ export const TRACE_ERROR_CODES: ErrorCodeMap = {
 interface Endpoint { type?: string; id?: string }
 
 /** Both halves or neither: returns the normalised pair (or undefined when absent). */
-function pair(e: Endpoint, name: 'source' | 'target'): { type: string; id: number } | undefined {
+function pair(e: Endpoint, name: 'source' | 'target'): { type: string; id: number | string } | undefined {
   if (e.type === undefined && e.id === undefined) return undefined;
   if (e.type === undefined || e.id === undefined) {
     throw new InputError(`--${name}-type 与 --${name}-id 必须同时提供`);
   }
-  return { type: normalizeTypeCode(e.type, `--${name}-type`), id: parseId(e.id, `--${name}-id`) };
+  // Long ids: a BUG id is a snowflake beyond 2^53, sent as an exact string.
+  return { type: normalizeTypeCode(e.type, `--${name}-type`), id: parseLongId(e.id, `--${name}-id`) };
 }
 
 interface Flags {

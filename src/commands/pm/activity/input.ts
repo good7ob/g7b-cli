@@ -80,7 +80,8 @@ export interface PostFlags { task?: string; summary?: string; type?: string; url
 export interface PostBody {
   type: string;
   summary: string;
-  metadata?: { url: string };
+  /** TaskActivityPostDto reads a top-level url and stores it as metadata.url; a nested metadata is ignored. */
+  url?: string;
 }
 
 export function buildPostBody(o: PostFlags): { taskId: number; body: PostBody } {
@@ -91,7 +92,7 @@ export function buildPostBody(o: PostFlags): { taskId: number; body: PostBody } 
   if (o.url !== undefined) {
     const url = checkMaxLength(o.url.trim(), 2048, '--url');
     if (!/^https:\/\/\S+$/.test(url)) throw new InputError(`--url 必须是 https:// 开头的地址，收到: ${o.url}`);
-    body.metadata = { url };
+    body.url = url;
   }
   return { taskId, body };
 }
