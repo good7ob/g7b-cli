@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { InputError, emit, fail, parseId } from '../../utils/cliHelpers';
 import {
-  buildAppBody, buildFlowBody, buildNodeBody, buildScreenBody, buildVersionBody, planPreview, planScreenshots,
+  appScope, buildAppBody, buildFlowBody, buildNodeBody, buildScreenBody, buildVersionBody, planPreview, planScreenshots,
 } from './input';
 import {
   UiApp, UiFlow, UiFlowNode, UiPreviewRow, UiScreen, UiScreenshot, UiVersion,
@@ -30,22 +30,26 @@ async function findCurrent<T extends { id: number }>(listUrl: string, id: number
   return row;
 }
 
-async function list<T>(url: string, params?: Record<string, number>): Promise<T[]> {
+async function list<T>(url: string, params?: Record<string, number | boolean | undefined>): Promise<T[]> {
   return (await apiClient.get(url, params)) ?? [];
 }
 
 function registerAppCommands(ui: Command): void {
-  const app = ui.command('app').description('UI design apps / platforms of an org');
-  app.command('list').description('List apps of an org')
-    .requiredOption('--org <id>', 'Org id').option(...J)
+  const app = ui.command('app').description('UI design apps / platforms of an org (optionally of a product)');
+  app.command('list').description('List apps of an org, or of one product (--product; the org comes from the product)')
+    .option('--org <id>', 'Org id').option('--product <id>', 'Only this product\'s apps')
+    .option('--include-unassigned', 'With --product: also list the org\'s apps that belong to no product').option(...J)
     .action(async (o) => {
       try {
-        const rows = await list<UiApp>(`${BASE}/apps`, { orgId: parseId(o.org, '--org') });
+        const scope = appScope(o);
+        const params = scope.productId !== undefined && o.includeUnassigned ? { ...scope, includeUnassigned: true } : scope;
+        const rows = await list<UiApp>(`${BASE}/apps`, params);
         emit(o.json, rows, () => renderApps(rows));
       } catch (e) { fail('获取应用失败', e); }
     });
-  app.command('create').description('Create an app (org owner/admin)')
-    .requiredOption('--org <id>', 'Org id').requiredOption('--name <name>', 'Name (max 64, unique per org)')
+  app.command('create').description('Create an app (org owner/admin); --org and/or --product')
+    .option('--org <id>', 'Org id (may be omitted with --product)').option('--product <id>', 'Product of the same org the app belongs to')
+    .requiredOption('--name <name>', 'Name (max 64, unique per org)')
     .requiredOption('--platform <p>', 'web|ios|android|miniprogram|other')
     .option('--description <text>', 'Description (max 512)').option('--sort <n>', 'Sort order').option(...J)
     .action(async (o) => {
@@ -53,6 +57,16 @@ function registerAppCommands(ui: Command): void {
         const created = await apiClient.post(`${BASE}/apps`, buildAppBody(o));
         emit(o.json, created, () => `✓ 应用已创建: ${fmtId(created)} ${o.name} (${o.platform})`);
       } catch (e) { fail('创建应用失败', e); }
+    });
+  app.command('set-product <appId>').description('Assign an app to a product of its org, or --none to unassign (org owner/admin)')
+    .option('--product <id>', 'Product id').option('--none', 'Make it belong to no product').option(...J)
+    .action(async (appId, o) => {
+      try {
+        if ((o.product === undefined) === !o.none) throw new InputError('--product 与 --none 必须且只能给一个');
+        const productId = o.none ? null : parseId(o.product, '--product');
+        const updated = await apiClient.put(`${BASE}/apps/${parseId(appId, 'appId')}/product`, { productId });
+        emit(o.json, updated, () => `✓ 应用 #${appId} 所属产品: ${productId ?? '未归属'}`);
+      } catch (e) { fail('设置所属产品失败', e); }
     });
   app.command('delete <appId>').description('Delete an app AND all its screens, versions, screenshots, flows (org owner/admin)')
     .action(async (appId) => {

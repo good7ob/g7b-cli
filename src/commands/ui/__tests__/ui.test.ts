@@ -45,6 +45,35 @@ describe('ui app', () => {
     await expectRejected(['app', 'create', '--org', '7', '--name', ' ', '--platform', 'web'], '--name');
   });
 
+  // idea #167: apps by product
+  it('lists apps of a product, optionally with the org\'s unassigned apps', async () => {
+    const r = await ui(['app', 'list', '--product', '10'], ok([{ id: 1, name: '官网', platform: 'web', productId: 10 }, { id: 2, name: '旧', platform: 'ios', productId: null }]));
+    expect(r.http.get).toHaveBeenCalledWith('/forge/ui-design/apps', { params: { productId: 10 } });
+    expect(r.stdout).toContain('未归属');
+    const all = await ui(['app', 'list', '--org', '7', '--product', '10', '--include-unassigned'], ok([]));
+    expect(all.http.get).toHaveBeenCalledWith('/forge/ui-design/apps', { params: { orgId: 7, productId: 10, includeUnassigned: true } });
+    const orgOnly = await ui(['app', 'list', '--org', '7', '--include-unassigned'], ok([]));
+    expect(orgOnly.http.get).toHaveBeenCalledWith('/forge/ui-design/apps', { params: { orgId: 7 } });
+    await expectRejected(['app', 'list'], '--product');
+    await expectRejected(['app', 'list', '--product', 'x'], '--product');
+  });
+
+  it('creates an app in a product without --org', async () => {
+    const r = await ui(['app', 'create', '--product', '10', '--name', '官网', '--platform', 'web'], ok({ id: 3 }));
+    expect(r.http.post).toHaveBeenCalledWith('/forge/ui-design/apps', { productId: 10, name: '官网', platform: 'web' });
+    await expectRejected(['app', 'create', '--name', 'x', '--platform', 'web'], '--org');
+  });
+
+  it('assigns / clears the product of an app', async () => {
+    const r = await ui(['app', 'set-product', '3', '--product', '10'], ok({ id: 3, productId: 10 }));
+    expect(r.http.put).toHaveBeenCalledWith('/forge/ui-design/apps/3/product', { productId: 10 });
+    const none = await ui(['app', 'set-product', '3', '--none'], ok({ id: 3, productId: null }));
+    expect(none.http.put).toHaveBeenCalledWith('/forge/ui-design/apps/3/product', { productId: null });
+    expect(none.stdout).toContain('未归属');
+    await expectRejected(['app', 'set-product', '3'], '--none');
+    await expectRejected(['app', 'set-product', '3', '--product', '10', '--none'], '--none');
+  });
+
   it('deletes by id', async () => {
     const r = await ui(['app', 'delete', '3']);
     expect(r.http.delete).toHaveBeenCalledWith('/forge/ui-design/apps/3', undefined);

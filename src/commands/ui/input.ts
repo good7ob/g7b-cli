@@ -31,9 +31,18 @@ function defined(body: Record<string, unknown>): Body {
   return Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)) as Body;
 }
 
-export function buildAppBody(o: { org?: string; name?: string; platform?: string; description?: string; sort?: string }): Body {
+/** Org and/or product (idea #167): with --product alone the backend takes the org from the product. */
+export function appScope(o: { org?: string; product?: string }): { orgId?: number; productId?: number } {
+  if (o.org === undefined && o.product === undefined) throw new InputError('--org 与 --product 至少给一个');
+  const scope: { orgId?: number; productId?: number } = {};
+  if (o.org !== undefined) scope.orgId = parseId(o.org, '--org');
+  if (o.product !== undefined) scope.productId = parseId(o.product, '--product');
+  return scope;
+}
+
+export function buildAppBody(o: { org?: string; product?: string; name?: string; platform?: string; description?: string; sort?: string }): Body {
   return defined({
-    orgId: parseId(o.org, '--org'),
+    ...appScope(o),
     name: requireText(o.name, 64, '--name'),
     platform: requireOneOf(o.platform ?? '', PLATFORMS, '--platform'),
     description: optText(o.description, 512, '--description'),
