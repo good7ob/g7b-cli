@@ -1,6 +1,6 @@
 import { ApiDate, dash, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 
-export interface UiApp { id: number; orgId?: number; name?: string; platform?: string; description?: string | null; sortOrder?: number | null }
+export interface UiApp { id: number; orgId?: number; productId?: number | null; name?: string; platform?: string; description?: string | null; sortOrder?: number | null }
 export interface UiScreen {
   id: number; appId?: number; screenCode?: string | null; name?: string; routePath?: string | null;
   category?: string | null; status?: string | null; sortOrder?: number | null; parentScreenId?: number | null;
@@ -21,8 +21,9 @@ const empty = (what: string) => `(没有${what})`;
 
 export function renderApps(list: UiApp[]): string {
   if (!list.length) return empty('应用');
-  return renderTable([['ID', 'NAME', 'PLATFORM', 'SORT', 'DESCRIPTION'],
-    ...list.map((a) => [String(a.id), dash(a.name), dash(a.platform), dash(a.sortOrder), dash(a.description)])], { 4: wrap(40) });
+  return renderTable([['ID', 'NAME', 'PLATFORM', 'PRODUCT', 'SORT', 'DESCRIPTION'],
+    ...list.map((a) => [String(a.id), dash(a.name), dash(a.platform), a.productId == null ? '未归属' : String(a.productId),
+      dash(a.sortOrder), dash(a.description)])], { 5: wrap(40) });
 }
 
 export function renderScreens(list: UiScreen[]): string {
