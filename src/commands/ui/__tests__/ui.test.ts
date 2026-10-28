@@ -74,6 +74,27 @@ describe('ui screen', () => {
       { name: '首页', screenCode: 'SCR-1', routePath: '/home', category: 'main', status: 'active', sortOrder: 3 });
   });
 
+  it('--parent creates / moves a sub-screen, --main detaches it, neither leaves the parent alone (#168)', async () => {
+    const created = await ui(['screen', 'create', '4', '--name', '物流', '--parent', '9'], ok({ id: 10 }));
+    expect(created.http.post).toHaveBeenCalledWith('/forge/ui-design/apps/4/screens', { name: '物流', screenType: 'sub', parentScreenId: 9 });
+
+    const current = { id: 10, name: '物流', parentScreenId: 9 };
+    const get = (m: string) => (m === 'get' ? ok([current]) : ok({ id: 10 }));
+    const detached = await ui(['screen', 'update', '10', '--app', '4', '--main'], get);
+    expect(detached.http.put).toHaveBeenCalledWith('/forge/ui-design/screens/10', { name: '物流', screenType: 'main' });
+    const renamed = await ui(['screen', 'update', '10', '--app', '4', '--name', '物流跟踪'], get);
+    expect(renamed.http.put).toHaveBeenCalledWith('/forge/ui-design/screens/10', { name: '物流跟踪' });
+
+    await expectRejected(['screen', 'create', '4', '--name', 'a', '--parent', 'x'], '--parent');
+    await expectRejected(['screen', 'create', '4', '--name', 'a', '--parent', '9', '--main'], '--main');
+  });
+
+  it('lists the parent of sub-screens', async () => {
+    const r = await ui(['screen', 'list', '4'], ok([{ id: 9, name: '订单详情' }, { id: 10, name: '物流', parentScreenId: 9 }]));
+    expect(r.stdout).toContain('PARENT');
+    expect(r.stdout.split('\n').find((l) => l.includes('物流'))).toMatch(/物流\s+9\s/);
+  });
+
   it('update refuses a screen that is not under --app', async () => {
     const r = await ui(['screen', 'update', '9', '--app', '4', '--name', 'x'], ok([{ id: 1, name: 'other' }]));
     expect(r.exitCode).toBe(1);
