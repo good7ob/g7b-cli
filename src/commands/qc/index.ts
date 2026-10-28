@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerBugCommands } from './bug';
 import { registerReportCommands } from './report';
+import { registerPipelineCommands } from './pipeline';
 import { registerTestCaseCommands } from './testcase';
 
 export function registerQcCommands(program: Command) {
@@ -11,6 +12,7 @@ export function registerQcCommands(program: Command) {
   registerBugCommands(qcCommand);
   registerTestCaseCommands(qcCommand);
   registerReportCommands(qcCommand);
+  registerPipelineCommands(qcCommand);
 
   return qcCommand;
 }
