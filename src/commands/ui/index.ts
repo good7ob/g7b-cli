@@ -66,7 +66,9 @@ function registerAppCommands(ui: Command): void {
 function withScreenFlags(cmd: Command): Command {
   return cmd.option('--name <name>', 'Screen name (max 128)').option('--code <code>', 'Screen code, e.g. SCR-WEB-HOME-001 (max 64)')
     .option('--route <path>', 'Route path (max 256)').option('--category <c>', 'Category (max 64)')
-    .option('--status <s>', 'active|deprecated|planned (default planned)').option('--sort <n>', 'Sort order').option(...J);
+    .option('--status <s>', 'active|deprecated|planned (default planned)').option('--sort <n>', 'Sort order')
+    .option('--parent <screenId>', 'Make it a sub-screen (子画面) of this main screen of the same app')
+    .option('--main', 'Make it a main screen (主画面), detaching it from its parent').option(...J);
 }
 
 function registerScreenCommands(ui: Command): void {

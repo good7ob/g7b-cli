@@ -3,7 +3,7 @@ import { ApiDate, dash, fmtDateTime, renderTable } from '../../utils/cliHelpers'
 export interface UiApp { id: number; orgId?: number; name?: string; platform?: string; description?: string | null; sortOrder?: number | null }
 export interface UiScreen {
   id: number; appId?: number; screenCode?: string | null; name?: string; routePath?: string | null;
-  category?: string | null; status?: string | null; sortOrder?: number | null;
+  category?: string | null; status?: string | null; sortOrder?: number | null; parentScreenId?: number | null;
 }
 export interface UiVersion {
   id: number; screenId?: number; versionType?: string; label?: string; description?: string | null;
@@ -27,8 +27,9 @@ export function renderApps(list: UiApp[]): string {
 
 export function renderScreens(list: UiScreen[]): string {
   if (!list.length) return empty('页面');
-  return renderTable([['ID', 'CODE', 'NAME', 'ROUTE', 'CATEGORY', 'STATUS', 'SORT'],
-    ...list.map((s) => [String(s.id), dash(s.screenCode), dash(s.name), dash(s.routePath), dash(s.category), dash(s.status), dash(s.sortOrder)])]);
+  return renderTable([['ID', 'CODE', 'NAME', 'PARENT', 'ROUTE', 'CATEGORY', 'STATUS', 'SORT'],
+    ...list.map((s) => [String(s.id), dash(s.screenCode), dash(s.name), dash(s.parentScreenId), dash(s.routePath), dash(s.category),
+      dash(s.status), dash(s.sortOrder)])]);
 }
 
 export function renderVersions(list: UiVersion[]): string {

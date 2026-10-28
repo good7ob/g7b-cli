@@ -41,7 +41,9 @@ export function buildAppBody(o: { org?: string; name?: string; platform?: string
   });
 }
 
-interface ScreenFlags { name?: string; code?: string; route?: string; category?: string; status?: string; sort?: string }
+interface ScreenFlags {
+  name?: string; code?: string; route?: string; category?: string; status?: string; sort?: string; parent?: string; main?: boolean;
+}
 interface ScreenCurrent { name?: string; screenCode?: string | null; routePath?: string | null; category?: string | null; status?: string | null; sortOrder?: number | null }
 
 /** `current` (update) supplies every field the flags leave out, because PUT overwrites them all. */
@@ -54,7 +56,19 @@ export function buildScreenBody(o: ScreenFlags, current?: ScreenCurrent): Body {
     category: keep(optText(o.category, 64, '--category'), current?.category),
     status: o.status !== undefined ? requireOneOf(o.status, SCREEN_STATUSES, '--status') : current?.status ?? undefined,
     sortOrder: keep(sortOf(o.sort), current?.sortOrder),
+    ...screenTypeOf(o),
   });
+}
+
+/**
+ * 子画面 (idea #168): --parent makes the screen a sub-screen of that main screen, --main detaches it.
+ * With neither the body carries no screenType / parentScreenId and the backend keeps the current parent,
+ * so (unlike the text fields) nothing has to be resent on update.
+ */
+function screenTypeOf(o: ScreenFlags): Body {
+  if (o.parent !== undefined && o.main) throw new InputError('--parent 与 --main 不能同时使用');
+  if (o.parent !== undefined) return { screenType: 'sub', parentScreenId: parseId(o.parent, '--parent') };
+  return o.main ? { screenType: 'main' } : {};
 }
 
 interface VersionFlags { type?: string; label?: string; description?: string; active?: boolean }
