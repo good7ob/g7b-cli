@@ -1398,7 +1398,7 @@ API 端点：`POST /qc/runs/import`（multipart）、`GET /qc/runs/latest`（N-9
 - 截图：递归收集目录内 png / jpg / jpeg / gif / webp；单张 > 20 MB 跳过并警告，合计 > 200 MB 的部分跳过，每条用例 ≤ 20 张，非图片文件（trace.zip、视频）不上传并提示改用 `qc run attach`。
 - 截图 → 用例：按 Playwright 报告里 `results[].attachments[].path` 匹配（先比绝对路径；报告来自 CI 等其他机器时比「结果目录/文件名」两段，唯一才算）；对上的写进 `meta.evidenceMap`，对不上的由服务端按文件名（`<结果目录>__<文件名>`）前缀匹配。
 
-**请求（multipart）**：`meta`（JSON）`{projectId, productId?, testType, source: CLI|AUTOMATION_STEP, runId?, stepId?, taskId?, planId?, environment?, buildRef?, reportFormat: playwright_json|junit_xml|g7b_json, autoBug?, evidenceMap?: [{file, kind: "screenshot", caseName?, titlePath?, specFile?}]}`；`report` 报告文件；`evidence` 0..n 张截图。超时 5 分钟。
+**请求（multipart）**：`meta`（JSON）`{projectId, productId?, testType, source: CLI|AUTOMATION_STEP, runId?, stepId?, taskId?, planId?, environment?, envTag?（同 --env）, buildRef?, reportFormat: playwright_json|junit_xml|g7b_json, autoBug?, evidenceMap?: [{file, kind: "screenshot", caseName?, titlePath?, specFile?}]}`；`report` 报告文件；`evidence` 0..n 张截图。超时 5 分钟。
 
 **退出码**：0 全部通过；2 上传成功但有失败；1 参数 / 解析 / 上传错误（含服务端 `2728` 报告解析失败）。
 

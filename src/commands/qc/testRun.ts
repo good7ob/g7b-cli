@@ -212,7 +212,9 @@ export function buildImportMeta(v: ValidatedUpload, report: ParsedReport, eviden
     stepId: v.stepId,
     taskId: v.taskId,
     planId: v.planId,
+    // envTag = 新列 qc_test_run.env_tag（V352）；environment = 既有 RunStartRequest 字段（Bug 的 found_stage 取它）
     environment: v.environment,
+    envTag: v.environment,
     buildRef: v.buildRef,
     reportFormat: WIRE_FORMAT[report.format],
     autoBug: v.autoBug ? true : undefined,

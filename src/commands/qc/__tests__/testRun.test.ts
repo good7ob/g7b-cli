@@ -270,7 +270,7 @@ describe('test-run upload (CLI)', () => {
       name: 'meta',
       json: {
         projectId: 7, testType: 'e2e', source: 'AUTOMATION_STEP', runId: 31, stepId: 32, taskId: 33,
-        environment: 'test', buildRef: 'abc', reportFormat: 'playwright_json', autoBug: true,
+        environment: 'test', envTag: 'test', buildRef: 'abc', reportFormat: 'playwright_json', autoBug: true,
         evidenceMap: [
           {
             file: 'login-wrong-password-chromium__test-failed-1.png', kind: 'screenshot',
