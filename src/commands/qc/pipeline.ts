@@ -30,7 +30,7 @@ export function parseReportFile(raw: string): unknown[] {
   return list;
 }
 
-function printGate(gate: any) {
+export function printGate(gate: any) {
   if (!gate) return;
   const waived = gate.waivedAt ? '（已豁免）' : '';
   console.log(`\n质量门禁：${VERDICT_CN[gate.verdict] ?? gate.verdict}${waived}  构建 ${gate.buildRef ?? '-'}`);

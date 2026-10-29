@@ -3,6 +3,7 @@ import { registerBugCommands } from './bug';
 import { registerReportCommands } from './report';
 import { registerPipelineCommands } from './pipeline';
 import { registerTestCaseCommands } from './testcase';
+import { addTestRunCommands, registerTestRunCommands } from './testRun';
 
 export function registerQcCommands(program: Command) {
   const qcCommand = program
@@ -13,6 +14,9 @@ export function registerQcCommands(program: Command) {
   registerTestCaseCommands(qcCommand);
   registerReportCommands(qcCommand);
   registerPipelineCommands(qcCommand);
+  // 一次导入报告与截图（N-9）：`qc run upload|latest`，顶层 `test-run upload|latest`（prd-0082 FP-17 的命令名）是同一实现
+  addTestRunCommands(qcCommand.commands.find((c) => c.name() === 'run')!);
+  registerTestRunCommands(program);
 
   return qcCommand;
 }
