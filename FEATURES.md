@@ -1359,10 +1359,12 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 
 | 命令 | 说明 |
 |---|---|
-| `heartbeat start [--pid <pid>]` | 先上报一次，再启动后台循环（每 30 秒），监视的 Agent 进程退出时循环自行结束；同一进程已有循环则不重复启动。`--pid` 默认是父进程，在 hook 脚本里要显式传长期存活的 Agent 进程。Key 被拒绝（401 / 403 / 404 / 非员工 Key）时报错且不启动 |
-| `heartbeat stop [--pid <pid>]` | 停止该 Agent 的循环；本机没有其他会话在为同一员工上报时才立即下线 |
-| `heartbeat beat` | 手动上报一次（调试） |
-| `heartbeat status` | 列出本机运行中的心跳循环 |
+| `heartbeat start [--pid <pid>] [--runner-id <id>] [--slots <n>] [--env <tags>]` | 先上报一次，再启动后台循环（每 30 秒），监视的 Agent 进程退出时循环自行结束；同一进程已有循环则不重复启动。`--pid` 默认是父进程，在 hook 脚本里要显式传长期存活的 Agent 进程。Key 被拒绝（401 / 403 / 404 / 非员工 Key）时报错且不启动。带 Runner 参数时心跳同时续 Runner 在线键与租约（prd-0136 `rp-auto-sched-0010`） |
+| `heartbeat stop [--pid <pid>]` | 停止该 Agent 的循环；本机没有其他会话在为同一员工上报时才立即下线。Runner 循环总是带 `?runnerKey=&runnerId=` 下线（释放未领取的分配） |
+| `heartbeat beat [--runner-id <id>] [--slots <n>] [--env <tags>] [--json]` | 手动上报一次（调试）；响应里的 `stopStepIds` 会打印出来 |
+| `heartbeat status [--json]` | 列出本机运行中的心跳循环，含每个循环代表的 Runner（id / slots / env） |
+
+Runner 参数（prd-0136 FP-2）：`--runner-id` 指定 Runner；只给 `--slots` / `--env` 时取 `agent listen` 注册在 `~/.good7ob/agent-state.json` 里的 Runner，没有则报错。不带任何 Runner 参数 = 旧行为，只续员工在线标记，不改 Runner 属性。请求体：`{ runnerId, runnerKey, slots?, envTags? }`；`--slots` 1~8，`--env` 为 `dev,test,prod` 的子集。`agent listen` 内部复用同一个心跳循环（进程内），不再另起一个。
 
 后端 90 秒内没有收到心跳就把员工视为不在线，所以 Agent 崩溃也会自动变回空闲。循环状态文件在 `~/.good7ob/heartbeat/<agentPid>.json`。
 

@@ -64,6 +64,28 @@ describe('AgentStateStore', () => {
     expect(() => store.read()).toThrow(/损坏/);
   });
 
+  it('keeps the runner registration and the slot in the same file independently', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-state-'));
+    const store = new AgentStateStore(dir);
+    const runner = { runnerId: 12, runnerKey: 'mbp', hostLabel: 'mbp:good7ob', slots: 2, envTags: ['dev'], agentKind: 'CLAUDE_CODE', registeredAt: 'now' };
+    expect(store.readRunner()).toBeNull();
+    store.writeRunner(runner);
+    expect(store.read()).toEqual(IDLE);
+    store.write(busy);
+    expect(store.readRunner()).toEqual(runner);
+    expect(store.read()).toEqual(busy);
+    store.writeRunner(null);
+    expect(store.readRunner()).toBeNull();
+    expect(store.read()).toEqual(busy);
+    expect(JSON.parse(fs.readFileSync(store.file, 'utf-8'))).not.toHaveProperty('runner');
+  });
+
+  it('busyState carries the assignment context of a scheduled task', () => {
+    const slot = busyState({ id: 1, assignmentId: 9, runId: 3, stepId: 45, nodeCode: 'DEV' } as any, T0, 60);
+    expect(slot).toMatchObject({ assignmentId: 9, runId: 3, stepId: 45, nodeCode: 'DEV' });
+    expect(busyState({ id: 1 }, T0, 60)).not.toHaveProperty('stepId');
+  });
+
   it('takes over a stale lock', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-state-'));
     const store = new AgentStateStore(dir);
