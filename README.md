@@ -209,6 +209,20 @@ good7ob approval reject 31 --comment "scope unclear"   # --comment is required
 
 Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`, `prd request-approval`).
 
+### `automation`
+
+```bash
+good7ob automation list --status enabled
+good7ob automation create --name "夜间开发" --project 7 --trigger periodic --every weekly --weekday mon,wed --at 22:00 --tags auto --max-tasks 2
+good7ob automation preview --cron "0 22 * * 1-5"      # next fire times, nothing saved
+good7ob automation enable 12                          # enable = authorise (owner/admin)
+good7ob automation run 12 --wait                      # manual run -> run id (= execution plan id)
+good7ob automation pause 12 --reason "maintenance"
+good7ob automation settings set --require-enable-approval
+```
+
+Organisation automations (prd-0135, backend #989): definitions with a cron / periodic / task-pool / manual trigger (EVENT is phase 2 and rejected client-side), lifecycle (enable / pause / resume / disable / withdraw-approval), runs, events, the plans view and org settings. Org from `--org-id`/`--org`, `GOOD7OB_ORG_ID`, `config set org-id`, or the key's only org. Exit code 3 = skipped / conflict (2702, 2708-2711). See `FEATURES.md`.
+
 ### `trace`
 
 ```bash

@@ -25,6 +25,7 @@
 - [workspace — 我的工作台](#workspace--我的工作台)
 - [release — 发布管理](#release--发布管理)
 - [approval — 审批](#approval--审批)
+- [automation — 自动化](#automation--自动化)
 - [trace — 追溯关系](#trace--追溯关系)
 - [template — 模板中心](#template--模板中心)
 - [whoami — 当前身份](#whoami--当前身份)
@@ -1117,6 +1118,58 @@ good7ob approval list --mine
 good7ob approval list --target-type release --target-id 7 --status approved
 good7ob approval approve 31 --comment "LGTM"
 good7ob approval reject 31 --comment "范围不清，补充测试报告后重提"
+```
+
+---
+
+## automation — 自动化
+
+API 端点前缀：`/api/v1/orgs/{orgId}/automations`、`/api/v1/orgs/{orgId}/automation-settings`（prd-0135，backend #989）。
+组织：`--org-id <id>`（或 `--org <id>`）→ `GOOD7OB_ORG_ID` → `config set org-id` → Key 只属一个组织时自动取（多个组织时报错并列出）。
+定义状态：draft / enabled / paused / awaiting_approval / disabled。启用 = 授权：记录启用人与计费快照；组织开启「启用需审批」时启用 / 修改已启用的定义会进入审批（`approval` 命令组决定，`withdraw-approval` 撤回）。
+
+| 命令 | 说明 |
+|------|------|
+| `automation list` | 组织的自动化（下次运行升序）；列：名称、状态、触发方式、下次运行、最近结果、项目；`--status` `--project` `--trigger` `--keyword` `-p/--page` `--page-size`（≤100） |
+| `automation show <id>` | 详情：触发（含 cron / 时区）、运行窗口、下次运行、最近结果、目标与当前匹配任务数、预算、计费与启用人、审批中 / 进行中运行、Runner 告警、最近 10 次运行（含跳过）与最近事件 |
+| `automation create` | 新建草稿；必填 `--name` `--project` `--trigger cron\|periodic\|task-pool\|manual`，见下表 |
+| `automation update <id> …` | 只改给出的字段（同 create 的选项）；先读当前定义，被改到的段整体回写 |
+| `automation delete <id> [--yes]` | 删除（仅草稿 / 已停用，且无未结束运行）；非交互环境必须 `--yes` |
+| `automation run <id> [--wait] [--wait-timeout <分钟>]` | 手动运行（已启用 / 已暂停，仅 owner/admin）→ 运行 ID（= 执行计划 ID）、状态、任务；`--wait` 轮询直到 running 或未执行，最长一个宽限期 |
+| `automation enable\|pause\|resume\|disable <id> [--reason]` | 启用 / 暂停 / 恢复 / 停用（仅 owner/admin）；启用后显示计费主体、单次上限与下次运行 |
+| `automation withdraw-approval <id>` | 撤回审批中的启用 / 修改，回到原状态 |
+| `automation preview --cron <expr> \| --every …` | 触发时刻预览（`trigger-preview`，不保存）：平台时间 JST、触发器时区、是否在 `--window` 内；`--timezone` `--count`（1-20，默认 5） |
+| `automation runs <id>` | 运行（= 执行计划）与被跳过的触发，新的在前；`--status` `-p` `--page-size` |
+| `automation events <id>` | 定义事件（新建 / 修改 / 启用 / 暂停 / 审批 / 运行创建 / 跳过…） |
+| `automation plans` | 「计划」：自动化 + 项目执行计划；`--source automation\|manual`（manual = 手动建的执行计划）`--status` `--project` `--trigger` `--keyword`；末尾显示待审批的自动化 / 运行数 |
+| `automation settings get` | 组织设置：时区、启用需审批、每次运行需审批（生效值与来源）、审批超时、成员可编辑等 |
+| `automation settings set` | `--timezone` `--[no-]require-enable-approval` `--[no-]require-run-approval` `--run-approval-timeout <1-168 小时>` `--[no-]member-can-edit`（仅 owner/admin，只发给出的项） |
+
+create / update 的触发与目标选项：
+
+| 选项 | 请求字段 |
+|------|------|
+| `--trigger cron --cron "0 22 * * 1-5"` | `trigger: {type: CRON, cronExpr}`（五段，两次触发间隔 ≥ 5 分钟） |
+| `--trigger periodic --every daily\|weekly\|monthly --at HH:mm [--weekday mon,wed] [--day 1-28\|last]` | `trigger: {type: PERIODIC, periodic: {kind, time, weekdays\|monthDay}}`（星期 1=周一 … 7=周日） |
+| `--trigger task-pool [--pool-interval 5-1440]` | `trigger: {type: TASK_POOL, poolMinIntervalMinutes}` |
+| `--trigger manual` | `trigger: {type: MANUAL}`（只能 `automation run`） |
+| `--timezone` `--window 22:00-06:00` `--window-weekday` `--grace 1-60` | `trigger.timeZone / window{start,end,weekdays} / graceMinutes`（窗口可跨午夜；`--window none` 取消） |
+| `--project <id>` `--max-tasks 1-20` | `target: {type: TASK_FILTER, projectId, maxTasksPerRun}` |
+| `--tags a,b` `--priority high,urgent` `--executor <AI 员工 ID>` 或 `--task-filter '<json>'` | `target.taskFilter: {labels, priorities, executorEmployeeId}`（二选一；`--task-filter none` 清空） |
+| `--budget-tokens N` `--daily-budget-tokens N` | `budget: {runTokenBudget, dailyTokenBudget}`（`unlimited` = 不限；后端整段替换，只给一个时另一个按"不限"保存；单次 ≤ 当日） |
+| `--billing org-pool\|byok` | `billing: {subject: ORG_POOL\|BYOK}` |
+
+`--trigger event` 在 CLI 端直接拒绝（「第二期」，后端 EVENT 只能存草稿不能启用）。
+
+业务错误码（`AutomationErrorEnum`，按消息里的 KEY 区分同码）：`1001` 参数不合法 / `EVENT_TRIGGER_PHASE2` 第二期、`1002` 不存在、`1006` 同名、`2004` 无权（owner/admin）、`2702` 状态不允许、`2703` AI 员工 Key 只读、`2704` 计费主体不可用、`2705` 目标无效、`2706` 触发器不合法、`2707` 有未结束运行不能删、`2708` 已有进行中运行、`2709` 预算用尽、`2710` 无可用 Runner、`2711` 无待执行任务、`2712` 无 DEV 岗位 AI 员工、`2724` 预算不合法、`2726` 目标类型不支持。
+退出码：0 成功；3 跳过 / 冲突（`2702 2708 2709 2710 2711`，以及 `run --wait` 未开始）；1 其他错误。所有命令支持 `--json`。
+
+```bash
+good7ob automation create --name "夜间开发" --project 7 --trigger cron --cron "0 22 * * 1-5" --tags auto --budget-tokens 200000 --daily-budget-tokens 1000000
+good7ob automation update 12 --every weekly --weekday 1,3 --at 23:00
+good7ob automation preview --every monthly --day last --at 23:00 --timezone Asia/Shanghai
+good7ob automation run 12 --wait; echo $?      # 0 已开始 / 3 跳过或冲突 / 1 错误
+good7ob automation plans --source manual
 ```
 
 ---
