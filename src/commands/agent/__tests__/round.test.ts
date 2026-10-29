@@ -51,6 +51,62 @@ describe('runRound', () => {
     expect(api.get).toHaveBeenCalledWith('/progress/agent-tasks', { projectId: 9 });
   });
 
+  it('registered runner: queue and claim carry runnerId, the assignment context lands in the slot and the forward', async () => {
+    const assigned = { id: 11, taskNo: 'T11', name: 'dev step', assignmentId: 9, runId: 3, stepId: 45, nodeCode: 'DEV', nodePrompt: 'do it' };
+    const { store, api, deps } = setup({
+      get: async () => [assigned, { id: 12, name: 'free' }],
+      post: async () => ({ id: 11, status: 'in_progress' }),
+    });
+    const forward = vi.fn(async () => undefined);
+    const r = await runRound({ ...deps, runnerId: 7 }, forward);
+    expect(r.kind).toBe('claimed');
+    expect(api.get).toHaveBeenCalledWith('/progress/agent-tasks', { runnerId: 7 });
+    expect(api.post).toHaveBeenCalledWith('/progress/tasks/11/claim?runnerId=7');
+    expect(store.read()).toMatchObject({ status: 'busy', taskId: 11, assignmentId: 9, runId: 3, stepId: 45, nodeCode: 'DEV' });
+    expect(forward).toHaveBeenCalledWith(expect.objectContaining({ id: 11, assignmentId: 9, runId: 3, stepId: 45, nodeCode: 'DEV' }));
+    expect((r as any).task.nodePrompt).toBe('do it');
+  });
+
+  it('409 ASSIGNED_TO_OTHER is skipped, never fought over; nothing else -> assigned_elsewhere', async () => {
+    const other = () => Object.assign(new Error('ASSIGNED_TO_OTHER: 任务 1 已分配给同一员工的另一台 Runner #3'), { code: 409 });
+    const { store, api, deps } = setup({
+      get: async () => [{ id: 1, assignmentId: 9 }],
+      post: async () => {
+        throw other();
+      },
+    });
+    const log = vi.fn();
+    const r = await runRound({ ...deps, runnerId: 7, log });
+    expect(r).toEqual({ kind: 'assigned_elsewhere', refused: [1] });
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('已分配给其他 Runner'));
+    expect(store.read()).toEqual(IDLE);
+  });
+
+  it('400 JOB_MISMATCH is skipped and the next item claimed', async () => {
+    const { api, deps } = setup({
+      get: async () => [{ id: 1 }, { id: 2 }],
+      post: async (url: string) => {
+        if (url.startsWith('/progress/tasks/1/')) throw Object.assign(new Error('JOB_MISMATCH: 岗位不含 测试'), { code: 400 });
+        return { id: 2, status: 'in_progress' };
+      },
+    });
+    const log = vi.fn();
+    const r = await runRound({ ...deps, log });
+    expect(r.kind).toBe('claimed');
+    expect(api.post.mock.calls.map((c) => c[0])).toEqual(['/progress/tasks/1/claim', '/progress/tasks/2/claim']);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('岗位不匹配'));
+  });
+
+  it('a step the heartbeat stopped is freed without a second release', async () => {
+    const { store, api, deps } = setup({ get: async (url: string) => (url === '/progress/tasks/7' ? { status: 'in_progress' } : []) });
+    store.write({ ...busyState({ id: 7, stepId: 45 }, T0 - 91 * 60_000, 60), stopRequestedAt: new Date(T0).toISOString() });
+    const r = await runRound(deps);
+    expect(r.kind).toBe('empty');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(store.read()).toEqual(IDLE);
+  });
+
   it('forward failure releases the task and frees the slot', async () => {
     const { store, api, deps } = setup({
       get: async () => [{ id: 5 }],

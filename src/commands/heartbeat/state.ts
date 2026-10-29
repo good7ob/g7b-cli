@@ -14,6 +14,8 @@ export interface LoopEntry {
   /** The detached background loop. */
   loopPid: number;
   startedAt: string;
+  /** prd-0136: the runner this loop beats for (`agent listen`, or `heartbeat start --runner-id / --slots / --env`). */
+  runner?: { runnerId?: number; runnerKey?: string; slots?: number; envTags?: string[] };
 }
 
 export function isPidAlive(pid: number): boolean {

@@ -14,12 +14,34 @@ export interface SlotTask {
   projectId: number | null;
   claimedAt: string; // ISO
   deadline: string; // ISO, claimedAt + expected duration
+  /** prd-0136: set when the scheduler assigned the task to this runner (N-4). */
+  assignmentId?: number | null;
+  runId?: number | null;
+  stepId?: number | null;
+  nodeCode?: string | null;
+  /** prd-0137: org of the run (when the queue item / claimed task carries it), so `run …` needs no --org-id. */
+  orgId?: number | null;
+  /** prd-0137 `run log append`: last log segment seq sent for this step (runner-local, from 1). */
+  logSeq?: number;
+  /** ISO time the heartbeat told us to stop this step (the backend released it already). */
+  stopRequestedAt?: string;
 }
 
 export type BusyState = { status: 'busy' | 'timeout' } & SlotTask;
 export type AgentState = { status: 'idle' } | BusyState;
 
 export const IDLE: AgentState = { status: 'idle' };
+
+/** What `agent listen` registered this machine as (prd-0136 rp-auto-sched-0009); kept next to the slot. */
+export interface RunnerRegistration {
+  runnerId: number;
+  runnerKey: string;
+  hostLabel: string;
+  slots: number;
+  envTags: string[];
+  agentKind: string;
+  registeredAt: string; // ISO
+}
 
 /** Backend task status, or 'unknown' when the lookup failed. */
 export type RemoteStatus = string | 'unknown';
@@ -51,7 +73,7 @@ export function busyState(
   expectedMinutes: number
 ): BusyState {
   const minutes = task.estimatedHours && task.estimatedHours > 0 ? task.estimatedHours * 60 : expectedMinutes;
-  return {
+  const slot: BusyState = {
     status: 'busy',
     taskId: task.id,
     taskNo: task.taskNo ?? null,
@@ -60,6 +82,13 @@ export function busyState(
     claimedAt: new Date(nowMs).toISOString(),
     deadline: new Date(nowMs + minutes * 60_000).toISOString(),
   };
+  const t = task as Record<string, any>;
+  if (t.assignmentId != null) slot.assignmentId = t.assignmentId;
+  if (t.runId != null) slot.runId = t.runId;
+  if (t.stepId != null) slot.stepId = t.stepId;
+  if (t.nodeCode) slot.nodeCode = t.nodeCode;
+  if (t.orgId != null) slot.orgId = t.orgId;
+  return slot;
 }
 
 const LOCK_STALE_MS = 60_000;
@@ -76,22 +105,50 @@ export class AgentStateStore {
     return `${this.file}.lock`;
   }
 
-  read(): AgentState {
-    if (!fs.existsSync(this.file)) return IDLE;
+  /** The whole file: the slot fields plus an optional `runner` registration. */
+  private readRaw(): Record<string, any> {
+    if (!fs.existsSync(this.file)) return {};
     try {
       const s = JSON.parse(fs.readFileSync(this.file, 'utf-8'));
-      return s?.status === 'busy' || s?.status === 'timeout' ? s : IDLE;
+      return s && typeof s === 'object' ? s : {};
     } catch (e) {
       // A corrupt file must not silently become idle: that would claim a second task while one is running.
       throw new Error(`agent 状态文件损坏（${this.file}）: ${(e as Error).message}。确认后可用 good7ob agent reset 重置`);
     }
   }
 
-  write(state: AgentState): void {
+  private writeRaw(raw: Record<string, any>): void {
     fs.mkdirSync(this.dir, { recursive: true });
     const tmp = `${this.file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
+    fs.writeFileSync(tmp, JSON.stringify(raw, null, 2), 'utf-8');
     fs.renameSync(tmp, this.file);
+  }
+
+  read(): AgentState {
+    const { runner: _runner, ...s } = this.readRaw();
+    return s?.status === 'busy' || s?.status === 'timeout' ? (s as AgentState) : IDLE;
+  }
+
+  /** Writes the slot; the runner registration in the same file is kept. */
+  write(state: AgentState): void {
+    let runner: RunnerRegistration | undefined;
+    try {
+      runner = this.readRunner() ?? undefined;
+    } catch {
+      /* corrupt file: the slot write replaces it, the registration is redone by the next listen */
+    }
+    this.writeRaw(runner ? { ...state, runner } : { ...state });
+  }
+
+  readRunner(): RunnerRegistration | null {
+    const r = this.readRaw().runner;
+    return r && typeof r.runnerId === 'number' && typeof r.runnerKey === 'string' ? (r as RunnerRegistration) : null;
+  }
+
+  /** Writes the registration; the slot in the same file is kept. `null` clears it. */
+  writeRunner(runner: RunnerRegistration | null): void {
+    const slot = this.read();
+    this.writeRaw(runner ? { ...slot, runner } : { ...slot });
   }
 
   /**
