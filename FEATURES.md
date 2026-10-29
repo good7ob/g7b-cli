@@ -31,6 +31,7 @@
 - [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
 - [heartbeat — 本地 Agent 在线心跳](#heartbeat--本地-agent-在线心跳)
 - [worktree — 本机 worktree 占用登记](#worktree--本机-worktree-占用登记)
+- [test-run — 测试运行上传](#test-run--测试运行上传)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -94,6 +95,7 @@ good7ob
 ├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
 ├── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
 ├── heartbeat                # 本地 Agent 在线心跳（AI 员工 Key）：start / stop / beat / status
+├── test-run                 # 测试运行：上传 Playwright / JUnit 报告与截图、查最新运行（= qc run upload / latest）
 └── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
 ```
 
@@ -1377,6 +1379,34 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 | `worktree heartbeat --task <id> [--pid <pid>] [--json]` | 刷新心跳；没有记录时非 0 退出 |
 | `worktree release --task <id> [--json]` | 释放占用；没有记录时幂等（0 退出） |
 | `worktree list [--all] [--json]` | 默认先清理失效记录（pid 不存在或心跳超过 240 分钟）并落盘；`--all` 不清理，失效记录标「疑似失效」 |
+
+---
+
+## test-run — 测试运行上传
+
+API 端点：`POST /qc/runs/import`（multipart）、`GET /qc/runs/latest`（N-9，想法 #194，prd-0082 FP-17 `rp-qc-test-0106`～`0118`）。`good7ob test-run upload|latest` 与 `good7ob qc run upload|latest` 是同一实现；分步上报仍用 `qc run start / report / attach / finish`。
+
+| 命令 | 说明 |
+|---|---|
+| `test-run upload --project <id> --type <unit\|api\|e2e\|regression> --report <file> [--format playwright\|junit\|g7b] [--screenshots <dir>] [--run <runId> --step <stepId>] [--task <id>] [--test-round <planId>] [--product <id>] [--env dev\|test\|staging\|prod] [--build <ref>] [--auto-bug] [--json]` | 一次导入：开始运行 → 上报结果 → 上传截图 → 结束（失败按项目设置建 Bug，`--auto-bug` 显式要求建；带 `--step` 时挂到自动化步骤）。输出 运行号、通过 / 失败 / 跳过、未匹配用例数、证据数、新建 / 复用 Bug、门禁结论 |
+| `test-run latest [--project <id>] [--task <id> \| --step <stepId>] [--json]` | 最新测试运行（同一来源引用下完成时间最晚的一次）：统计、失败用例、证据；没有时输出「暂无测试运行」 |
+
+**本地处理（上传前）**
+
+- 格式：`--format` 优先；否则 `.xml` 或以 `<` 开头 → JUnit（根须为 `<testsuites>` / `<testsuite>`）；JSON 含 `suites` → Playwright；`[{caseId, result}]` 或 `{results:[…]}` → g7b（`qc run report` 的格式）。识别不了直接报错，不发请求。
+- 预检：报告 ≤ 20 MB、≤ 2000 条结果；`--type` / `--env` 取值、ID 为正整数、`--run` 与 `--step` 成对。
+- 截图：递归收集目录内 png / jpg / jpeg / gif / webp；单张 > 20 MB 跳过并警告，合计 > 200 MB 的部分跳过，每条用例 ≤ 20 张，非图片文件（trace.zip、视频）不上传并提示改用 `qc run attach`。
+- 截图 → 用例：按 Playwright 报告里 `results[].attachments[].path` 匹配（先比绝对路径；报告来自 CI 等其他机器时比「结果目录/文件名」两段，唯一才算）；对上的写进 `meta.evidenceMap`，对不上的由服务端按文件名（`<结果目录>__<文件名>`）前缀匹配。
+
+**请求（multipart）**：`meta`（JSON）`{projectId, productId?, testType, source: CLI|AUTOMATION_STEP, runId?, stepId?, taskId?, planId?, environment?, envTag?（同 --env）, buildRef?, reportFormat: playwright_json|junit_xml|g7b_json, autoBug?, evidenceMap?: [{file, kind: "screenshot", caseName?, titlePath?, specFile?}]}`；`report` 报告文件；`evidence` 0..n 张截图。超时 5 分钟。
+
+**退出码**：0 全部通过；2 上传成功但有失败；1 参数 / 解析 / 上传错误（含服务端 `2728` 报告解析失败）。
+
+```bash
+good7ob test-run upload --project 7 --type e2e --report playwright-report.json --screenshots test-results --run 31 --step 32
+good7ob test-run upload --project 7 --type api --report build/test-results/junit.xml --env test --build $(git rev-parse --short HEAD)
+good7ob test-run latest --step 32
+```
 
 ---
 

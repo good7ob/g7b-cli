@@ -22,6 +22,17 @@ interface ApiResponse<T> {
   };
 }
 
+/** One part of ApiClient.uploadMultipart: a file (`filePath`), a JSON body (`json`) or a plain field (`value`). */
+export interface MultipartPart {
+  name: string;
+  value?: string;
+  json?: unknown;
+  filePath?: string;
+  /** file name sent for a file part (defaults to the basename) */
+  fileName?: string;
+  contentType?: string;
+}
+
 // fix: #564 https://github.com/good7ob/backend/issues/564
 // /api/infra/** is isolated per organization: the backend requires X-Org-Id on those calls.
 export function withInfraOrg(config: AxiosRequestConfig, orgId: number | undefined): AxiosRequestConfig {
@@ -218,6 +229,42 @@ export class ApiClient {
         // follow-redirects caps bodies at 10MB by default; a 50-file batch can exceed that
         maxBodyLength: Infinity,
         maxContentLength: Infinity,
+      });
+      return this.unwrap(response.data);
+    } catch (error) {
+      throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Multipart with mixed parts: plain fields, a JSON part (Spring `@RequestPart` needs its
+   * `application/json` type) and files streamed from disk under a chosen file name, so several
+   * same-named files (Playwright's `test-failed-1.png` in every result folder) stay apart.
+   */
+  async uploadMultipart(url: string, parts: MultipartPart[], options: { timeoutMs?: number } = {}): Promise<any> {
+    try {
+      const FormDataLibrary = require('form-data');
+      const formData = new FormDataLibrary();
+      for (const p of parts) {
+        if (p.filePath) {
+          formData.append(p.name, fs.createReadStream(p.filePath), {
+            filename: p.fileName ?? path.basename(p.filePath),
+            contentType: p.contentType,
+            knownLength: fs.statSync(p.filePath).size,
+          });
+        } else if (p.json !== undefined) {
+          formData.append(p.name, JSON.stringify(p.json), { contentType: 'application/json', filename: p.fileName });
+        } else if (p.value !== undefined) {
+          formData.append(p.name, p.value);
+        }
+      }
+      // every part has a known length, so send Content-Length instead of a chunked body
+      const headers: Record<string, string> = { ...formData.getHeaders(), 'Content-Length': String(formData.getLengthSync()) };
+      const response = await this.instance.post(url, formData, {
+        headers,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
       });
       return this.unwrap(response.data);
     } catch (error) {

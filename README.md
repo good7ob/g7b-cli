@@ -408,6 +408,21 @@ good7ob qc tc coverage 12          # uncovered RPs; --all for every RP
 good7ob qc tc suites 12
 ```
 
+### Test runs (`test-run`, alias of `qc run upload|latest`)
+
+One call imports a whole report: `POST /qc/runs/import` starts the run, reports every result, uploads the screenshots and finishes it (failed results open bugs, the run is attached to the automation step). Use `qc run start / report / attach / finish` for step-by-step reporting.
+
+```bash
+# Playwright JSON or JUnit XML (format detected from extension + content; --format playwright|junit|g7b to force)
+good7ob test-run upload --project 7 --type e2e --report playwright-report.json --screenshots test-results \
+  [--run <runId> --step <stepId>] [--task <id>] [--test-round <planId>] [--env dev|test|staging|prod] [--build <sha>] [--auto-bug] [--json]
+good7ob test-run latest --step 32          # or --task <id> / --project <id>; --json for the raw run
+```
+
+- `--type` is `unit|api|e2e|regression`; with `--run/--step` the source is `AUTOMATION_STEP`, otherwise `CLI`.
+- Screenshots: the directory is walked recursively; only png/jpg/gif/webp are sent, files over 20 MB are skipped with a warning, 200 MB per upload and 20 per case at most. Files are matched to cases through the Playwright report's attachment paths (absolute path, or result-folder/file name when the report came from another machine); unmatched files are sent as `<folder>__<file>` so the server can match them by scenario prefix.
+- Report ≤ 20 MB and ≤ 2000 results (split larger runs). Exit code: 0 all passed, 2 uploaded with failures, 1 argument / parse / upload error.
+
 ## Build and test
 
 ```bash
