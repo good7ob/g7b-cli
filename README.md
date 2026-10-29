@@ -284,18 +284,23 @@ See `FEATURES.md` (habit) for the file format, error codes and rules.
 
 Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine (`~/.good7ob/agent-state.json`): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.
 
+`agent listen` also registers the machine as a **Runner** of the AI employee behind the key (prd-0136, idea #189): `POST /api/v1/me/runners` on start (idempotent on employee + host id), the runner heartbeat every 30 s (`POST /api/v1/me/heartbeat` with `runnerId / runnerKey`, renews the runner's leases), `GET /progress/agent-tasks?runnerId=` so items the scheduler assigned to this runner come first, and `DELETE /api/v1/me/heartbeat?runnerKey=&runnerId=` on Ctrl-C so unclaimed leases go back to the pool. A human key is refused (`仅 AI 员工 Key 可注册 Runner`) and nothing is registered; a network / 5xx failure is retried, never fatal.
+
 ```bash
 # Forward claimed tasks to a Hermes webhook (HMAC-signed) — or use agent.forward.command instead
 good7ob config set agent.forward.url http://127.0.0.1:8644/webhooks/good7ob-task
 good7ob config set agent.forward.secret <secret>
 # good7ob config set agent.forward.command 'claude -p "处理 good7ob 任务 {taskId}"'   # only {taskId}/{taskNo}
 
-good7ob agent listen [--interval 15] [--once]   # poll → claim → forward
-good7ob agent next [--json]                     # for agents that pull: exit 3 = busy, 4 = queue empty
+good7ob agent listen [--interval 15] [--once] [--slots 2] [--env dev,test] [--agent-kind CLAUDE_CODE] [--host-id <id>]
+                                                # register runner → heartbeat → poll (assigned first) → claim → forward
+good7ob agent next [--json]                     # for agents that pull: exit 3 = busy, 4 = queue empty, 5 = only tasks assigned to other runners
 good7ob agent done <taskId> [--status completed]
-good7ob agent status
-good7ob agent reset [--release]
+good7ob agent status [--json]                   # slot + runner registration + config
+good7ob agent reset [--release] [--keep-runner] # slot back to idle; forgets the runner registration unless --keep-runner
 ```
+
+Runner flags default to `agent.slots` (1), `agent.envTags` (none; subset of `dev,test,prod`), `agent.agentKind` (`CLAUDE_CODE`), `agent.hostId` (the hostname; the backend `runnerKey`). An assigned item is claimed with `?runnerId=`; a `409 ASSIGNED_TO_OTHER` (another runner's assignment) is skipped, never fought over, and `400 JOB_MISMATCH` (employee lacks the node's job) likewise. The claimed task's run context (`assignmentId / runId / stepId / nodeCode` and the node prompt / expected output / exit checklist) is printed and sent to the webhook as `assignment_id / run_id / step_id / node_code`. When the heartbeat answers `stopStepIds`, the matching local step is marked stopped (the backend already released it, so the CLI never releases it again). `--slots` above 1 is announced to the scheduler as capacity; the local executor still runs one task at a time.
 
 Other settings: `agent.intervalSeconds` (15), `agent.expectedMinutes` (60), `agent.graceMinutes` (30), `agent.projectId`.
 
