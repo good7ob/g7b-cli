@@ -44,6 +44,7 @@ import { registerHabitCommands } from './commands/habit';
 import { registerArtifactCommands } from './commands/artifact';
 import { registerFeatCommands } from './commands/feat';
 import { registerDeliverableCommands } from './commands/deliverable';
+import { registerAutomationCommands } from './commands/automation';
 
 const program = new Command();
 
@@ -91,6 +92,7 @@ registerHabitCommands(program);
 registerArtifactCommands(program);
 registerFeatCommands(program);
 registerDeliverableCommands(program);
+registerAutomationCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
