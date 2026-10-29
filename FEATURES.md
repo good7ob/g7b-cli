@@ -30,6 +30,7 @@
 - [whoami — 当前身份](#whoami--当前身份)
 - [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
 - [heartbeat — 本地 Agent 在线心跳](#heartbeat--本地-agent-在线心跳)
+- [run — 自动化运行与步骤回报](#run--自动化运行与步骤回报)
 - [worktree — 本机 worktree 占用登记](#worktree--本机-worktree-占用登记)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
@@ -1367,6 +1368,33 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 Runner 参数（prd-0136 FP-2）：`--runner-id` 指定 Runner；只给 `--slots` / `--env` 时取 `agent listen` 注册在 `~/.good7ob/agent-state.json` 里的 Runner，没有则报错。不带任何 Runner 参数 = 旧行为，只续员工在线标记，不改 Runner 属性。请求体：`{ runnerId, runnerKey, slots?, envTags? }`；`--slots` 1~8，`--env` 为 `dev,test,prod` 的子集。`agent listen` 内部复用同一个心跳循环（进程内），不再另起一个。
 
 后端 90 秒内没有收到心跳就把员工视为不在线，所以 Agent 崩溃也会自动变回空闲。循环状态文件在 `~/.good7ob/heartbeat/<agentPid>.json`。
+
+## run — 自动化运行与步骤回报
+
+prd-0137（想法 #188，任务 #2226），后端 #992：`/api/v1/orgs/{orgId}/runs/…`。平台不执行步骤，步骤数据都由 Runner 经 CLI 回报。
+
+**默认值**：Runner 侧命令的 `--run / --step` 缺省取本地工作槽（`~/.good7ob/agent-state.json`，`agent listen / next` 领取调度分配时写入 `assignmentId / runId / stepId / nodeCode`，有则带 `orgId`）。只给 `--step` 且等于槽里的步骤时补 `--run`，反之亦然；其他步骤必须两者都给。组织：`--org-id` → 槽里该步骤的组织 → `GOOD7OB_ORG_ID` → `config set org-id` → 槽记录的本机组织（指定了其他步骤时）→ Key 唯一所属组织。
+
+| 命令 | 说明 |
+|---|---|
+| `run log append [--run --step] (--file <path> \| --stdin \| --text "…") [--seq N]` | 先本地脱敏（Key / token / 密码 / Bearer / 私钥 / URL 凭据 → `***`），按 ≤ 1 MB 切段（尽量在换行处、不切断多字节字符），以 JSON `{seq, content}` 逐段 `POST …/logs`。序号：`--seq` 优先；槽里的步骤用槽内计数器 `logSeq` 续号（该槽首次上传先 `GET …/logs?limit=1` 取服务端最后一段，避免重领同一步骤时覆盖），其他步骤从服务端最后一段 +1。计数器在发送前推进；中途失败提示「原命令加 `--seq <首段>`」重试（同 seq 幂等，已存的段返回 duplicate）。本地上限 100 MB，单步 50 MB 由服务端 `2722` 截断 |
+| `run step done [--run --step] [--summary "…"] [--result completed\|partial] [--pr <url>]… [--tokens N\|json] [--artifact <type>:<ref>]… [--from-git <base> \| --files <json\|@file>] [--branch] [--commit-range]` | `POST …/done`，body `{summary, prUrls, artifacts, tokens, files, branch, commitRange}`。`--result partial` 后端无字段，以 `[partial] ` 前缀写入摘要；`--tokens N` 记为 `{input: N}`，精确时给 JSON `{"input","output","cacheRead","cacheWrite"}`。成功且是槽里的步骤 → 槽置空闲。输出下一步 / 任务状态 / 运行状态 |
+| `run step fail [--run --step] --reason "…" [--retryable] [--code <code>] [--message "…"]` | `POST …/fail` `{reason: <失败码>, message}`。失败码：`--code`；或 `--reason` 本身就是失败码（`TEST_FAILED` / `REVIEW_FAILED` / `AGENT_ERROR` / `BLOCKED` / `OTHER`）；否则 `--retryable` → `AGENT_ERROR`，不带 → `OTHER`，`--reason` 文字作为说明。`TEST_FAILED` / `REVIEW_FAILED` 触发后端返工（输出返工步骤） |
+| `run tool-calls append [--run --step] --file <jsonl>` | 每行 `{tool, startedAt, durationMs, ok, note}`（也接受 `toolName / result / summary`）→ `{toolName, startedAt, durationMs, result: ok\|error, summary}`；note 脱敏并截到 200 字；每 500 条一次请求；错误行报行号 |
+| `run files report [--run --step] (--from-git <base> \| --files <json\|@file>) [--pr <url>] [--branch] [--commit-range]` | `git diff --numstat -z -M <base>...HEAD` + `--name-status` 得到 `{path, changeType A/M/D/R, linesAdded, linesDeleted, oldPath?, prUrl?}`，只发路径与行数，**不发文件内容**；二进制计 0；分支默认当前分支，commit 范围默认 `merge-base..HEAD`（只含已提交改动）。超过 2000 条提示服务端截断 |
+| `run artifacts add [--run --step] --type <type> --ref <id\|url> [--title]` | `POST …/artifacts` `{type, id \| url, title}`；`PR` → `PULL_REQUEST`；类型闭集 `PULL_REQUEST / REVIEW_REPORT / TEST_RUN / EXTERNAL / DELIVERABLE_PACKAGE / GATE_RESULT / ACCEPTANCE_RECORD / RELEASE / DEPLOY_RECORD`（否则 `2727`）；幂等 |
+| `run list [--automation] [--project] [--status] [--page] [--page-size]` | 组织运行列表（默认近 90 天）；状态 `queued / running / paused / awaiting_approval / succeeded / failed / cancelled` |
+| `run show <runId>` | 运行头、合计 token / 成本、等待原因、可执行操作、步骤表 |
+| `run logs <runId> [--step <id>] [--after <seq>] [--limit N] [--follow]` | 不给 `--step` 取执行中的步骤，否则最后一个有日志的步骤；先显示最近约 200 KB。`--follow` 每 10 秒轮询 `GET /stream?since=`：打印新事件，对 `lastLogSeq` 前进的步骤按游标 `GET …/logs?after=` 取新段（其他步骤从当前末尾开始，新步骤从头），运行终结后退出 |
+| `run pause \| resume <runId>`、`run halt <runId> [--reason]`、`run cancel \| abandon <runId> --reason "…"` | 先 `GET /runs/{id}` 读 `version`，再 `POST /{op}` `{version, reason?}`；`2723` 版本冲突提示重新执行 |
+| `run step retry <runId> <stepId>` / `run step reassign <runId> <stepId> [--employee <id>] [--reason]` | 重跑带 `version`；改派释放租约后重新决定或指定员工 |
+
+**与既有命令的衔接**
+
+- `agent done <taskId>`：槽是该任务且带 `stepId` 时改为 `run step done`（可带 `--summary` / `--pr`），不再 `PUT /progress/tasks/{id}`（任务状态由运行引擎推进；`--status` 此时不使用并提示）；`--no-step` 保留旧路径（后端按任务状态兜底推进步骤）。回报失败时不清槽。
+- `log save`：新增 `--run-id / --step-id / --node-code`；都不给时，若槽带步骤且 `--task-id` 未给或等于槽里的任务，自动带上槽里的 `runId / stepId / nodeCode`（未给 `--task-id` 时同时带 `taskId`），stderr 提示；`--no-run-link` 关闭。后端校验步骤属于该任务（否则 `1001`）。
+
+**错误码**：`2718` 步骤回报只接受 AI 员工 Key；`2000 STEP_NOT_HELD` 步骤不是本员工持有（已改派 / 租约收回，提示 `agent reset --keep-runner`）；`2000 RUN_NOT_VISIBLE` 无权查看；`2719` 步骤结束超过 10 分钟；`2722` 单步日志超过 50 MB；`2703` AI 员工 Key 不能操作运行；`2723` version 冲突；`2720 / 2721` 不能重跑 / 达到重试上限；`2725` 只有已暂停的运行可放弃；`2727` 产物类型不在闭集。
 
 ## worktree — 本机 worktree 占用登记
 

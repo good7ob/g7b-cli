@@ -86,6 +86,13 @@ describe('AgentStateStore', () => {
     expect(busyState({ id: 1 }, T0, 60)).not.toHaveProperty('stepId');
   });
 
+  it('busyState keeps the org of the claimed task (run commands need no --org-id) and starts without a log seq', () => {
+    const slot = busyState({ id: 1, stepId: 45, runId: 3, orgId: 58 } as any, T0, 60);
+    expect(slot).toMatchObject({ orgId: 58 });
+    expect(slot).not.toHaveProperty('logSeq');
+    expect(busyState({ id: 1 }, T0, 60)).not.toHaveProperty('orgId');
+  });
+
   it('takes over a stale lock', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-state-'));
     const store = new AgentStateStore(dir);
