@@ -19,8 +19,11 @@ async function expectRejected(args: string[], needle: string) {
 
 describe('idea status (A1: nine statuses)', () => {
   it.each(['evaluating', 'archived', 'planning', 'developing', 'released', 'validated'])('accepts %s', async (to) => {
-    const r = await idea(['status', '5', to]);
-    expect(r.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: to });
+    const r = await idea(['status', '5', to, ...(to === 'archived' ? ['--reason', '功能已完成开发'] : [])]);
+    expect(r.http.post).toHaveBeenCalledWith(
+      '/forge/ideas/5/status',
+      to === 'archived' ? { toStatus: to, reason: '功能已完成开发' } : { toStatus: to },
+    );
     expect(r.stdout).toContain(`→ ${to}`);
   });
 
