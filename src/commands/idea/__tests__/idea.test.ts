@@ -181,6 +181,29 @@ describe('idea update / delete / status / reject', () => {
     expect(noHttpCalls(bad)).toBe(true);
   });
 
+  it('status archived requires --reason and sends it; other targets send no reason', async () => {
+    const good = await idea(['status', '5', 'archived', '--reason', '功能已完成开发']);
+    expect(good.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: 'archived', reason: '功能已完成开发' });
+    const missing = await idea(['status', '5', 'archived']);
+    expect(missing.stderr).toContain('--reason');
+    const long = await idea(['status', '5', 'archived', '--reason', 'x'.repeat(1001)]);
+    expect(long.stderr).toContain('最多 1000');
+    const other = await idea(['status', '5', 'planning', '--reason', '多余']);
+    expect(other.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: 'planning' });
+    expect(noHttpCalls(missing) && noHttpCalls(long)).toBe(true);
+  });
+
+  it('close posts archived with the reason, requires it, and caps it at 1000 chars', async () => {
+    const good = await idea(['close', '5', '--reason', '功能已完成开发']);
+    expect(good.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: 'archived', reason: '功能已完成开发' });
+    expect(good.stdout).toContain('已关闭');
+    const missing = await idea(['close', '5']);
+    expect(missing.stderr).toContain('required option');
+    const long = await idea(['close', '5', '--reason', 'x'.repeat(1001)]);
+    expect(long.stderr).toContain('最多 1000');
+    expect(noHttpCalls(missing) && noHttpCalls(long)).toBe(true);
+  });
+
   it('reject sends the reason, requires it, and caps it at 1000 chars', async () => {
     const good = await idea(['reject', '5', '--reason', '不做']);
     expect(good.http.post).toHaveBeenCalledWith('/forge/ideas/5/reject', { reason: '不做' });
