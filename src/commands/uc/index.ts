@@ -10,16 +10,17 @@ import { Command } from 'commander';
 import * as path from 'path';
 import apiClient from '../../services/ApiClient';
 import {
-  ErrorCodeMap, InputError, emit, guarded, parseId, requireText, resolveProductId,
+  ErrorCodeMap, InputError, emit, guarded, parseId, requireOneOf, requireText, resolveProductId,
 } from '../../utils/cliHelpers';
 import { pushDiagram, planRender, runPlan } from './batch';
 import {
-  DIAGRAM_TYPES, MAX_ACTOR_NAME, MAX_DIAGRAM_NAME, buildCreateBody, buildEntryBody, buildRelationBody, mergeUpdateBody,
-  parseChannels, parseLimit, requireChanges, resolveActorId, resolveUseCaseId, upper, PRIORITIES,
+  DIAGRAM_TYPES, GAP_CODES, MAX_ACTOR_NAME, ORDERS, SORTS, STATUSES, MAX_DIAGRAM_NAME, buildCreateBody, buildEntryBody, buildRelationBody, mergeUpdateBody,
+  parseChannels, parseEnumList, parseLimit, requireChanges, scopeParams, resolveActorId, resolveUseCaseId, upper, PRIORITIES,
 } from './input';
 import { RenderError, createRenderer, describeRenderError } from './plantuml';
 import {
-  Actor, DiagramRow, OverviewRow, UcDetail, UcPage, renderActors, renderBatch, renderDetail, renderDiagrams,
+  Actor, DiagramRow, Metrics, OverviewRow, StatusView, UcDetail, UcListItem, UcPage, renderActors, renderBatch, renderDetail, renderDiagrams,
+  renderGaps, renderMetrics, renderStatus,
   renderFpCandidates, renderList, renderOverviews, renderTestCandidates,
 } from './render';
 import { readSourceFile } from './source';
@@ -42,6 +43,7 @@ const CODES: ErrorCodeMap = {
   15011: '该 FP 还承载着入口声明，先用 uc entry remove 删除这些入口',
   15012: '源码未通过服务端安全检查（不允许文件引入、远程地址、环境变量等）',
   15013: '用例数据在渲染期间变化了，请重新执行',
+  15014: '范围内用例过多（超过 2000 条），无法实时计算状态；请加筛选条件缩小范围（--priority / --sub-module / --release / --milestone）',
 };
 
 const JSON_OPT = ['--json', 'Output as JSON'] as const;
@@ -78,8 +80,12 @@ async function resolveTestCaseId(ref: string, id: number): Promise<number> {
 function registerUseCaseCommands(uc: Command): void {
   uc.command('list').description('List use cases of a product (ascending by code)')
     .option(...PRODUCT_OPT).option('--priority <p>', 'P0|P1|P2').option('--actor <id>', 'Actor id')
-    .option('--sub-module <id>', 'Sub-module id').option('--channel <c>', 'WEB|APP|CLI|MCP|API').option('--page <n>', 'Page (default 1)')
-    .option('--size <n>', 'Page size 1-100 (default 20)').option(...JSON_OPT)
+    .option('--sub-module <id>', 'Sub-module id').option('--channel <c>', 'WEB|APP|CLI|MCP|API')
+    .option('--status <list>', `Derived status, comma separated: ${STATUSES.join('|')}`)
+    .option('--gap <list>', 'Has any of these gap marks, comma separated: NO_FUNCTION_POINT|NO_ENTRY|FP_INCOMPLETE|FP_INVALID|INCLUDE_NOT_AVAILABLE|API_WITHOUT_UI|NO_DIAGRAM|DIAGRAM_NOT_FRESH|NO_TEST_CASE|TEST_FAILED|TEST_NOT_RUN')
+    .option('--release <id>', 'Target release id').option('--milestone <id>', 'Target milestone id')
+    .option('--sort <key>', `${SORTS.join('|')} (default code)`).option('--order <o>', 'asc|desc (default asc)')
+    .option('--page <n>', 'Page (default 1)').option('--size <n>', 'Page size 1-100 (default 20)').option(...JSON_OPT)
     .action((o) => guarded('获取用例列表失败', CODES, async () => {
       const productId = resolveProductId(o.product);
       const params = {
@@ -87,6 +93,11 @@ function registerUseCaseCommands(uc: Command): void {
         actorId: o.actor === undefined ? undefined : parseId(o.actor, '--actor'),
         subModuleId: o.subModule === undefined ? undefined : parseId(o.subModule, '--sub-module'),
         channel: o.channel === undefined ? undefined : parseChannels(o.channel, '--channel')[0],
+        status: parseEnumList(o.status, STATUSES, '--status'),
+        gap: parseEnumList(o.gap, GAP_CODES, '--gap'),
+        ...scopeParams(o),
+        sort: o.sort === undefined ? undefined : requireOneOf(o.sort.trim().toLowerCase(), SORTS, '--sort'),
+        order: o.order === undefined ? undefined : requireOneOf(o.order.trim().toLowerCase(), ORDERS, '--order'),
         pageNum: o.page === undefined ? undefined : parseId(o.page, '--page'),
         pageSize: o.size === undefined ? undefined : parseId(o.size, '--size'),
       };
@@ -306,6 +317,30 @@ function registerDiagramCommands(uc: Command): void {
     });
 }
 
+function registerStatusCommands(uc: Command): void {
+  uc.command('status <uc>').description('Derived status of a use case: per-channel reachability and why, gap marks, what verification lacks, status of included use cases')
+    .option(...PRODUCT_OPT).option(...JSON_OPT)
+    .action((ref, o) => guarded('获取用例状态失败', CODES, async () => {
+      const view: StatusView = await apiClient.get(`${detailPath(await ucId(ref, o))}/status`);
+      emit(o.json, view, () => renderStatus(view));
+    }));
+
+  const scoped = (c: Command) => c.option(...PRODUCT_OPT).option('--release <id>', 'Only use cases targeting this release')
+    .option('--milestone <id>', 'Only use cases targeting this milestone (with --release: both)').option(...JSON_OPT);
+
+  scoped(uc.command('metrics').description('Completion figures: P0 first, then P1 / P2 / total; usable and verified rates, count per status (live, no history; reference only)'))
+    .action((o) => guarded('获取完成度指标失败', CODES, async () => {
+      const metrics: Metrics = await apiClient.get(`/products/${resolveProductId(o.product)}/use-case-metrics`, scopeParams(o));
+      emit(o.json, metrics, () => renderMetrics(metrics));
+    }));
+
+  scoped(uc.command('gaps').description('P0 use cases that are partial or not started, with their gap marks'))
+    .action((o) => guarded('获取缺口清单失败', CODES, async () => {
+      const rows: UcListItem[] = (await apiClient.get(`/products/${resolveProductId(o.product)}/use-case-gaps`, scopeParams(o))) ?? [];
+      emit(o.json, rows, () => renderGaps(rows));
+    }));
+}
+
 export function registerUcCommands(program: Command) {
   const uc = program.command('uc').description('User use cases: register, link FPs / tests / entries / relations, push and render PlantUML diagrams');
   // the server records the source of a change (activity feed, object-file access log) from this header
@@ -313,5 +348,6 @@ export function registerUcCommands(program: Command) {
   registerUseCaseCommands(uc);
   registerActorCommands(uc);
   registerLinkCommands(uc);
+  registerStatusCommands(uc);
   registerDiagramCommands(uc);
 }

@@ -10,6 +10,14 @@ export const PRIORITIES = ['P0', 'P1', 'P2'] as const;
 export const CHANNELS = ['WEB', 'APP', 'CLI', 'MCP', 'API'] as const;
 export const DIAGRAM_TYPES = ['SEQUENCE', 'ACTIVITY'] as const;
 export const RELATION_TYPES = ['INCLUDE', 'EXTEND'] as const;
+export const STATUSES = ['NOT_STARTED', 'PARTIAL', 'AVAILABLE', 'VERIFIED'] as const;
+/** api-0180 §14.4 gap mark codes. */
+export const GAP_CODES = [
+  'NO_FUNCTION_POINT', 'NO_ENTRY', 'FP_INCOMPLETE', 'FP_INVALID', 'INCLUDE_NOT_AVAILABLE', 'API_WITHOUT_UI',
+  'NO_DIAGRAM', 'DIAGRAM_NOT_FRESH', 'NO_TEST_CASE', 'TEST_FAILED', 'TEST_NOT_RUN',
+] as const;
+export const SORTS = ['code', 'priority', 'status'] as const;
+export const ORDERS = ['asc', 'desc'] as const;
 export const CLEARABLE = ['sub-module', 'note', 'release', 'milestone'] as const;
 
 export const MAX_GOAL = 200;
@@ -147,4 +155,16 @@ export function parseLimit(raw: string | undefined): number | undefined {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1 || n > 50) throw new InputError(`--limit 必须是 1-50 的整数，收到: ${raw}`);
   return n;
+}
+
+/** `partial,available` -> 'PARTIAL,AVAILABLE' (validated, de-duplicated), the comma form U01 accepts. */
+export function parseEnumList<T extends string>(raw: string | undefined, allowed: readonly T[], label: string): string | undefined {
+  if (raw === undefined) return undefined;
+  const items = Array.from(new Set(raw.split(',').map((v) => upper(v, allowed, label))));
+  return items.join(',');
+}
+
+/** The U01 / S02 / S03 scope filters shared by list, metrics and gaps. */
+export function scopeParams(o: { release?: string; milestone?: string }): { releaseId?: number; milestoneId?: number } {
+  return { releaseId: optId(o.release, '--release'), milestoneId: optId(o.milestone, '--milestone') };
 }

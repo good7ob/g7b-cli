@@ -309,12 +309,16 @@ Quality-control commands for bug tracking and QA reporting.
 
 ### `uc`
 
-User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, plus `push` and `render` for PlantUML diagrams.
+User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, `status` / `metrics` / `gaps` (derived status, completion figures, P0 gap list), plus `push` and `render` for PlantUML diagrams.
 
 ```bash
 good7ob uc list --product 10
 good7ob uc show UC-3 --product 10                      # UC-n needs --product (or GOOD7OB_PRODUCT_ID); a bare number is the id
 good7ob uc update UC-3 --priority P0 --clear note      # reads the use case, merges, PUTs (the PUT replaces every field)
+good7ob uc status UC-3 --product 10                    # why it is partial / not started, which gaps
+good7ob uc metrics --product 10 --release 3            # P0 first; a rate with nothing to divide shows —
+good7ob uc gaps --product 10                           # P0 use cases that are partial / not started
+good7ob uc list --product 10 --status partial,not_started --sort status
 good7ob uc push UC-3 flow.puml --type SEQUENCE --name invite
 good7ob uc render --product 10                         # every stale / unrendered picture; exit code 1 if any one fails
 ```

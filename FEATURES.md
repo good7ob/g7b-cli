@@ -1388,7 +1388,10 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 
 | 命令 | 说明 |
 |---|---|
-| `uc list [--priority P0\|P1\|P2] [--actor <id>] [--sub-module <id>] [--channel <c>] [--page <n>] [--size <n>]` | 用例列表（按编号升序，未关联 FP 的标「未关联」） |
+| `uc list [--priority P0\|P1\|P2] [--actor <id>] [--sub-module <id>] [--channel <c>] [--status <列表>] [--gap <列表>] [--release <id>] [--milestone <id>] [--sort code\|priority\|status] [--order asc\|desc] [--page <n>] [--size <n>]` | 用例列表（默认按编号升序），每行带派生状态、缺口标记、流程图状态。`--status`（NOT_STARTED/PARTIAL/AVAILABLE/VERIFIED）和 `--gap`（缺口码，如 NO_ENTRY、TEST_FAILED、DIAGRAM_NOT_FRESH）可逗号分隔，满足其一即可，大小写不敏感；带它们或 `--sort status` 时服务端要先派生，范围内超过 2000 条返回 15014，加 `--priority` / `--sub-module` / `--release` / `--milestone` 缩小范围 |
+| `uc status <uc>` | 派生状态（未开始/部分/可用/已验证）及原因、逐渠道可达性（缺入口声明 / 承载 FP 未完成 / 承载 FP 已失效）与入口、缺口标记、已验证还缺哪几条（测试 / 流程图）、include 的用例状态；`--json` 原样输出 |
+| `uc metrics [--release <id>] [--milestone <id>]` | 完成度指标：先单独突出 P0，再 P1 / P2 / 合计；显示可用率、已验证率（0～1 小数显示为百分比，用例数为 0 时显示「—」不是 0%）和四种状态的数量分布。实时计算、没有历史，只作参考，不接审批或质量门禁 |
+| `uc gaps [--release <id>] [--milestone <id>]` | 缺口清单：P0 且状态为部分 / 未开始的用例，带缺口标记和「已通：API；缺：Web」 |
 | `uc show <uc>` | 详情：渠道与入口声明（未声明入口的渠道标 ⚠）、关联 FP（含失效原因）、测试用例及最近结果、四个方向的关系 |
 | `uc add --actor <id\|名称> --goal <文本> --priority <P0\|P1\|P2> --channel <WEB,APP,CLI,MCP,API> [--sub-module] [--note] [--release] [--milestone]` | 创建用例 |
 | `uc update <uc> [--actor] [--goal] [--priority] [--sub-module] [--note] [--release] [--milestone] [--clear sub-module,note,release,milestone]` | 修改。后端 PUT 是整体替换，所以先 GET 当前值、合并、再 PUT；没给的字段保持原值，要清空用 `--clear`；什么都没给不发请求 |
@@ -1404,7 +1407,7 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 | `uc push <uc> <源码文件> --type SEQUENCE\|ACTIVITY [--name <名称>]` | 本机渲染 PNG，**成功后才**提交源码 + 渲染记录 + PNG（一次 multipart）。渲染失败：打印 PlantUML 的报错与行号，不发任何请求，退出码非 0。`--name` 缺省取文件名；同用例内按名称找图，没有就新建、源码变了就追加版本 |
 | `uc render [--overview <key\|all>] [--diagrams] [--uc <uc>] [--all]` | 渲染并上传全部「过期或未渲染」的图（流程图 + 总图）；`--overview` / `--diagrams` / `--uc` 指定范围，`--all` 连已最新的一起重渲染。每张图独立成败，成功的保留，失败的逐张列出原因，任一失败则退出码非 0。上传遇 15013（数据已变）自动重新取源码再渲染一次 |
 
-状态与度量命令（`uc status` / `uc metrics` / 缺口清单）待后端 #2354 合并后补充。
+状态、缺口和度量都是服务端调用时现算的（不存储）；`metrics` / `gaps` 与带状态筛选的 `list` 一样，范围内用例超过 2000 条时报 15014，CLI 提示加筛选条件缩小范围。
 
 ### 本机渲染与安全
 
