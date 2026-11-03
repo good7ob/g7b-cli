@@ -15,7 +15,7 @@ import { SyncItem, SyncResult, renderSync } from './render';
 const MAX_PAGES = 100;
 const DEFAULT_LIMIT = 200;
 
-interface Actor {
+export interface Actor {
   actorType?: string | null;
   userId?: number | null;
   employee?: { id?: number | null; orgId?: number | null } | null;
@@ -29,13 +29,13 @@ interface FeedPage {
 }
 
 /** Who is calling decides the scope on the server, so identity comes from the credential, never a flag. */
-function identityOf(actor: Actor): SyncResult['identity'] {
+export function identityOf(actor: Actor): SyncResult['identity'] {
   if (actor.employee?.id) return { kind: 'emp', id: Number(actor.employee.id) };
   if (actor.userId) return { kind: 'user', id: Number(actor.userId) };
   throw new Error('无法确定当前身份，请先 good7ob whoami 确认登录状态');
 }
 
-function orgFor(identity: SyncResult['identity'], actor: Actor, option: string | undefined, configured: number | undefined): number {
+export function orgFor(identity: SyncResult['identity'], actor: Actor, option: string | undefined, configured: number | undefined): number {
   if (identity.kind === 'emp') {
     const own = Number(actor.employee?.orgId);
     if (option !== undefined && Number(option) !== own) {
