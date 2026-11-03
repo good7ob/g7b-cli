@@ -64,7 +64,7 @@ export async function resolveUseCaseId(raw: string | undefined, product?: string
 }
 
 interface ActorRow { id: number; name: string; enabled: boolean }
-const actorKey = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+export const actorKey = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
 /** An actor given as an id, or as its name (matched like the server: ignoring case and all whitespace). */
 export async function resolveActorId(raw: string, productId: number): Promise<number> {

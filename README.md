@@ -309,7 +309,7 @@ Quality-control commands for bug tracking and QA reporting.
 
 ### `uc`
 
-User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, `status` / `metrics` / `gaps` (derived status, completion figures, P0 gap list), plus `push` and `render` for PlantUML diagrams.
+User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, `status` / `metrics` / `gaps` (derived status, completion figures, P0 gap list), plus `push` and `render` for PlantUML diagrams and `import` for existing PlantUML use case diagrams.
 
 ```bash
 good7ob uc list --product 10
@@ -321,7 +321,11 @@ good7ob uc gaps --product 10                           # P0 use cases that are p
 good7ob uc list --product 10 --status partial,not_started --sort status
 good7ob uc push UC-3 flow.puml --type SEQUENCE --name invite
 good7ob uc render --product 10                         # every stale / unrendered picture; exit code 1 if any one fails
+good7ob uc import ./diagrams --product 10 --priority P1 --channels Web   # preview only
+good7ob uc import ./diagrams/login.puml --product 10 --priority P1 --channels App --apply
 ```
+
+`uc import` reads `.puml` files (directories recursively) as text on this machine: nothing is rendered, uploaded or executed. `--priority` and `--channels` are required (never guessed); without `--apply` it only previews. Existing role + goal pairs are skipped, existing use cases are never changed. See `FEATURES.md` (uc section).
 
 Rendering happens on this machine and never uses an online PlantUML service. Install PlantUML, Graphviz and Java yourself, or point `GOOD7OB_PLANTUML_CMD` at `java -jar plantuml.jar` or `docker run --rm -i plantuml/plantuml:latest`. The CLI always renders with `PLANTUML_SECURITY_PROFILE=SANDBOX`; a different value in your environment is overridden. See `FEATURES.md` (uc section) for every command.
 

@@ -1,0 +1,47 @@
+@startuml orders-1
+title 用例图 1 · 下单与售后（prd-0001 FP-1~3、prd-0002）
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecaseBackgroundColor #F7F7F7
+actor "顾客" as Cu
+actor "客服" as CS
+actor "店长" as Mgr
+actor "对账系统" as Sys
+
+rectangle "下单" {
+  usecase "提交订单" as O1
+  usecase "校验库存" as O2
+  usecase "使用优惠券" as O3
+  usecase "待补充说明" as O4
+}
+rectangle "售后" {
+  package "退款" {
+    usecase "申请退款" as R1
+    usecase "审批退款" as R2
+  }
+  usecase "查看售后记录" as R3
+}
+usecase "每日对账" as A1
+
+Cu --> O1
+Cu --> O3
+Cu --> R1
+CS --> R1
+CS --> R3
+Mgr --> R2
+Mgr --> R3
+Sys --> A1
+CS --> O1
+
+O1 ..> O2 : <<include>>
+O3 ..> O1 : <<extend>>
+R3 ..> R1 : <<include>>
+R2 ..> R1 : 基于
+R2 ..> R3 : include 记录
+
+note right of R1
+  退款金额超过阈值时需店长审批
+end note
+@enduml

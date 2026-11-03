@@ -1,0 +1,26 @@
+@startuml notify-2
+title 用例图 2 · 通知与偏好（prd-0003 FP-2~4、prd-0004）
+left to right direction
+skinparam shadowing false
+actor "订阅用户\n(已登录的消费者)" as U
+actor "运营\n(内容与活动)" as Op
+
+rectangle "发送" {
+  usecase "创建通知\n选择模板与受众" as N1
+  usecase "定时发送通知" as N2
+}
+rectangle "偏好" {
+  usecase "设置接收偏好\n(渠道 / 免打扰时段)" as P1
+}
+
+Op --> N1
+Op --> N2
+U --> P1
+N2 ..> N1 : 基于
+
+note bottom of N1
+  模板需先审核
+  再用于发送
+end note
+note left of P1 : 默认全部开启
+@enduml
