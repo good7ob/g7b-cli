@@ -6,13 +6,14 @@
  *
  * `PUT /use-cases/{id}` replaces every field, so `update` reads the use case first and sends back what you did not change.
  */
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import * as path from 'path';
 import apiClient from '../../services/ApiClient';
 import {
   ErrorCodeMap, InputError, emit, guarded, parseId, requireOneOf, requireText, resolveProductId,
 } from '../../utils/cliHelpers';
 import { pushDiagram, planRender, runPlan } from './batch';
+import { runImport } from './import';
 import {
   DIAGRAM_TYPES, GAP_CODES, MAX_ACTOR_NAME, ORDERS, SORTS, STATUSES, MAX_DIAGRAM_NAME, buildCreateBody, buildEntryBody, buildRelationBody, mergeUpdateBody,
   parseChannels, parseEnumList, parseLimit, requireChanges, scopeParams, resolveActorId, resolveUseCaseId, upper, PRIORITIES,
@@ -317,6 +318,22 @@ function registerDiagramCommands(uc: Command): void {
     });
 }
 
+function registerImportCommand(uc: Command): void {
+  uc.command('import <paths...>')
+    .description('Import the roles and use cases of existing PlantUML use case diagrams (.puml; directories are searched recursively). Preview by default, --apply writes')
+    .option(...PRODUCT_OPT).option('--priority <p>', 'P0|P1|P2 (required: not guessed)').option('--channels <list>', 'Requested channels, comma separated: WEB,APP,CLI,MCP,API (required: not guessed)')
+    .option('--submodule <id>', 'Sub-module id for every imported use case (default: unassigned)')
+    .addOption(new Option('--sub-module <id>').hideHelp())
+    .option('--apply', 'Write the use cases (default: preview only)').option('--verbose', 'List every use case and relation').option(...JSON_OPT)
+    .action(async (paths: string[], o) => {
+      let failed = false;
+      await guarded('导入用例失败', CODES, async () => {
+        failed = await runImport(paths, { ...o, submodule: o.submodule ?? o.subModule }, CODES);
+      });
+      if (failed) process.exit(1);
+    });
+}
+
 function registerStatusCommands(uc: Command): void {
   uc.command('status <uc>').description('Derived status of a use case: per-channel reachability and why, gap marks, what verification lacks, status of included use cases')
     .option(...PRODUCT_OPT).option(...JSON_OPT)
@@ -350,4 +367,5 @@ export function registerUcCommands(program: Command) {
   registerLinkCommands(uc);
   registerStatusCommands(uc);
   registerDiagramCommands(uc);
+  registerImportCommand(uc);
 }
