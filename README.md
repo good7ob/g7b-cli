@@ -307,6 +307,20 @@ good7ob qc --help
 
 Quality-control commands for bug tracking and QA reporting.
 
+### `uc`
+
+User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, plus `push` and `render` for PlantUML diagrams.
+
+```bash
+good7ob uc list --product 10
+good7ob uc show UC-3 --product 10                      # UC-n needs --product (or GOOD7OB_PRODUCT_ID); a bare number is the id
+good7ob uc update UC-3 --priority P0 --clear note      # reads the use case, merges, PUTs (the PUT replaces every field)
+good7ob uc push UC-3 flow.puml --type SEQUENCE --name invite
+good7ob uc render --product 10                         # every stale / unrendered picture; exit code 1 if any one fails
+```
+
+Rendering happens on this machine and never uses an online PlantUML service. Install PlantUML, Graphviz and Java yourself, or point `GOOD7OB_PLANTUML_CMD` at `java -jar plantuml.jar` or `docker run --rm -i plantuml/plantuml:latest`. The CLI always renders with `PLANTUML_SECURITY_PROFILE=SANDBOX`; a different value in your environment is overridden. See `FEATURES.md` (uc section) for every command.
+
 ### `schema`
 
 Load a live PostgreSQL schema into Forge DB Schema Design (`/forge/schema/*`: module → table → column). Tables are grouped into modules by name prefix (`forge_`, `pm_`, …; unmatched → `其他`). Table/column DB comments become descriptions, and singular/plural pairs such as `pm_task`/`pm_tasks` are flagged `疑似重复`. The import is idempotent: it creates what is missing and updates what changed, and it never deletes. Writes need the `owner`/`admin` role in the org.

@@ -31,6 +31,7 @@
 - [org ai-employee — AI 员工 Key 与档案](#org-ai-employee--ai-员工-key-与档案)
 - [heartbeat — 本地 Agent 在线心跳](#heartbeat--本地-agent-在线心跳)
 - [worktree — 本机 worktree 占用登记](#worktree--本机-worktree-占用登记)
+- [uc — 用户用例](#uc--用户用例)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -94,7 +95,8 @@ good7ob
 ├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
 ├── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
 ├── heartbeat                # 本地 Agent 在线心跳（AI 员工 Key）：start / stop / beat / status
-└── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
+├── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
+└── uc                       # 用户用例（prd-0180）：用例 / 角色 / 渠道与入口 / 关联 FP 与测试 / include·extend 关系；push 流程图、render 总图与过期图（本机 PlantUML）
 ```
 
 ---
@@ -1377,6 +1379,41 @@ good7ob org ai-employee key disable 58 7 && good7ob org ai-employee key enable 5
 | `worktree heartbeat --task <id> [--pid <pid>] [--json]` | 刷新心跳；没有记录时非 0 退出 |
 | `worktree release --task <id> [--json]` | 释放占用；没有记录时幂等（0 退出） |
 | `worktree list [--all] [--json]` | 默认先清理失效记录（pid 不存在或心跳超过 240 分钟）并落盘；`--all` 不清理，失效记录标「疑似失效」 |
+
+---
+
+## uc — 用户用例
+
+用户用例管理（prd-0180，契约 backend `docs/api/api-0180-use-case-management.md`）。`<uc>` 写 `UC-12`（产品内编号，需要 `--product` 或 `GOOD7OB_PRODUCT_ID`）或数字 id；`--product` 缺省读 `GOOD7OB_PRODUCT_ID`。所有命令都带 `--json`，并给请求加 `X-Client-Channel: cli`（动态里记为 CLI 来源）。查看需产品所属组织成员，编辑需组织 owner/admin；AI 员工 Key 暂时一律无权（#2357 之前）。
+
+| 命令 | 说明 |
+|---|---|
+| `uc list [--priority P0\|P1\|P2] [--actor <id>] [--sub-module <id>] [--channel <c>] [--page <n>] [--size <n>]` | 用例列表（按编号升序，未关联 FP 的标「未关联」） |
+| `uc show <uc>` | 详情：渠道与入口声明（未声明入口的渠道标 ⚠）、关联 FP（含失效原因）、测试用例及最近结果、四个方向的关系 |
+| `uc add --actor <id\|名称> --goal <文本> --priority <P0\|P1\|P2> --channel <WEB,APP,CLI,MCP,API> [--sub-module] [--note] [--release] [--milestone]` | 创建用例 |
+| `uc update <uc> [--actor] [--goal] [--priority] [--sub-module] [--note] [--release] [--milestone] [--clear sub-module,note,release,milestone]` | 修改。后端 PUT 是整体替换，所以先 GET 当前值、合并、再 PUT；没给的字段保持原值，要清空用 `--clear`；什么都没给不发请求 |
+| `uc delete <uc> [--confirm]` | 软删除。被其他用例 include/extend 引用时服务端返回 15007 并列出引用方，确认后加 `--confirm` 重发 |
+| `uc actors list\|add <名称>\|rename <id> <名称>\|disable <id>\|enable <id>\|delete <id>` | 产品的用例角色清单（被未删除用例引用的角色不能删，只能停用） |
+| `uc link-fp <uc> <fp>` / `uc unlink-fp <uc> <fp>` | 关联 / 取消关联 FP；`<fp>` 是 id 或编号（如 `fun-org-0001`，通过候选搜索按编号精确匹配） |
+| `uc link-test <uc> <用例>` / `uc unlink-test <uc> <用例>` | 关联 / 取消关联测试用例（id 或用例编号） |
+| `uc entry add <uc> --channel <c> --ref <入口> --fp <fp>` / `uc entry remove <uc> <entryId>` | 入口声明（承载 FP 必须已关联） |
+| `uc channels set <uc> <WEB,CLI,...>` | 设置要求渠道（完整集合；去掉的渠道其入口声明作废） |
+| `uc relation add <uc> --type include\|extend --target <uc> [--when <触发条件>]` / `uc relation remove <uc> <relationId>` | include / extend 关系；`<uc>` 是主语（`UC-4 extend UC-1`），extend 必须带 `--when`，include 不能带 |
+| `uc candidates fp [关键词]` / `uc candidates test [关键词]` `[--limit 1-50]` | 搜索可关联的 FP（含已取消/已移除并标失效）/ 测试用例（带最近结果） |
+| `uc diagrams <uc>` / `uc overviews` | 流程图 / 总图清单及新鲜度（最新、图已过期、未渲染） |
+| `uc push <uc> <源码文件> --type SEQUENCE\|ACTIVITY [--name <名称>]` | 本机渲染 PNG，**成功后才**提交源码 + 渲染记录 + PNG（一次 multipart）。渲染失败：打印 PlantUML 的报错与行号，不发任何请求，退出码非 0。`--name` 缺省取文件名；同用例内按名称找图，没有就新建、源码变了就追加版本 |
+| `uc render [--overview <key\|all>] [--diagrams] [--uc <uc>] [--all]` | 渲染并上传全部「过期或未渲染」的图（流程图 + 总图）；`--overview` / `--diagrams` / `--uc` 指定范围，`--all` 连已最新的一起重渲染。每张图独立成败，成功的保留，失败的逐张列出原因，任一失败则退出码非 0。上传遇 15013（数据已变）自动重新取源码再渲染一次 |
+
+状态与度量命令（`uc status` / `uc metrics` / 缺口清单）待后端 #2354 合并后补充。
+
+### 本机渲染与安全
+
+渲染只发生在本机，不使用任何在线 PlantUML 服务，也不依赖后端渲染。依赖不随 CLI 打包：PlantUML、Graphviz（`dot`）、Java。渲染命令默认 `plantuml`，用 `GOOD7OB_PLANTUML_CMD` 覆盖（如 `java -jar /path/plantuml.jar`、`docker run --rm -i plantuml/plantuml:latest`）。
+
+- 安全档位固定 **SANDBOX**：渲染子进程环境里强制 `PLANTUML_SECURITY_PROFILE=SANDBOX`，用户环境里的值会被覆盖；PlantUML 还会优先读取 JVM 系统属性，所以 `JAVA_TOOL_OPTIONS` 等选项变量里若指定了档位会被丢弃，命令行里写档位会被拒绝。`docker run` 形式会在 `run` 之后插入 `-i --network none -e PLANTUML_SECURITY_PROFILE=SANDBOX`，并去掉用户写的同类 `-e` / `--network`。
+- 渲染前检查：命令存在、版本不低于 1.2022.0（识别不出版本也拒绝）、Java 与 Graphviz（容器形式只检查 docker）。不满足时拒绝渲染并给出安装方法，不提交任何内容。
+- PNG 超过对象文件单文件上限（100 MB）时不上传；超过 25 MB 时提示（服务端开启病毒扫描会拒绝）。
+- 源码哈希（SHA-256，换行规范化为 `\n`，UTF-8）与服务端 `UseCaseSourceHash` 一致；push 和 render 提交的都是被渲染的那份文本的哈希。
 
 ---
 
