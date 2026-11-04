@@ -6,6 +6,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import configService from './ConfigService';
 
 /** Backend common/util/ApiTimes.HEADER / EPOCH_MS. */
 export const TIME_FORMAT_HEADER = 'X-Time-Format';
@@ -38,9 +39,10 @@ export class ApiClient {
   private infraOrgId: number | undefined;
 
   constructor() {
-    // Get API endpoint and key from environment or config file
-    this.baseURL = process.env.GOOD7OB_API_URL || this.loadConfigValue('apiUrl') || 'https://api.good7ob.net';
-    this.apiKey = process.env.GOOD7OB_API_KEY || this.loadConfigValue('apiKey') || '';
+    // The URL is fixed to prod unless GOOD7OB_ENV picks a defined environment (see ConfigService); the key follows it.
+    // GOOD7OB_API_KEY still overrides the key (CI, one-off admin tokens), never the URL.
+    this.baseURL = configService.get('apiUrl');
+    this.apiKey = process.env.GOOD7OB_API_KEY || configService.get('apiKey') || '';
 
     this.instance = axios.create({
       baseURL: this.baseURL,
@@ -240,25 +242,9 @@ export class ApiClient {
     this.instance.defaults.baseURL = baseURL;
   }
 
-  /**
-   * Load config value from ~/.good7ob/config.json
-   */
   /** The org every /api/infra call of this run acts on (set by the `infra` command's preAction). */
   setInfraOrgId(orgId: number): void {
     this.infraOrgId = orgId;
-  }
-
-  private loadConfigValue(key: string): string | null {
-    try {
-      const configPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.good7ob', 'config.json');
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        return config[key] || null;
-      }
-    } catch (error) {
-      // Silently ignore config read errors
-    }
-    return null;
   }
 
   /**

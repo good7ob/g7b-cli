@@ -56,13 +56,14 @@ npm run dev -- <command>
 ### 认证配置
 
 ```bash
-# 方式一：环境变量
-export GOOD7OB_API_KEY=g7b_sk_...
-export GOOD7OB_API_URL=https://api.good7ob.net
+# 生产（默认，地址固定为 https://api.good7ob.com）
+export GOOD7OB_API_KEY=g7b_sk_...              # 方式一：环境变量
+good7ob config set api-key "your-api-key"      # 方式二：配置文件 (~/.good7ob/config.json)
 
-# 方式二：配置文件 (~/.good7ob/config.json)
-good7ob config set api-key "your-api-key"
-good7ob config set api-url "https://api.good7ob.net"
+# 非生产环境：先在配置文件里定义，再按进程用 GOOD7OB_ENV 启用（key / org / project 各环境独立）
+good7ob config set environments.dev.api-url "https://api-dev.good7ob.net"
+good7ob config set environments.dev.api-key "dev-api-key"
+GOOD7OB_ENV=dev good7ob pm task list 4
 ```
 
 ---
@@ -1546,7 +1547,7 @@ good7ob habit workflow add --name 每日开工 --scene daily --step 看待办 --
 
 ## API 集成
 
-**Base URL：** `https://api.good7ob.net`（可通过环境变量覆盖）
+**Base URL：** `https://api.good7ob.com`（发布版固定生产；非生产见上文 `GOOD7OB_ENV`）
 
 **认证方式：** `Authorization: Bearer <api-key>`
 

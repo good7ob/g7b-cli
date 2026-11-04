@@ -44,15 +44,31 @@ Configuration is stored in:
 
 Default values:
 
-- `apiUrl`: `https://api.good7ob.net`
+- API address: fixed to `https://api.good7ob.com` (production). A release build always talks to production; `apiUrl` in the file is ignored.
 - `apiKey`: empty
+
+### Non-production environments (dev / test / local)
+
+Define them in the config file, then switch one on **per process** with `GOOD7OB_ENV`. Nothing stays switched on, and
+two terminals can use two environments at the same time. Key, org and project are kept per environment.
+
+```bash
+good7ob config set environments.dev.api-url https://api-dev.good7ob.net
+good7ob config set environments.dev.api-key g7b_sk_dev_key
+good7ob config set environments.dev.org-id 58
+
+GOOD7OB_ENV=dev good7ob pm task list 4     # dev
+good7ob pm task list 4                     # production
+```
+
+A banner on stderr names the environment in use. `GOOD7OB_ENV` naming an undefined environment is an error.
+`GOOD7OB_API_KEY` still overrides the key; there is no override for the address.
 
 ### Common config commands
 
 ```bash
-good7ob config set api-url https://api.good7ob.net
 good7ob config set api-key g7b_sk_your_api_key_here
-good7ob config get api-url
+good7ob config get api-key
 good7ob config list
 good7ob config clear-credentials
 good7ob config reset
