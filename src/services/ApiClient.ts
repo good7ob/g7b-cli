@@ -39,8 +39,8 @@ export class ApiClient {
   private infraOrgId: number | undefined;
 
   constructor() {
-    // The URL is fixed to prod unless GOOD7OB_ENV picks a defined environment (see ConfigService); the key follows it.
-    // GOOD7OB_API_KEY still overrides the key (CI, one-off admin tokens), never the URL.
+    // The URL is the install's own (prod for a release, dev-env.json for a dev clone, see flavor.ts), never configurable.
+    // GOOD7OB_API_KEY still overrides the key (CI, one-off admin tokens).
     this.baseURL = configService.get('apiUrl');
     this.apiKey = process.env.GOOD7OB_API_KEY || configService.get('apiKey') || '';
 

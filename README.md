@@ -42,25 +42,23 @@ The CLI stores local configuration in:
 
 Default values:
 
-- API address: fixed to `https://api.good7ob.com` (production). A release build always talks to production; `apiUrl` in the file is ignored.
+- API address: fixed to `https://api.good7ob.com` (production). It cannot be configured, and `apiUrl` in the file is ignored.
 - `apiKey`: empty
 
-### Non-production environments (dev / test / local)
+### Dev / test installs
 
-Define them in the config file, then switch one on **per process** with `GOOD7OB_ENV`. Nothing stays switched on, and
-two terminals can use two environments at the same time. Key, org and project are kept per environment.
+A release install always talks to production. To reach another environment, clone the repository a second time and mark
+that clone as a dev install by creating `dev-env.json` next to `package.json` (it is git-ignored and not published):
 
 ```bash
-good7ob config set environments.dev.api-url https://api-dev.good7ob.net
-good7ob config set environments.dev.api-key g7b_sk_dev_key
-good7ob config set environments.dev.org-id 58
-
-GOOD7OB_ENV=dev good7ob pm task list 4     # dev
-good7ob pm task list 4                     # production
+echo '{"name":"dev","apiUrl":"https://api-dev.good7ob.net"}' > dev-env.json
+npm install && npm run build
 ```
 
-A banner on stderr names the environment in use. `GOOD7OB_ENV` naming an undefined environment is an error.
-`GOOD7OB_API_KEY` still overrides the key; there is no override for the address.
+The dev clone talks to that address and keeps its own config and local state in `~/.good7ob-dev` (production uses
+`~/.good7ob`), so the two never share a key, an org, a project or a work slot and can be used side by side on one machine.
+A dev clone prints `[good7ob] 使用 dev 环境：<地址>` on stderr for every command. Give it its own command name, e.g.
+`alias good7ob-dev='node /path/to/dev-clone/dist/index.js'`.
 
 ### Common config commands
 

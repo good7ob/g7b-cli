@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { dataDir } from '../../services/flavor';
 
 export interface SlotTask {
   taskId: number;
@@ -66,7 +66,7 @@ const LOCK_STALE_MS = 60_000;
 const LOCK_TIMEOUT_MS = 70_000; // longer than the stale age so a crashed holder's lock can be taken over
 
 export class AgentStateStore {
-  constructor(private readonly dir: string = path.join(os.homedir(), '.good7ob')) {}
+  constructor(private readonly dir: string = dataDir()) {}
 
   get file(): string {
     return path.join(this.dir, 'agent-state.json');

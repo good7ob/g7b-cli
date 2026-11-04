@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import configService, { ENV_FIELDS, EnvField } from '../../services/ConfigService';
+import configService from '../../services/ConfigService';
 import { AGENT_KEYS, getAgentValue, withAgentValue } from '../agent/config';
 
 const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'projectId' | 'theme'> = {
@@ -29,19 +29,6 @@ const KEY_ALIASES: Record<string, 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'pr
 
 const SENSITIVE_KEYS = new Set(['apiKey', 'agent.forward.secret']);
 const AGENT_PREFIX = 'agent.';
-const ENV_PREFIX = 'environments.';
-const NUMERIC_FIELDS = new Set<string>(['userId', 'orgId', 'projectId']);
-
-/** `environments.<name>.<field>` -> its parts, or null for any other key. */
-function parseEnvKey(key: string): { name: string; field: EnvField } | null {
-  if (!key.startsWith(ENV_PREFIX)) return null;
-  const [name, rawField, ...rest] = key.slice(ENV_PREFIX.length).split('.');
-  const field = rawField && KEY_ALIASES[rawField];
-  if (!name || !field || rest.length || !ENV_FIELDS.includes(field as EnvField)) {
-    throw new Error(`Unsupported config key: ${key}（形如 environments.<名>.${ENV_FIELDS.join('|')}）`);
-  }
-  return { name, field: field as EnvField };
-}
 
 function normalizeKey(input: string): 'apiUrl' | 'apiKey' | 'userId' | 'orgId' | 'projectId' | 'theme' {
   const normalized = KEY_ALIASES[input];
@@ -83,14 +70,6 @@ export function registerConfigCommands(program: Command) {
           console.log(`✓ Config updated: ${key} = ${formatValue(key, getAgentValue(configService.get('agent'), agentKey))}`);
           return;
         }
-        const envKey = parseEnvKey(key);
-        if (envKey) {
-          const parsed = NUMERIC_FIELDS.has(envKey.field) ? parseInt(value, 10) : value;
-          if (typeof parsed === 'number' && Number.isNaN(parsed)) throw new Error(`${envKey.field} must be a number`);
-          configService.setEnvField(envKey.name, envKey.field, parsed);
-          console.log(`✓ Config updated: ${key} = ${formatValue(envKey.field, parsed)}`);
-          return;
-        }
         const normalizedKey = normalizeKey(key);
         const isNumeric = normalizedKey === 'userId' || normalizedKey === 'orgId' || normalizedKey === 'projectId';
         const parsedValue = isNumeric ? parseInt(value, 10) : value;
@@ -116,11 +95,6 @@ export function registerConfigCommands(program: Command) {
           console.log(`${key}=${formatValue(key, getAgentValue(configService.get('agent'), key.slice(AGENT_PREFIX.length)))}`);
           return;
         }
-        const envKey = parseEnvKey(key);
-        if (envKey) {
-          console.log(`${key}=${formatValue(envKey.field, configService.getEnvField(envKey.name, envKey.field))}`);
-          return;
-        }
         const normalizedKey = normalizeKey(key);
         const value = configService.get(normalizedKey);
         console.log(`${normalizedKey}=${formatValue(normalizedKey, value)}`);
@@ -136,16 +110,13 @@ export function registerConfigCommands(program: Command) {
     .action(() => {
       const config = configService.getAll();
       console.log('Current configuration:');
-      console.log(`  environment: ${configService.activeEnvironment()}  (非生产环境用 GOOD7OB_ENV=<名> 启用)`);
+      console.log(`  environment: ${configService.activeEnvironment()}`);
       console.log(`  apiUrl: ${formatValue('apiUrl', config.apiUrl)}`);
       console.log(`  apiKey: ${formatValue('apiKey', config.apiKey)}`);
       console.log(`  userId: ${formatValue('userId', config.userId)}`);
       console.log(`  orgId: ${formatValue('orgId', config.orgId)}`);
       console.log(`  projectId: ${formatValue('projectId', config.projectId)}`);
       console.log(`  theme: ${formatValue('theme', config.theme)}`);
-      Object.entries(configService.listEnvironments()).forEach(([name, profile]) => {
-        console.log(`  environments.${name}: ${formatValue('apiUrl', profile.apiUrl)}  key ${formatValue('apiKey', profile.apiKey)}`);
-      });
       AGENT_KEYS.forEach((k) => {
         const key = `${AGENT_PREFIX}${k}`;
         console.log(`  ${key}: ${formatValue(key, getAgentValue(config.agent, k))}`);
