@@ -1,11 +1,16 @@
 /**
  * Configuration Service
- * Manages CLI configuration and credentials
+ * Manages CLI configuration and credentials.
+ *
+ * The API address is not configurable: it is the install's flavor (see flavor.ts) — production for a release,
+ * the address in dev-env.json for a dev clone.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { currentFlavor, dataDir, Flavor, PROD } from './flavor';
+
+export { PROD_API_URL } from './flavor';
 
 interface Config {
   apiUrl: string;
@@ -19,16 +24,42 @@ interface Config {
   agent?: Record<string, any>;
 }
 
+export interface ConfigOptions {
+  homeDir?: string;
+  flavor?: Flavor;
+}
+
 export class ConfigService {
   private configDir: string;
   private configFile: string;
   private config: Config;
+  private readonly flavor: Flavor;
+  /** One-line stderr hints for this run (dev banner, ignored legacy apiUrl); the caller decides to print them. */
+  readonly notices: readonly string[];
 
-  constructor() {
-    const homeDir = os.homedir();
-    this.configDir = path.join(homeDir, '.good7ob');
+  constructor(opts: ConfigOptions = {}) {
+    this.flavor = opts.flavor ?? currentFlavor;
+    this.configDir = dataDir(this.flavor, opts.homeDir);
     this.configFile = path.join(this.configDir, 'config.json');
     this.config = this.loadConfig();
+    this.notices = this.buildNotices();
+  }
+
+  private buildNotices(): string[] {
+    const notices: string[] = [];
+    if (this.flavor.name !== PROD) {
+      notices.push(`[good7ob] 使用 ${this.flavor.name} 环境：${this.flavor.apiUrl}`);
+    }
+    const stored = (this.config.apiUrl || '').replace(/\/+$/, '');
+    if (stored && stored !== this.flavor.apiUrl) {
+      notices.push(`[good7ob] 配置文件里的 apiUrl（${stored}）已忽略：本安装固定访问 ${this.flavor.apiUrl}。`);
+    }
+    return notices;
+  }
+
+  /** The environment this install talks to: 'prod' or the dev-env.json name. */
+  activeEnvironment(): string {
+    return this.flavor.name;
   }
 
   /**
@@ -36,7 +67,7 @@ export class ConfigService {
    */
   private loadConfig(): Config {
     const defaultConfig: Config = {
-      apiUrl: 'https://api.good7ob.net',
+      apiUrl: this.flavor.apiUrl,
       apiKey: '',
     };
 
@@ -74,14 +105,20 @@ export class ConfigService {
    * Get configuration value
    */
   get(key: keyof Config): any {
-    return this.config[key];
+    return key === 'apiUrl' ? this.flavor.apiUrl : this.config[key];
   }
 
   /**
    * Set configuration value
    */
   set(key: keyof Config, value: any): void {
-    (this.config as any)[key] = value;
+    if (key === 'apiUrl') {
+      if (value !== this.flavor.apiUrl) {
+        throw new Error(`本安装的 API 地址固定为 ${this.flavor.apiUrl}，不能修改`);
+      }
+      return;
+    }
+    this.config = { ...this.config, [key]: value };
     this.saveConfig();
   }
 
@@ -89,14 +126,14 @@ export class ConfigService {
    * Check if API key is configured
    */
   isConfigured(): boolean {
-    return !!this.config.apiKey && !!this.config.apiUrl;
+    return !!this.config.apiKey && !!this.flavor.apiUrl;
   }
 
   /**
    * Get all configuration
    */
   getAll(): Config {
-    return { ...this.config };
+    return { ...this.config, apiUrl: this.flavor.apiUrl };
   }
 
   /**
@@ -104,7 +141,7 @@ export class ConfigService {
    */
   reset(): void {
     this.config = {
-      apiUrl: 'https://api.good7ob.net',
+      apiUrl: this.flavor.apiUrl,
       apiKey: '',
     };
     this.saveConfig();
@@ -114,9 +151,15 @@ export class ConfigService {
    * Remove credentials
    */
   clearCredentials(): void {
-    this.config.apiKey = '';
-    this.saveConfig();
+    this.set('apiKey', '');
   }
 }
 
-export default new ConfigService();
+/** Constructing may print hints; do it once per process, for the shared instance only. */
+function createDefault(): ConfigService {
+  const service = new ConfigService();
+  service.notices.forEach((line) => console.error(line));
+  return service;
+}
+
+export default createDefault();

@@ -8,8 +8,8 @@
  */
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { dataDir } from '../../services/flavor';
 
 export interface SectionMeta {
   count: number;
@@ -34,7 +34,7 @@ export class CacheStore {
 
   constructor(identityKey: string, productId: number) {
     if (!/^[a-z]+-[0-9]+-org[0-9]+$/.test(identityKey)) throw new Error(`非法的缓存键: ${identityKey}`);
-    this.dir = path.join(os.homedir(), '.good7ob', 'cache', identityKey, `product-${productId}`);
+    this.dir = path.join(dataDir(), 'cache', identityKey, `product-${productId}`);
   }
 
   readManifest(): Manifest | null {
