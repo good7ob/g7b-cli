@@ -188,8 +188,8 @@ describe('idea update / delete / status / reject', () => {
     expect(missing.stderr).toContain('--reason');
     const long = await idea(['status', '5', 'archived', '--reason', 'x'.repeat(1001)]);
     expect(long.stderr).toContain('最多 1000');
-    const other = await idea(['status', '5', 'planning', '--reason', '多余']);
-    expect(other.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: 'planning' });
+    const other = await idea(['status', '5', 'evaluating', '--reason', '多余']);
+    expect(other.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: 'evaluating' });
     expect(noHttpCalls(missing) && noHttpCalls(long)).toBe(true);
   });
 

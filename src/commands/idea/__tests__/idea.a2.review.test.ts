@@ -76,7 +76,7 @@ describe('idea review start / get / complete', () => {
   });
 
   it('start maps 1007; --json prints the raw response', async () => {
-    expect((await review(['start', '21'], bizError(1007, 'idea is draft'))).stderr).toContain('planning/developing/released');
+    expect((await review(['start', '21'], bizError(1007, 'idea is draft'))).stderr).toContain('须为 approved');
     expect(JSON.parse((await review(['start', '21', '--json'], ok(full))).stdout)).toEqual(full);
   });
 
@@ -84,10 +84,10 @@ describe('idea review start / get / complete', () => {
     const done = { ...full, review: { ...full.review, status: 'completed', reviewedBy: 11, reviewedAt: '2026-09-19 10:30:00' } };
     const r = await review(['complete', '21'], ok(done));
     expect(r.http.post).toHaveBeenCalledWith('/forge/ideas/21/effect-review/complete', undefined);
-    expect(r.stdout).toContain('效果复盘已完成，Idea 已 validated');
+    expect(r.stdout).toContain('效果复盘已完成');
     expect(r.stdout).toContain('完成时冻结');
     expect(r.stdout).toContain('2026-09-19 10:30:00 by 11');
-    expect((await review(['complete', '21'], bizError(1007, 'not released'))).stderr).toContain('须为 released');
+    expect((await review(['complete', '21'], bizError(1007, 'release not shipped'))).stderr).toContain('关联的版本已发布');
   });
 
   it('rejects a bad ideaId', async () => {
