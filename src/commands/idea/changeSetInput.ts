@@ -24,7 +24,7 @@ export const CHANGE_SET_ERROR_CODES: ErrorCodeMap = {
   1001: '参数值不合法（枚举 / 长度 / solutionId 不属于该 Idea / moduleId 不属于该产品）',
   1002: '变更集 / 条目 / Idea 不存在（或已删除）',
   1006: '数据已存在：同一变更集内该对象已有条目，或已有待处理的审批',
-  1007: '当前状态不允许该操作（创建要求 Idea 为 approved/planning；改条目仅 draft/impact_analyzed；提交要求 impact_analyzed 且至少 1 个已确认条目；Apply 要求 approved 且未 Apply）',
+  1007: '当前状态不允许该操作（创建要求 Idea 为 approved；改条目仅 draft/impact_analyzed；提交要求 impact_analyzed 且至少 1 个已确认条目；Apply 要求 approved 且未 Apply）',
   1009: '并发冲突（状态刚被他人改变），请重试',
   2000: '无权访问：你不是该产品的组织成员（Apply 另要求 owner/admin 或创建人）',
 };

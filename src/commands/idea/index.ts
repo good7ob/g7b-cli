@@ -103,7 +103,7 @@ export function registerIdeaCommands(program: Command) {
     .action(createIdea);
 
   withIdeaFields(idea.command('update <id>'))
-    .description('Update an idea (omitted flags stay unchanged; locked once approved/archived; only --release stays editable through developing)')
+    .description('Update an idea (omitted flags stay unchanged; locked once approved/archived; only --release stays editable once approved)')
     .option('--title <title>', 'Title (max 200 chars)')
     .option('--source <source>', `Source (${oneOf(SOURCES)})`)
     .option('--release <id>', 'Link to a release of the same product (planned|in_progress|awaiting_approval)')
