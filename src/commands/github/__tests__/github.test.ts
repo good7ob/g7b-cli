@@ -4,13 +4,13 @@ import { registerGithubCommands } from '../index';
 import { batchesOf, collectPrs, mapPr, sinceFor, GhPr } from '../logic';
 import { bizError, ok, runCli } from '../../../utils/__tests__/cliHarness';
 
-vi.mock('../gh', () => ({ ghUser: vi.fn(), ghPrList: vi.fn() }));
+vi.mock('../gh', () => ({ ghUser: vi.fn(), ghPrList: vi.fn(), ghPrFiles: vi.fn() }));
 import * as gh from '../gh';
-const ghMock = { ghUser: vi.mocked(gh.ghUser), ghPrList: vi.mocked(gh.ghPrList) };
+const ghMock = { ghUser: vi.mocked(gh.ghUser), ghPrList: vi.mocked(gh.ghPrList), ghPrFiles: vi.mocked(gh.ghPrFiles) };
 
 const row = (over: Partial<GhPr> = {}): GhPr => ({
   number: 7, title: 't', url: 'https://github.com/o/r/pull/7', state: 'MERGED', author: { login: 'bob' },
-  additions: 3, deletions: 1, changedFiles: 2, baseRefName: 'main', headRefName: 'f',
+  additions: 3, deletions: 1, changedFiles: 2, files: [{ path: 'src/A.java', additions: 3, deletions: 1 }, { path: 'README.md', additions: 0, deletions: 0 }], baseRefName: 'main', headRefName: 'f',
   createdAt: '2026-10-01T01:00:00Z', mergedAt: '2026-10-02T01:00:00Z', closedAt: '2026-10-02T01:00:00Z',
   updatedAt: '2026-10-02T02:00:00Z', ...over,
 });
@@ -25,6 +25,10 @@ describe('mapPr', () => {
     expect(i.state).toBe('open');
     expect(i.mergedAt).toBeNull();
     expect(i.closedAt).toBeNull();
+  });
+  it('carries effective lines, null when unknown', () => {
+    expect(mapPr('o/r', row(), { additions: 3, deletions: 1 })).toMatchObject({ effectiveAdditions: 3, effectiveDeletions: 1 });
+    expect(mapPr('o/r', row())).toMatchObject({ effectiveAdditions: null, effectiveDeletions: null });
   });
   it('closed unmerged', () => {
     expect(mapPr('o/r', row({ state: 'CLOSED', mergedAt: null })).state).toBe('closed');
