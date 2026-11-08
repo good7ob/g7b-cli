@@ -1,8 +1,9 @@
 /** Thin wrapper over the `gh` CLI. execFileSync with an argv array, never a shell string. Read-only. */
 import { execFileSync } from 'child_process';
+import { PrFile } from './effective';
 import { GhPr } from './logic';
 
-const FIELDS = 'number,title,url,state,author,additions,deletions,changedFiles,baseRefName,headRefName,createdAt,mergedAt,closedAt,updatedAt';
+const FIELDS = 'number,title,url,state,author,additions,deletions,changedFiles,baseRefName,headRefName,createdAt,mergedAt,closedAt,updatedAt,files';
 
 function gh(args: string[]): string {
   try {
@@ -23,4 +24,13 @@ export function ghUser(): { login: string; id: number } {
 
 export async function ghPrList(repo: string, search: string): Promise<GhPr[]> {
   return JSON.parse(gh(['pr', 'list', '--repo', repo, '--state', 'all', '--search', search, '--json', FIELDS, '-L', '200'])) as GhPr[];
+}
+
+/** Every file of a PR through the REST API (gh pr list truncates the list for big PRs). Capped by GitHub at 3000 files. */
+export async function ghPrFiles(repo: string, number: number): Promise<PrFile[]> {
+  const out = gh(['api', '--paginate', `repos/${repo}/pulls/${number}/files`, '--jq', '.[] | [.filename, .additions, .deletions] | @tsv']);
+  return out.split('\n').filter(Boolean).map((line) => {
+    const [path, additions, deletions] = line.split('\t');
+    return { path, additions: Number(additions), deletions: Number(deletions) };
+  });
 }

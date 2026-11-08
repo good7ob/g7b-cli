@@ -1,5 +1,6 @@
 /** Pure logic for `good7ob github sync` (prd-0124): row mapping, since-date, pagination narrowing, batching. */
 import { fmtDateTime } from '../../utils/cliHelpers';
+import type { EffectiveLines, PrFile } from './effective';
 
 export const PAGE_SIZE = 200;
 export const BATCH_SIZE = 200;
@@ -16,6 +17,7 @@ export interface GhPr {
   additions: number;
   deletions: number;
   changedFiles: number;
+  files?: PrFile[];
   baseRefName: string;
   headRefName: string;
   createdAt: string;
@@ -34,6 +36,8 @@ export interface PrItem {
   additions: number;
   deletions: number;
   changedFiles: number;
+  effectiveAdditions: number | null;
+  effectiveDeletions: number | null;
   baseRef: string;
   headRef: string;
   createdAt: string;
@@ -45,7 +49,7 @@ export interface PrItem {
 /** gh prints Go's zero time (0001-01-01...) or "" for "not set". */
 const realTime = (v: string | null | undefined): string | null => (!v || v.startsWith('0001-') ? null : v);
 
-export function mapPr(repoFullName: string, r: GhPr): PrItem {
+export function mapPr(repoFullName: string, r: GhPr, effective: EffectiveLines | null = null): PrItem {
   return {
     repoFullName,
     prNumber: r.number,
@@ -57,6 +61,8 @@ export function mapPr(repoFullName: string, r: GhPr): PrItem {
     additions: r.additions,
     deletions: r.deletions,
     changedFiles: r.changedFiles,
+    effectiveAdditions: effective?.additions ?? null,
+    effectiveDeletions: effective?.deletions ?? null,
     baseRef: r.baseRefName,
     headRef: r.headRefName,
     createdAt: r.createdAt,
