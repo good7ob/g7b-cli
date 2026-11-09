@@ -5,6 +5,7 @@ import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
 import { registerDepCommands } from './dep';
 import { registerTimeCommands } from './time';
+import { prdOption, registerRequirementCommands, resolveSources, upsertSources } from './requirement';
 import { fmtDate, fmtDateTime, InputError, parseDate, parseId } from '../../../utils/cliHelpers';
 
 function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: string }): Record<string, string> {
@@ -161,6 +162,15 @@ export function registerTaskCommands(pmCommand: Command) {
         console.log(`执行者:     ${task.executorId || '-'}`);
         console.log(`阻塞原因:   ${task.blockedReason || '-'}`);
         console.log(`创建时间:   ${fmtDateTime(task.createdAt, '-')}`);
+        if (task.requirementRemovedAt) {
+          console.log(`⚠ 需求已移除: ${task.requirementRemovedNote || '-'}（${fmtDateTime(task.requirementRemovedAt, '-')}）`);
+        }
+        if (task.requirementChangedAt) {
+          console.log(`⚠ 需求已变更: ${task.requirementChangedNote || '-'}（${fmtDateTime(task.requirementChangedAt, '-')}）`);
+        }
+        if (task.requirementRemovedAt || task.requirementChangedAt) {
+          console.log('  先 `pm task requirement-check` 看变化，处理后 `pm task requirement-ack`');
+        }
         if (task.tags?.length) {
           console.log(`标签:       ${task.tags.map((t: any) => t.name || t).join(', ')}`);
         }
@@ -180,6 +190,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--project-id <id>', 'Project ID (default: current project)')
     .requiredOption('--name <name>', 'Task name')
     .option('--description <desc>', 'Task description')
+    .option(...prdOption)
     .option('--priority <priority>', 'Priority (high|medium|low)', 'medium')
     .option('--status <status>', 'Initial status', 'not_started')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
@@ -203,6 +214,7 @@ export function registerTaskCommands(pmCommand: Command) {
           ...executorFields(options),
         };
         if (options.description) body.description = options.description;
+        if (options.prd?.length) body.description = upsertSources(options.description, await resolveSources(options.prd));
         if (options.deadline) body.deadline = options.deadline;
         if (options.ownerId) body.ownerId = parseInt(options.ownerId);
         if (options.parentTaskId) body.parentTaskId = parseInt(options.parentTaskId);
@@ -225,6 +237,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .description('Update a task')
     .option('--name <name>', 'Task name')
     .option('--description <desc>', 'Task description')
+    .option(...prdOption)
     .option('--priority <priority>', 'Priority (high|medium|low)')
     .option('--status <status>', 'Status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
@@ -243,6 +256,11 @@ export function registerTaskCommands(pmCommand: Command) {
         const body: any = { ...plannedDates(options), ...executorFields(options) };
         if (options.name) body.name = options.name;
         if (options.description) body.description = options.description;
+        if (options.prd?.length) {
+          // without --description the source lines go into the description the task has now
+          const base = options.description ?? (await apiClient.get(`/progress/tasks/${id}`)).description;
+          body.description = upsertSources(base, await resolveSources(options.prd));
+        }
         if (options.priority) body.priority = options.priority;
         if (options.status) body.status = options.status;
         if (options.deadline) body.deadline = options.deadline;
@@ -445,6 +463,7 @@ export function registerTaskCommands(pmCommand: Command) {
 
   registerDepCommands(taskCommand);
   registerTimeCommands(taskCommand);
+  registerRequirementCommands(taskCommand);
 
   return taskCommand;
 }

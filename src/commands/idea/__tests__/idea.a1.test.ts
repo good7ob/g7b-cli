@@ -17,10 +17,13 @@ async function expectRejected(args: string[], needle: string) {
   expect(noHttpCalls(r)).toBe(true);
 }
 
-describe('idea status (A1: nine statuses)', () => {
-  it.each(['evaluating', 'archived', 'planning', 'developing', 'released', 'validated'])('accepts %s', async (to) => {
-    const r = await idea(['status', '5', to]);
-    expect(r.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: to });
+describe('idea status (five statuses: approval ends the idea, g7b task 2584)', () => {
+  it.each(['evaluating', 'archived'])('accepts %s', async (to) => {
+    const r = await idea(['status', '5', to, ...(to === 'archived' ? ['--reason', '功能已完成开发'] : [])]);
+    expect(r.http.post).toHaveBeenCalledWith(
+      '/forge/ideas/5/status',
+      to === 'archived' ? { toStatus: to, reason: '功能已完成开发' } : { toStatus: to },
+    );
     expect(r.stdout).toContain(`→ ${to}`);
   });
 
@@ -28,17 +31,21 @@ describe('idea status (A1: nine statuses)', () => {
     await expectRejected(['status', '5', to], to === 'approved' ? 'idea select' : 'idea reject');
   });
 
+  it.each(['planning', 'developing', 'released', 'validated'])('no longer offers the removed delivery stage %s', async (to) => {
+    await expectRejected(['status', '5', to], 'toStatus');
+  });
+
   it('rejects unknown, and maps 1007 (illegal transition) and 1009 (lost race)', async () => {
     await expectRejected(['status', '5', 'done'], 'toStatus');
-    const illegal = await idea(['status', '5', 'released'], bizError(1007, 'draft -> released'));
+    const illegal = await idea(['status', '5', 'evaluating'], bizError(1007, 'approved -> evaluating'));
     expect(illegal.stderr).toContain('当前状态不允许');
-    const race = await idea(['status', '5', 'planning'], bizError(1009, 'retry'));
+    const race = await idea(['status', '5', 'evaluating'], bizError(1009, 'retry'));
     expect(race.stderr).toContain('请重试');
   });
 
-  it('list --status accepts the new statuses', async () => {
-    const r = await idea(['list', '--product', '3', '--status', 'validated'], ok({ records: [], total: 0 }));
-    expect(r.http.get).toHaveBeenCalledWith('/forge/ideas', { params: { productId: 3, pageNum: 1, pageSize: 20, status: 'validated' } });
+  it('list --status accepts approved', async () => {
+    const r = await idea(['list', '--product', '3', '--status', 'approved'], ok({ records: [], total: 0 }));
+    expect(r.http.get).toHaveBeenCalledWith('/forge/ideas', { params: { productId: 3, pageNum: 1, pageSize: 20, status: 'approved' } });
   });
 });
 
