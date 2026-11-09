@@ -27,7 +27,7 @@ export function registerChangeSetCommands(idea: Command): void {
 
   cs
     .command('create <ideaId>')
-    .description('Create a draft change set for an approved/planning idea (solution defaults to the selected one)')
+    .description('Create a draft change set for an approved idea (solution defaults to the selected one)')
     .requiredOption('--title <title>', 'Title (max 200 chars)')
     .option('--solution <id>', 'Solution being implemented (must belong to the idea)')
     .option('--summary <text>', 'Summary (max 2000 chars)')

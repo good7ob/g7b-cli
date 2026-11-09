@@ -110,6 +110,7 @@ export function registerConfigCommands(program: Command) {
     .action(() => {
       const config = configService.getAll();
       console.log('Current configuration:');
+      console.log(`  environment: ${configService.activeEnvironment()}`);
       console.log(`  apiUrl: ${formatValue('apiUrl', config.apiUrl)}`);
       console.log(`  apiKey: ${formatValue('apiKey', config.apiKey)}`);
       console.log(`  userId: ${formatValue('userId', config.userId)}`);

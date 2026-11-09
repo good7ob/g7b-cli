@@ -6,6 +6,7 @@ import { BeatResult, runLoop } from '../loop';
 import { isPidAlive, liveEntries, readEntry, removeEntry, writeEntry } from '../state';
 import { registerHeartbeatCommands } from '../index';
 import { bizError, ok, runCli } from '../../../utils/__tests__/cliHarness';
+import { AgentStateStore } from '../../agent/state';
 
 // os.homedir() is mocked, not $HOME: vitest workers keep a private process.env that libuv never sees
 vi.mock('os', async () => {
@@ -119,6 +120,50 @@ describe('heartbeat commands', () => {
     expect(run.exitCode).toBeUndefined();
     expect(readEntry(31)).toBeNull();
     expect(run.http.delete).toHaveBeenCalledWith('/api/v1/me/heartbeat', undefined);
+  });
+
+  it('beat --runner-id/--slots/--env posts the runner fields and reports stopStepIds (prd-0136)', async () => {
+    const run = await hb(['beat', '--runner-id', '12', '--slots', '2', '--env', 'dev,test'], ok({ stopStepIds: [345] }));
+    expect(run.exitCode).toBeUndefined();
+    expect(run.http.post).toHaveBeenCalledWith('/api/v1/me/heartbeat', { runnerId: 12, slots: 2, envTags: ['dev', 'test'] });
+    expect(run.stdout).toContain('Runner #12');
+    expect(run.stdout).toContain('后端要求停止步骤: 345');
+  });
+
+  it('beat --slots without --runner-id uses the registration agent listen left, else refuses', async () => {
+    const refused = await hb(['beat', '--slots', '2']);
+    expect(refused.exitCode).toBe(1);
+    expect(refused.stderr).toContain('--runner-id');
+    expect(refused.http.post).not.toHaveBeenCalled();
+
+    new AgentStateStore(path.join(home, '.good7ob')).writeRunner({ runnerId: 7, runnerKey: 'mbp', hostLabel: 'l', slots: 1, envTags: [], agentKind: 'CLAUDE_CODE', registeredAt: 'now' });
+    const run = await hb(['beat', '--slots', '2', '--json']);
+    expect(run.http.post).toHaveBeenCalledWith('/api/v1/me/heartbeat', { runnerId: 7, runnerKey: 'mbp', slots: 2 });
+    expect(JSON.parse(run.stdout)).toEqual({ status: 'ok', runner: { runnerId: 7, runnerKey: 'mbp', slots: 2 }, stopStepIds: [] });
+  });
+
+  it('beat rejects bad runner flags before any request', async () => {
+    const run = await hb(['beat', '--runner-id', '1', '--env', 'staging']);
+    expect(run.exitCode).toBe(1);
+    expect(run.stderr).toContain('staging');
+    expect(run.http.post).not.toHaveBeenCalled();
+  });
+
+  it('status shows the runner each loop beats for', async () => {
+    writeEntry({ agentPid: 51, loopPid: process.pid, startedAt: 'now', runner: { runnerId: 12, runnerKey: 'mbp', slots: 2, envTags: ['dev'] } });
+    const run = await hb(['status']);
+    expect(run.stdout).toContain('agent 51');
+    expect(run.stdout).toContain('runner #12  slots 2  env dev');
+    expect(JSON.parse((await hb(['status', '--json'])).stdout)[0].runner.runnerId).toBe(12);
+  });
+
+  it('stop of a runner loop takes that runner offline (query carries its identity) even while other loops run', async () => {
+    writeEntry({ agentPid: 61, loopPid: process.pid, startedAt: 'now' });
+    writeEntry({ agentPid: 62, loopPid: 2 ** 22 - 1, startedAt: 'now', runner: { runnerId: 12, runnerKey: 'mbp' } });
+    const run = await hb(['stop', '--pid', '62']);
+    expect(run.exitCode).toBeUndefined();
+    expect(run.http.delete).toHaveBeenCalledWith('/api/v1/me/heartbeat?runnerKey=mbp&runnerId=12', undefined);
+    expect(readEntry(61)).not.toBeNull();
   });
 
   it('stop keeps the employee online while another session of it still runs', async () => {

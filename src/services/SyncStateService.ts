@@ -7,8 +7,8 @@
  */
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { dataDir } from './flavor';
 
 /** Items kept as the local snapshot of the last run (for other commands such as gjob-rpt). */
 export const SNAPSHOT_LIMIT = 500;
@@ -28,7 +28,7 @@ export class SyncStateService {
   constructor(private readonly options: SyncStateOptions = {}) {}
 
   private get stateDir(): string {
-    return this.options.stateDir ?? path.join(os.homedir(), '.good7ob', 'sync');
+    return this.options.stateDir ?? path.join(dataDir(), 'sync');
   }
 
   fileFor(key: string): string {

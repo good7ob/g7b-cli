@@ -13,11 +13,11 @@ import { EffectReviewResult, renderReview } from './reviewRender';
 const path = (ideaId: string) => `/forge/ideas/${parseId(ideaId, 'ideaId')}/effect-review`;
 
 export function registerReviewCommands(idea: Command): void {
-  const review = idea.command('review').description('Effect review of a released idea — expected vs actual, feeds estimation correction (A2)');
+  const review = idea.command('review').description('Effect review of an approved idea — expected vs actual, feeds estimation correction (A2)');
 
   review
     .command('start <ideaId>')
-    .description('Create the review draft, or refresh its snapshot / actuals (idea must be planning|developing|released)')
+    .description('Create the review draft, or refresh its snapshot / actuals (idea must be approved)')
     .option('--json', 'Output as JSON')
     .action(async (ideaId, o) => {
       try {
@@ -60,12 +60,12 @@ export function registerReviewCommands(idea: Command): void {
 
   review
     .command('complete <ideaId>')
-    .description('Complete the review: freezes accuracy, moves the idea released → validated, recomputes correction factors')
+    .description('Complete the review: freezes accuracy and recomputes correction factors (idea must be approved and linked to a released version; idea owner / product owner / org admin only; the idea status does not change)')
     .option('--json', 'Output as JSON')
     .action(async (ideaId, o) => {
       try {
         const result: EffectReviewResult = await apiClient.post(`${path(ideaId)}/complete`);
-        emit(o.json, result, () => `✓ 效果复盘已完成，Idea 已 validated\n${renderReview(result)}`);
+        emit(o.json, result, () => `✓ 效果复盘已完成\n${renderReview(result)}`);
       } catch (error) {
         fail('完成效果复盘失败', error, REVIEW_ERROR_CODES);
       }

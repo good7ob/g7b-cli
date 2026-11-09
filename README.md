@@ -42,20 +42,32 @@ The CLI stores local configuration in:
 
 Default values:
 
-- `apiUrl`: `https://api.good7ob.net`
+- API address: fixed to `https://api.good7ob.com` (production). It cannot be configured, and `apiUrl` in the file is ignored.
 - `apiKey`: empty
+
+### Dev / test installs
+
+A release install always talks to production. To reach another environment, clone the repository a second time and mark
+that clone as a dev install by creating `dev-env.json` next to `package.json` (it is git-ignored and not published):
+
+```bash
+echo '{"name":"dev","apiUrl":"https://api-dev.good7ob.net"}' > dev-env.json
+npm install && npm run build
+```
+
+The dev clone talks to that address and keeps its own config and local state in `~/.good7ob-dev` (production uses
+`~/.good7ob`), so the two never share a key, an org, a project or a work slot and can be used side by side on one machine.
+A dev clone prints `[good7ob] 使用 dev 环境：<地址>` on stderr for every command. Give it its own command name, e.g.
+`alias good7ob-dev='node /path/to/dev-clone/dist/index.js'`.
 
 ### Common config commands
 
 ```bash
-# Set API base URL
-good7ob config set api-url https://api.good7ob.net
-
 # Set API key
 good7ob config set api-key g7b_sk_your_api_key_here
 
 # Read one value
-good7ob config get api-url
+good7ob config get api-key
 
 # List current config (API key is masked)
 good7ob config list
@@ -209,6 +221,22 @@ good7ob approval reject 31 --comment "scope unclear"   # --comment is required
 
 Decide, inspect or cancel approval requests. There is no create command: features open requests themselves (e.g. `release request-approval`, `prd request-approval`).
 
+### `automation`
+
+```bash
+good7ob automation list --status enabled
+good7ob automation create --name "夜间开发" --project 7 --trigger periodic --every weekly --weekday mon,wed --at 22:00 --tags auto --max-tasks 2
+good7ob automation preview --cron "0 22 * * 1-5"      # next fire times, nothing saved
+good7ob automation templates                         # built-in + published org workflows, runnable or not
+good7ob automation update 12 --workflow nightly-dev --workflow-version latest   # use a published workflow (key or wf:<id>)
+good7ob automation enable 12                          # enable = authorise (owner/admin)
+good7ob automation run 12 --wait                      # manual run -> run id (= execution plan id)
+good7ob automation pause 12 --reason "maintenance"
+good7ob automation settings set --require-enable-approval
+```
+
+Organisation automations (prd-0135, backend #989): definitions with a cron / periodic / task-pool / manual trigger (EVENT is phase 2 and rejected client-side), lifecycle (enable / pause / resume / disable / withdraw-approval), runs, events, the plans view and org settings. `--workflow` picks the workflow template (`BUILTIN_LINEAR_V1`, `wf:<id>` or a published workflow key; idea #187 N-2), `--workflow-version` a version or `latest` (fixed when enabled). Org from `--org-id`/`--org`, `GOOD7OB_ORG_ID`, `config set org-id`, or the key's only org. Exit code 3 = skipped / conflict (2702, 2708-2711). See `FEATURES.md`.
+
 ### `trace`
 
 ```bash
@@ -284,20 +312,49 @@ See `FEATURES.md` (habit) for the file format, error codes and rules.
 
 Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine (`~/.good7ob/agent-state.json`): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.
 
+`agent listen` also registers the machine as a **Runner** of the AI employee behind the key (prd-0136, idea #189): `POST /api/v1/me/runners` on start (idempotent on employee + host id), the runner heartbeat every 30 s (`POST /api/v1/me/heartbeat` with `runnerId / runnerKey`, renews the runner's leases), `GET /progress/agent-tasks?runnerId=` so items the scheduler assigned to this runner come first, and `DELETE /api/v1/me/heartbeat?runnerKey=&runnerId=` on Ctrl-C so unclaimed leases go back to the pool. A human key is refused (`仅 AI 员工 Key 可注册 Runner`) and nothing is registered; a network / 5xx failure is retried, never fatal.
+
 ```bash
 # Forward claimed tasks to a Hermes webhook (HMAC-signed) — or use agent.forward.command instead
 good7ob config set agent.forward.url http://127.0.0.1:8644/webhooks/good7ob-task
 good7ob config set agent.forward.secret <secret>
 # good7ob config set agent.forward.command 'claude -p "处理 good7ob 任务 {taskId}"'   # only {taskId}/{taskNo}
 
-good7ob agent listen [--interval 15] [--once]   # poll → claim → forward
-good7ob agent next [--json]                     # for agents that pull: exit 3 = busy, 4 = queue empty
-good7ob agent done <taskId> [--status completed]
-good7ob agent status
-good7ob agent reset [--release]
+good7ob agent listen [--interval 15] [--once] [--slots 2] [--env dev,test] [--agent-kind CLAUDE_CODE] [--host-id <id>]
+                                                # register runner → heartbeat → poll (assigned first) → claim → forward
+good7ob agent next [--json]                     # for agents that pull: exit 3 = busy, 4 = queue empty, 5 = only tasks assigned to other runners
+good7ob agent done <taskId> [--status completed] [--summary …] [--pr <url>] [--no-step]   # slot with a run step → run step done
+good7ob agent status [--json]                   # slot + runner registration + config
+good7ob agent reset [--release] [--keep-runner] # slot back to idle; forgets the runner registration unless --keep-runner
 ```
 
+Runner flags default to `agent.slots` (1), `agent.envTags` (none; subset of `dev,test,prod`), `agent.agentKind` (`CLAUDE_CODE`), `agent.hostId` (the hostname; the backend `runnerKey`). An assigned item is claimed with `?runnerId=`; a `409 ASSIGNED_TO_OTHER` (another runner's assignment) is skipped, never fought over, and `400 JOB_MISMATCH` (employee lacks the node's job) likewise. The claimed task's run context (`assignmentId / runId / stepId / nodeCode` and the node prompt / expected output / exit checklist) is printed and sent to the webhook as `assignment_id / run_id / step_id / node_code`. When the heartbeat answers `stopStepIds`, the matching local step is marked stopped (the backend already released it, so the CLI never releases it again). `--slots` above 1 is announced to the scheduler as capacity; the local executor still runs one task at a time.
+
 Other settings: `agent.intervalSeconds` (15), `agent.expectedMinutes` (60), `agent.graceMinutes` (30), `agent.projectId`.
+
+### `run`
+
+Automation runs and their steps (prd-0137, idea #188; backend `/api/v1/orgs/{orgId}/runs`). **Runner reports** need the AI employee key that holds the step; `--run / --step` default to the busy local slot (`~/.good7ob/agent-state.json`, written by `agent listen / next` when a scheduler-assigned item was claimed), and the org to the slot's org, `GOOD7OB_ORG_ID`, `config set org-id` or the key's only org.
+
+```bash
+# runner side (AI employee key)
+good7ob run log append (--file out.log | --stdin | --text "…") [--seq N]   # masked locally, ≤ 1 MB segments, seq idempotent
+good7ob run step done --summary "…" [--result completed|partial] [--pr <url>]... [--tokens N|json] [--artifact TEST_RUN:7]... [--from-git origin/dev]
+good7ob run step fail --reason "…" [--retryable] [--code TEST_FAILED|REVIEW_FAILED|AGENT_ERROR|BLOCKED|OTHER] [--message …]
+good7ob run tool-calls append --file calls.jsonl        # {tool, startedAt, durationMs, ok, note} per line
+good7ob run files report --from-git origin/dev [--pr <url>]   # git diff --numstat base...HEAD: paths + counts, never contents
+good7ob run artifacts add --type PR|REVIEW_REPORT|TEST_RUN|EXTERNAL --ref <url|id> [--title …]
+good7ob log save … [--run-id --step-id --node-code | --no-run-link]   # defaults from the slot's step
+
+# human side
+good7ob run list [--automation <id>] [--status running] [--project <id>]
+good7ob run show <runId>
+good7ob run logs <runId> [--step <id>] [--follow]        # --follow polls /stream every 10 s until the run ends
+good7ob run pause|resume <runId>;  good7ob run halt|cancel|abandon <runId> --reason "…"   # version read first
+good7ob run step retry <runId> <stepId>;  good7ob run step reassign <runId> <stepId> [--employee <id>]
+```
+
+`step done / fail` on the slot's step frees the slot; `agent done <taskId>` on a slot that carries a step reports `run step done` instead of setting the task status (the run engine moves the task; `--no-step` keeps the old path). Errors: `2718` human key on a runner report, `2000 STEP_NOT_HELD` step not held by this employee, `2719` step ended > 10 min ago, `2722` step log over 50 MB, `2703` AI key on a human operation, `2723` version conflict (re-run the command).
 
 ### `qc`
 
@@ -306,6 +363,28 @@ good7ob qc --help
 ```
 
 Quality-control commands for bug tracking and QA reporting.
+
+### `uc`
+
+User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, `status` / `metrics` / `gaps` (derived status, completion figures, P0 gap list), plus `push` and `render` for PlantUML diagrams and `import` for existing PlantUML use case diagrams.
+
+```bash
+good7ob uc list --product 10
+good7ob uc show UC-3 --product 10                      # UC-n needs --product (or GOOD7OB_PRODUCT_ID); a bare number is the id
+good7ob uc update UC-3 --priority P0 --clear note      # reads the use case, merges, PUTs (the PUT replaces every field)
+good7ob uc status UC-3 --product 10                    # why it is partial / not started, which gaps
+good7ob uc metrics --product 10 --release 3            # P0 first; a rate with nothing to divide shows —
+good7ob uc gaps --product 10                           # P0 use cases that are partial / not started
+good7ob uc list --product 10 --status partial,not_started --sort status
+good7ob uc push UC-3 flow.puml --type SEQUENCE --name invite
+good7ob uc render --product 10                         # every stale / unrendered picture; exit code 1 if any one fails
+good7ob uc import ./diagrams --product 10 --priority P1 --channels Web   # preview only
+good7ob uc import ./diagrams/login.puml --product 10 --priority P1 --channels App --apply
+```
+
+`uc import` reads `.puml` files (directories recursively) as text on this machine: nothing is rendered, uploaded or executed. `--priority` and `--channels` are required (never guessed); without `--apply` it only previews. Existing role + goal pairs are skipped, existing use cases are never changed. See `FEATURES.md` (uc section).
+
+Rendering happens on this machine and never uses an online PlantUML service. Install PlantUML, Graphviz and Java yourself, or point `GOOD7OB_PLANTUML_CMD` at `java -jar plantuml.jar` or `docker run --rm -i plantuml/plantuml:latest`. The CLI always renders with `PLANTUML_SECURITY_PROFILE=SANDBOX`; a different value in your environment is overridden. See `FEATURES.md` (uc section) for every command.
 
 ### `schema`
 

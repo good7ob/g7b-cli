@@ -3,6 +3,7 @@
  */
 
 import { validateCommandTemplate } from './forward';
+import { normalizeAgentKind, parseEnvTags, parseSlots } from './runner';
 
 export interface AgentConfig {
   intervalSeconds: number;
@@ -10,13 +11,19 @@ export interface AgentConfig {
   graceMinutes: number;
   projectId?: number;
   forward: { url?: string; secret?: string; command?: string };
+  /** prd-0136 runner defaults for `agent listen` (flags override). */
+  slots?: number;
+  envTags?: string[];
+  agentKind?: string;
+  hostId?: string;
 }
 
 export const AGENT_DEFAULTS = { intervalSeconds: 15, expectedMinutes: 60, graceMinutes: 30 };
 
 const NUMERIC_KEYS = ['intervalSeconds', 'expectedMinutes', 'graceMinutes', 'projectId'] as const;
+const RUNNER_KEYS = ['slots', 'envTags', 'agentKind', 'hostId'] as const;
 const FORWARD_KEYS = ['url', 'secret', 'command'] as const;
-export const AGENT_KEYS = [...NUMERIC_KEYS, ...FORWARD_KEYS.map((k) => `forward.${k}`)];
+export const AGENT_KEYS = [...NUMERIC_KEYS, ...RUNNER_KEYS, ...FORWARD_KEYS.map((k) => `forward.${k}`)];
 
 function positive(value: unknown, label: string): number {
   const n = Number(value);
@@ -34,6 +41,10 @@ export function resolveAgentConfig(raw: any = {}): AgentConfig {
     graceMinutes: positive(raw?.graceMinutes ?? AGENT_DEFAULTS.graceMinutes, 'agent.graceMinutes'),
     projectId: raw?.projectId != null ? positive(raw.projectId, 'agent.projectId') : undefined,
     forward,
+    slots: raw?.slots != null ? parseSlots(String(raw.slots), 'agent.slots') : undefined,
+    envTags: raw?.envTags != null && raw.envTags !== '' ? parseEnvTags(Array.isArray(raw.envTags) ? raw.envTags.join(',') : String(raw.envTags), 'agent.envTags') : undefined,
+    agentKind: raw?.agentKind ? normalizeAgentKind(String(raw.agentKind), 'agent.agentKind') : undefined,
+    hostId: raw?.hostId ? String(raw.hostId) : undefined,
   };
 }
 
@@ -62,12 +73,20 @@ export function withAgentValue(raw: any, key: string, value: string): any {
     resolveAgentConfig(next);
     return next;
   }
-  const next = { ...base, [key]: value === '' ? undefined : positive(value, `agent.${key}`) };
+  let parsed: unknown;
+  if (value === '') parsed = undefined;
+  else if (key === 'slots') parsed = parseSlots(value, 'agent.slots');
+  else if (key === 'envTags') parsed = parseEnvTags(value, 'agent.envTags');
+  else if (key === 'agentKind') parsed = normalizeAgentKind(value, 'agent.agentKind');
+  else if (key === 'hostId') parsed = value.trim();
+  else parsed = positive(value, `agent.${key}`);
+  const next = { ...base, [key]: parsed };
   resolveAgentConfig(next);
   return next;
 }
 
 export function getAgentValue(raw: any, key: string): unknown {
   if (!AGENT_KEYS.includes(key)) throw new Error(`Unsupported config key: agent.${key}`);
-  return key.startsWith('forward.') ? raw?.forward?.[key.slice('forward.'.length)] : raw?.[key];
+  const v = key.startsWith('forward.') ? raw?.forward?.[key.slice('forward.'.length)] : raw?.[key];
+  return Array.isArray(v) ? v.join(',') : v;
 }

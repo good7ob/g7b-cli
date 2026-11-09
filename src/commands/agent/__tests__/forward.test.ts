@@ -73,4 +73,16 @@ describe('agent config', () => {
     expect(withAgentValue({}, 'graceMinutes', '45')).toEqual({ graceMinutes: 45 });
     expect(() => withAgentValue({}, 'graceMinutes', 'abc')).toThrow(/正数/);
   });
+
+  it('runner defaults: agent.slots / envTags / agentKind / hostId (prd-0136)', () => {
+    expect(withAgentValue({}, 'slots', '2')).toEqual({ slots: 2 });
+    expect(() => withAgentValue({}, 'slots', '9')).toThrow(/1 到 8/);
+    expect(withAgentValue({}, 'envTags', 'dev,Test')).toEqual({ envTags: ['dev', 'test'] });
+    expect(() => withAgentValue({}, 'envTags', 'staging')).toThrow(/staging/);
+    expect(withAgentValue({}, 'agentKind', 'codex')).toEqual({ agentKind: 'CODEX' });
+    expect(withAgentValue({ slots: 2 }, 'slots', '')).toEqual({ slots: undefined });
+    const cfg = resolveAgentConfig({ slots: 3, envTags: ['prod'], agentKind: 'CUSTOM', hostId: 'box' });
+    expect(cfg).toMatchObject({ slots: 3, envTags: ['prod'], agentKind: 'CUSTOM', hostId: 'box' });
+    expect(resolveAgentConfig({})).toMatchObject({ slots: undefined, envTags: undefined, agentKind: undefined });
+  });
 });

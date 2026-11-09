@@ -5,8 +5,8 @@
  */
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { dataDir } from '../../services/flavor';
 
 export interface LoopEntry {
   /** The agent process being watched (e.g. Claude Code). */
@@ -14,6 +14,8 @@ export interface LoopEntry {
   /** The detached background loop. */
   loopPid: number;
   startedAt: string;
+  /** prd-0136: the runner this loop beats for (`agent listen`, or `heartbeat start --runner-id / --slots / --env`). */
+  runner?: { runnerId?: number; runnerKey?: string; slots?: number; envTags?: string[] };
 }
 
 export function isPidAlive(pid: number): boolean {
@@ -27,7 +29,7 @@ export function isPidAlive(pid: number): boolean {
   }
 }
 
-const dir = () => path.join(os.homedir(), '.good7ob', 'heartbeat');
+const dir = () => path.join(dataDir(), 'heartbeat');
 const fileOf = (agentPid: number) => path.join(dir(), `${agentPid}.json`);
 
 export function readEntry(agentPid: number): LoopEntry | null {
