@@ -247,7 +247,9 @@ function printUploadResult(r: any, localEvidence: number) {
   const runLabel = run.runNo ? `${run.runNo}  (ID ${run.id})` : `ID ${run.id ?? '-'}`;
   console.log(`✓ 测试运行已上传: ${runLabel}  类型 ${run.testType ?? '-'}  来源 ${run.sourceType ?? run.source ?? '-'}`);
   console.log(`  共 ${s.total ?? 0}  通过 ${s.passed ?? 0}  失败 ${s.failed ?? 0}  跳过 ${s.skipped ?? 0}${s.blocked ? `  阻塞 ${s.blocked}` : ''}${s.flaky ? `  抖动 ${s.flaky}` : ''}`);
-  console.log(`  证据 ${r?.evidenceCount ?? localEvidence} 个${r?.unmatched ? `  未匹配用例 ${r.unmatched} 条（保留外部名称）` : ''}`);
+  // 契约（backend PipelineModels）：后端 ImportResult 的字段是 evidenceAttached / evidenceUnmatched（不是 evidenceCount）
+  console.log(`  证据 ${r?.evidenceAttached ?? r?.evidenceCount ?? localEvidence} 个${r?.unmatched ? `  未匹配用例 ${r.unmatched} 条（保留外部名称）` : ''}`);
+  if (r?.evidenceUnmatched?.length) console.log(`  ⚠ ${r.evidenceUnmatched.length} 个证据文件没能归到任何结果（未入库）: ${r.evidenceUnmatched.join('、')}`);
   if (r?.createdBugIds?.length) console.log(`  新建 Bug: ${r.createdBugIds.join(', ')}`);
   if (r?.reusedBugIds?.length) console.log(`  已存在的 Bug（追加失败记录）: ${r.reusedBugIds.join(', ')}`);
   if (r?.bugSkippedReason) console.log(`  ⚠ ${r.bugSkippedReason}`);
@@ -267,8 +269,10 @@ function printLatest(r: any) {
   if (failures.length) {
     console.log('失败用例：');
     for (const f of failures) {
-      const name = f.caseNo ?? f.caseTitle ?? f.externalName ?? f.name ?? `#${f.caseId ?? f.id}`;
-      console.log(`  ✗ ${name}${f.failureMessage ? `  ${String(f.failureMessage).split('\n')[0].substring(0, 80)}` : ''}`);
+      // 契约（backend PipelineModels）：后端 ResultView = {result, caseNo, caseTitle, evidence}，失败信息与外部名称在 result 里
+      const x = f.result ?? f;
+      const name = f.caseNo ?? f.caseTitle ?? x.externalName ?? f.name ?? `#${x.caseId ?? x.id}`;
+      console.log(`  ✗ ${name}${x.failureMessage ? `  ${String(x.failureMessage).split('\n')[0].substring(0, 80)}` : ''}`);
     }
   }
   const evidence: any[] = r.evidence ?? r.thumbnails ?? [];

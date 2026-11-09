@@ -248,7 +248,7 @@ describe('test-run upload (CLI)', () => {
   const RESPONSE = {
     run: { id: 501, runNo: 'TR-12', testType: 'e2e', sourceType: 'AUTOMATION_STEP' },
     summary: { total: 4, passed: 2, failed: 1, blocked: 0, skipped: 1, flaky: 1 },
-    unmatched: 3, createdBugIds: [88], reusedBugIds: [], evidenceCount: 2, attachedToStep: true,
+    unmatched: 3, createdBugIds: [88], reusedBugIds: [], evidenceAttached: 1, evidenceUnmatched: ['z-other__after.webp'], attachedToStep: true,
     gate: { verdict: 'FAIL', buildRef: 'abc', ruleOutcomes: [{ met: false, level: 'blocking', message: 'P0 用例全部通过' }] },
   };
 
@@ -290,7 +290,8 @@ describe('test-run upload (CLI)', () => {
     expect(r.stdout).toContain('截图 2 张（按附件路径对上用例 1 张）');
     expect(r.stdout).toContain('TR-12  (ID 501)');
     expect(r.stdout).toContain('通过 2  失败 1  跳过 1');
-    expect(r.stdout).toContain('证据 2 个  未匹配用例 3 条');
+    expect(r.stdout).toContain('证据 1 个  未匹配用例 3 条');
+    expect(r.stdout).toContain('1 个证据文件没能归到任何结果（未入库）: z-other__after.webp');
     expect(r.stdout).toContain('新建 Bug: 88');
     expect(r.stdout).toContain('已挂到自动化步骤');
     expect(r.stdout).toContain('质量门禁：不通过');
@@ -341,13 +342,17 @@ describe('test-run latest (CLI)', () => {
     const r = await latest(['--project', '7', '--step', '32'], ok({
       run: { id: 501, runNo: 'TR-12', testType: 'e2e', status: 'Finished', sourceType: 'AUTOMATION_STEP' },
       summary: { total: 4, passed: 3, failed: 1, skipped: 0 },
-      failures: [{ externalName: 'Login › wrong password', failureMessage: 'expected 401\nat …' }],
+      failures: [
+        { result: { externalName: 'Login › wrong password', failureMessage: 'expected 401\nat …' }, evidence: [] },
+        { result: { caseId: 9, failureMessage: 'boom' }, caseNo: 'TC-9', caseTitle: 'Logout', evidence: [] },
+      ],
       evidence: [{ fileName: 'test-failed-1.png' }],
     }));
     expect(r.http.get).toHaveBeenCalledWith('/qc/runs/latest', { params: { projectId: 7, stepId: 32 } });
     expect(r.stdout).toContain('TR-12  e2e  Finished');
     expect(r.stdout).toContain('通过 3  失败 1');
     expect(r.stdout).toContain('✗ Login › wrong password  expected 401');
+    expect(r.stdout).toContain('✗ TC-9  boom');
     expect(r.stdout).toContain('test-failed-1.png');
   });
 
