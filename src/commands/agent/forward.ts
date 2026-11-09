@@ -13,6 +13,11 @@ export interface ForwardTask {
   name: string;
   projectId: number | null;
   claimedAtMs: number;
+  /** prd-0136: present when the scheduler assigned the task (N-4); null for a free-pool claim. */
+  assignmentId?: number | null;
+  runId?: number | null;
+  stepId?: number | null;
+  nodeCode?: string | null;
 }
 
 const ALLOWED_PLACEHOLDERS = new Set(['taskId', 'taskNo']);
@@ -50,6 +55,10 @@ export async function forwardWebhook(url: string, secret: string, task: ForwardT
     name: task.name,
     project_id: task.projectId,
     event: 'claimed',
+    // prd-0136: only an assigned (scheduler) task carries its run context; a free-pool claim keeps the old body
+    ...(task.assignmentId != null || task.stepId != null
+      ? { assignment_id: task.assignmentId ?? null, run_id: task.runId ?? null, step_id: task.stepId ?? null, node_code: task.nodeCode ?? null }
+      : {}),
   });
   const timestamp = String(Math.floor(nowMs / 1000));
   let status: number;
