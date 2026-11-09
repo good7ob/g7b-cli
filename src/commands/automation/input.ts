@@ -149,6 +149,7 @@ export interface TaskFilter { priorities?: string[]; labels?: string[]; executor
 export interface Target {
   type?: string; projectId?: number; projectName?: string; taskFilter?: TaskFilter | null; maxTasksPerRun?: number;
   workflowTemplateCode?: string; workflowTemplateVersion?: number | null; matchingTaskCount?: number;
+  templateName?: string | null; resolvedTemplateVersion?: number | null;
 }
 export interface Budget {
   runTokenBudget?: number | null; dailyTokenBudget?: number | null; stepTimeoutMinutes?: number; runTimeoutMinutes?: number;
@@ -169,17 +170,54 @@ export interface DefinitionFlags {
   timezone?: string; poolInterval?: string; window?: string; windowWeekday?: string; grace?: string;
   taskFilter?: string; tags?: string; priority?: string; executor?: string; maxTasks?: string;
   budgetTokens?: string; dailyBudgetTokens?: string; billing?: string;
+  workflow?: string; workflowVersion?: string;
 }
 
 const TRIGGER_FLAGS: (keyof DefinitionFlags)[] = [
   'trigger', 'cron', 'every', 'at', 'weekday', 'day', 'timezone', 'poolInterval', 'window', 'windowWeekday', 'grace',
 ];
 const FILTER_FLAGS: (keyof DefinitionFlags)[] = ['taskFilter', 'tags', 'priority', 'executor'];
-const TARGET_FLAGS: (keyof DefinitionFlags)[] = ['project', 'maxTasks', ...FILTER_FLAGS];
+const TARGET_FLAGS: (keyof DefinitionFlags)[] = ['project', 'maxTasks', 'workflow', 'workflowVersion', ...FILTER_FLAGS];
 const BUDGET_FLAGS: (keyof DefinitionFlags)[] = ['budgetTokens', 'dailyBudgetTokens'];
 const given = (o: DefinitionFlags, keys: (keyof DefinitionFlags)[]) => keys.some((k) => o[k] !== undefined);
 
 export const touchesTrigger = (o: DefinitionFlags) => given(o, TRIGGER_FLAGS);
+
+// ── Workflow template (idea #187 N-2, design n2 §5) ──
+
+export const BUILTIN_TEMPLATE = 'BUILTIN_LINEAR_V1';
+const ORG_TEMPLATE_RE = /^wf:[1-9]\d*$/;
+
+/** A template code the backend takes as is: the built-in one or `wf:<workflow id>`; anything else is a workflow key. */
+export const isTemplateCode = (raw: string) => raw === BUILTIN_TEMPLATE || ORG_TEMPLATE_RE.test(raw);
+
+/** `--workflow-version`: `latest` = null (the latest version, fixed when the automation is enabled), or a version number. */
+export function parseWorkflowVersion(raw: string): number | null {
+  const v = raw.trim().toLowerCase();
+  if (v === 'latest') return null;
+  if (!/^[1-9]\d*$/.test(v)) throw new InputError(`--workflow-version 只能是正整数或 latest：${raw}`);
+  return Number(v);
+}
+
+export interface TemplateVersion {
+  version: number; publishedAt?: string | null; runnable?: boolean;
+  reasons?: { code?: string; message?: string }[] | null;
+  nodes?: { nodeCode?: string; name?: string | null; executorJob?: string | null; onFailureGoTo?: string | null }[] | null;
+}
+export interface WorkflowTemplate {
+  code: string; name?: string | null; source?: string | null; workflowId?: number | null; workflowKey?: string | null;
+  status?: string | null; latestVersion?: number | null; versions?: TemplateVersion[] | null;
+}
+
+/** `--workflow <workflowKey>` → `wf:<id>` from the template list (exact key, case-insensitive); codes pass through. */
+export function resolveTemplateCode(raw: string, templates: WorkflowTemplate[]): string {
+  const v = raw.trim();
+  if (isTemplateCode(v)) return v;
+  const hit = templates.find((t) => t.workflowKey && t.workflowKey.toLowerCase() === v.toLowerCase());
+  if (hit) return hit.code;
+  const known = templates.map((t) => (t.workflowKey ? `${t.workflowKey}（${t.code}）` : t.code)).join('、');
+  throw new InputError(`找不到工作流「${v}」：--workflow 取 ${BUILTIN_TEMPLATE}、wf:<id> 或已发布工作流的标识${known ? `；可用：${known}` : ''}（good7ob automation templates）`);
+}
 
 /** PERIODIC: `--every` + `--at`, `--weekday` for weekly, `--day` for monthly; missing parts come from `base`. */
 export function buildPeriodic(o: { every?: string; at?: string; weekday?: string; day?: string }, base?: Periodic): Periodic {
@@ -306,8 +344,20 @@ export function buildTarget(o: DefinitionFlags, base?: Target): Target {
   if (filter) out.taskFilter = filter;
   const max = o.maxTasks !== undefined ? parseIntInRange(o.maxTasks, '--max-tasks', 1, 20) : base?.maxTasksPerRun;
   if (max !== undefined) out.maxTasksPerRun = max;
-  if (base?.workflowTemplateCode) out.workflowTemplateCode = base.workflowTemplateCode;
-  if (base?.workflowTemplateVersion != null) out.workflowTemplateVersion = base.workflowTemplateVersion;
+  // --workflow must already be a code here (index resolves workflow keys before building the body)
+  const code = o.workflow !== undefined ? o.workflow.trim() : base?.workflowTemplateCode;
+  if (o.workflow !== undefined && !isTemplateCode(code ?? '')) {
+    throw new InputError(`--workflow 取 ${BUILTIN_TEMPLATE}、wf:<id> 或已发布工作流的标识：${o.workflow}`);
+  }
+  if (code) out.workflowTemplateCode = code;
+  if (o.workflowVersion !== undefined) {
+    if (!code) throw new InputError('--workflow-version 需要同时给出 --workflow');
+    out.workflowTemplateVersion = parseWorkflowVersion(o.workflowVersion);
+  } else if (o.workflow !== undefined && code !== base?.workflowTemplateCode) {
+    out.workflowTemplateVersion = null; // a new template starts at its latest version
+  } else if (base?.workflowTemplateVersion != null) {
+    out.workflowTemplateVersion = base.workflowTemplateVersion;
+  }
   return out;
 }
 

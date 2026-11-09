@@ -1,6 +1,8 @@
 import { ApiDate, AUTH_CODES, DASH, dash, describeError, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 import { extractRecords, extractTotal } from '../../utils/extractRecords';
-import { AUTOMATION_ERROR_CODES, AUTOMATION_ERROR_KEYS, Billing, Budget, Target, TaskFilter, Trigger } from './input';
+import {
+  AUTOMATION_ERROR_CODES, AUTOMATION_ERROR_KEYS, Billing, Budget, Target, TaskFilter, TemplateVersion, Trigger, WorkflowTemplate,
+} from './input';
 
 export interface LastRun { runId?: number | null; result?: string | null; reasonCode?: string | null; at?: ApiDate }
 export interface RunRow {
@@ -132,6 +134,7 @@ export function renderAutomationDetail(a: Automation): string {
     `最近结果: ${lastRunLabel(a.lastRun)}${a.lastRun?.at ? ' @ ' + fmtDateTime(a.lastRun.at) : ''}`,
     `目标:     项目 ${project(g)}；${filterLabel(g?.taskFilter)}；每次最多 ${dash(g?.maxTasksPerRun)} 个任务` +
       (g?.matchingTaskCount !== undefined && g?.matchingTaskCount !== null ? `；当前匹配 ${g.matchingTaskCount} 个` : ''),
+    `模板:     ${templateLabel(g)}`,
     `预算:     单次 ${tokens(b?.runTokenBudget)} / 当日 ${tokens(b?.dailyTokenBudget)}` +
       (b?.todayUsedTokens !== undefined ? `（今日已用 ${b.todayUsedTokens}）` : '') +
       `；步骤超时 ${dash(b?.stepTimeoutMinutes)} 分钟，运行超时 ${dash(b?.runTimeoutMinutes)} 分钟`,
@@ -151,6 +154,37 @@ export function renderAutomationDetail(a: Automation): string {
   const events = (a.recentEvents ?? []).slice(0, 5);
   if (events.length) lines.push('', '最近事件（最多 5 条，全部用 automation events）:', renderEventRows(events));
   return lines.join('\n');
+}
+
+// ── workflow templates (idea #187 N-2) ──
+
+/** 「夜间开发流程（wf:12）v3」; version null = latest, fixed at enable (resolvedTemplateVersion once enabled). */
+export function templateLabel(g: Target | null | undefined): string {
+  const code = g?.workflowTemplateCode;
+  if (!code) return DASH;
+  const name = g?.templateName && g.templateName !== code ? `${g.templateName}（${code}）` : code;
+  const pinned = g?.workflowTemplateVersion ?? null;
+  const resolved = g?.resolvedTemplateVersion ?? null;
+  const version = pinned !== null ? `v${pinned}` : resolved !== null ? `最新（启用时固定为 v${resolved}）` : '最新（启用时固定）';
+  return `${name} ${version}`;
+}
+
+const reasonText = (v: TemplateVersion | undefined) =>
+  !v ? DASH : v.runnable ? '可用' : `不可用：${(v.reasons ?? []).map((r) => r.message ?? r.code).filter(Boolean).join('；') || '原因未知'}`;
+
+export function renderTemplates(templates: WorkflowTemplate[], allVersions: boolean): string {
+  if (!templates.length) return '没有可用的工作流模板';
+  const rows: string[][] = [];
+  for (const t of templates) {
+    const versions = t.versions ?? [];
+    const shown = allVersions ? versions : versions.filter((v) => v.version === t.latestVersion).slice(0, 1);
+    const first = shown[0] ?? versions[0];
+    rows.push([t.code, dash(t.name), t.source === 'BUILTIN' ? '内置' : dash(t.workflowKey), dash(t.status ?? (t.source === 'BUILTIN' ? 'published' : null)),
+      first ? `v${first.version}` : DASH, reasonText(first)]);
+    if (allVersions) for (const v of shown.slice(1)) rows.push(['', '', '', '', `v${v.version}`, reasonText(v)]);
+  }
+  return renderTable([['编码', '名称', '标识', '状态', allVersions ? '版本' : '最新版本', '能否用于自动化'], ...rows]) +
+    '\n用法：good7ob automation create|update … --workflow <编码或标识> [--workflow-version <n|latest>]';
 }
 
 // ── actions ──
