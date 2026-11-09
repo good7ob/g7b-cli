@@ -215,13 +215,15 @@ Decide, inspect or cancel approval requests. There is no create command: feature
 good7ob automation list --status enabled
 good7ob automation create --name "夜间开发" --project 7 --trigger periodic --every weekly --weekday mon,wed --at 22:00 --tags auto --max-tasks 2
 good7ob automation preview --cron "0 22 * * 1-5"      # next fire times, nothing saved
+good7ob automation templates                         # built-in + published org workflows, runnable or not
+good7ob automation update 12 --workflow nightly-dev --workflow-version latest   # use a published workflow (key or wf:<id>)
 good7ob automation enable 12                          # enable = authorise (owner/admin)
 good7ob automation run 12 --wait                      # manual run -> run id (= execution plan id)
 good7ob automation pause 12 --reason "maintenance"
 good7ob automation settings set --require-enable-approval
 ```
 
-Organisation automations (prd-0135, backend #989): definitions with a cron / periodic / task-pool / manual trigger (EVENT is phase 2 and rejected client-side), lifecycle (enable / pause / resume / disable / withdraw-approval), runs, events, the plans view and org settings. Org from `--org-id`/`--org`, `GOOD7OB_ORG_ID`, `config set org-id`, or the key's only org. Exit code 3 = skipped / conflict (2702, 2708-2711). See `FEATURES.md`.
+Organisation automations (prd-0135, backend #989): definitions with a cron / periodic / task-pool / manual trigger (EVENT is phase 2 and rejected client-side), lifecycle (enable / pause / resume / disable / withdraw-approval), runs, events, the plans view and org settings. `--workflow` picks the workflow template (`BUILTIN_LINEAR_V1`, `wf:<id>` or a published workflow key; idea #187 N-2), `--workflow-version` a version or `latest` (fixed when enabled). Org from `--org-id`/`--org`, `GOOD7OB_ORG_ID`, `config set org-id`, or the key's only org. Exit code 3 = skipped / conflict (2702, 2708-2711). See `FEATURES.md`.
 
 ### `trace`
 

@@ -581,3 +581,83 @@ describe('helpers', () => {
     expect(describeAutomationError(e(1001, 'triggerType 必填'))).toBe('参数不合法 [1001: triggerType 必填]');
   });
 });
+
+// ── workflow template (idea #187 N-2, design n2 §5) ──
+
+describe('automation --workflow / templates', () => {
+  const TEMPLATES = { items: [
+    { code: 'BUILTIN_LINEAR_V1', name: '内置线性模板', source: 'BUILTIN', workflowId: null, latestVersion: 1,
+      versions: [{ version: 1, runnable: true, reasons: [], nodes: [] }] },
+    { code: 'wf:12', name: '夜间开发流程', source: 'ORG', workflowId: 12, workflowKey: 'nightly-dev', status: 'published', latestVersion: 3,
+      versions: [
+        { version: 3, runnable: false, reasons: [{ code: 'UNSUPPORTED_NODE', message: '含第一期不支持的节点：control.condition（是否通过）' }] },
+        { version: 2, runnable: true, reasons: [] },
+      ] },
+  ] };
+  const reply = (m: string, url: string): Envelope => {
+    if (m === 'get' && url.endsWith('/workflow-templates')) return ok(TEMPLATES);
+    if (m === 'get') return ok(VO);
+    return ok({ ...VO, id: 21, status: 'draft' });
+  };
+  const create = (extra: string[]) => auto(['create', '--name', 'n', '--project', '7', '--trigger', 'manual', ...extra], reply);
+
+  it('create --workflow wf:12 sends the code with version null (latest) and needs no lookup', async () => {
+    const r = await create(['--workflow', 'wf:12']);
+    expect(r.http.get).not.toHaveBeenCalledWith(`${BASE}/workflow-templates`, expect.anything());
+    expect(posted(r)[1].target).toEqual({ type: 'TASK_FILTER', projectId: 7, workflowTemplateCode: 'wf:12', workflowTemplateVersion: null });
+  });
+
+  it('create --workflow <workflowKey> resolves through the template list (case-insensitive); --workflow-version pins', async () => {
+    const r = await create(['--workflow', 'Nightly-Dev', '--workflow-version', '2']);
+    expect(r.http.get).toHaveBeenCalledWith(`${BASE}/workflow-templates`, { params: undefined });
+    expect(posted(r)[1].target).toMatchObject({ workflowTemplateCode: 'wf:12', workflowTemplateVersion: 2 });
+  });
+
+  it('an unknown workflow key lists the available ones; nothing is posted', async () => {
+    const r = await create(['--workflow', 'nope']);
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('找不到工作流「nope」');
+    expect(r.stderr).toContain('nightly-dev（wf:12）');
+    expect(r.http.post).not.toHaveBeenCalled();
+  });
+
+  it.each([['0'], ['v2'], ['1.5']])('rejects --workflow-version %s', async (v) => {
+    await expectRejected(['create', '--name', 'n', '--project', '7', '--trigger', 'manual', '--workflow', 'wf:12', '--workflow-version', v], '--workflow-version');
+  });
+
+  it('update --workflow-version latest keeps the current code and sends null; switching template resets the version', async () => {
+    const pinned = (m: string, url: string) => (m === 'get' && !url.endsWith('/workflow-templates')
+      ? ok({ ...VO, target: { ...VO.target, workflowTemplateCode: 'wf:12', workflowTemplateVersion: 2 } }) : reply(m, url));
+    const latest = await auto(['update', '12', '--workflow-version', 'latest'], pinned);
+    expect(latest.http.put.mock.calls[0][1].target).toMatchObject({ workflowTemplateCode: 'wf:12', workflowTemplateVersion: null });
+    const keep = await auto(['update', '12', '--max-tasks', '2'], pinned);
+    expect(keep.http.put.mock.calls[0][1].target).toMatchObject({ workflowTemplateCode: 'wf:12', workflowTemplateVersion: 2 });
+    const back = await auto(['update', '12', '--workflow', 'BUILTIN_LINEAR_V1'], pinned);
+    expect(back.http.put.mock.calls[0][1].target).toMatchObject({ workflowTemplateCode: 'BUILTIN_LINEAR_V1', workflowTemplateVersion: null });
+  });
+
+  it('2726 with the server reason is shown', async () => {
+    const r = await auto(['create', '--name', 'n', '--project', '7', '--trigger', 'manual', '--workflow', 'wf:12'],
+      (m, url) => (m === 'post' ? bizError(2726, 'TARGET_TYPE_NOT_SUPPORTED: 含第一期不支持的节点：control.condition（是否通过）') : reply(m, url)));
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('control.condition');
+  });
+
+  it('templates: latest version per template with runnable / reasons; --all-versions; --json', async () => {
+    const r = await auto(['templates'], reply);
+    expect(r.http.get).toHaveBeenCalledWith(`${BASE}/workflow-templates`, { params: undefined });
+    expect(r.stdout).toMatch(/BUILTIN_LINEAR_V1\s+内置线性模板\s+内置\s+published\s+v1\s+可用/);
+    expect(r.stdout).toMatch(/wf:12\s+夜间开发流程\s+nightly-dev\s+published\s+v3\s+不可用：含第一期不支持的节点/);
+    expect(r.stdout).not.toMatch(/\bv2\b/);
+    const all = await auto(['templates', '--all-versions'], reply);
+    expect(all.stdout).toMatch(/v2\s+可用/);
+    expect(JSON.parse((await auto(['templates', '--json'], reply)).stdout)).toHaveLength(2);
+  });
+
+  it('show prints the template line: name, code and the version that is fixed at enable', async () => {
+    const r = await auto(['show', '12'], ok({ ...VO, target: { ...VO.target, workflowTemplateCode: 'wf:12', templateName: '夜间开发流程', resolvedTemplateVersion: 3 } }));
+    expect(r.stdout).toContain('模板:     夜间开发流程（wf:12） 最新（启用时固定为 v3）');
+    const builtin = await auto(['show', '12']);
+    expect(builtin.stdout).toContain('模板:     BUILTIN_LINEAR_V1 最新（启用时固定）');
+  });
+});

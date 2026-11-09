@@ -17,12 +17,13 @@ import { resolveOrgId } from '../../utils/resolveOrgId';
 import { confirmOrThrow } from '../habit/input';
 import {
   BILLING, DefinitionFlags, EVERY, EXIT_SKIPPED, SKIP_CODES, SOURCES, STATUSES, SettingsFlags, TRIGGERS,
-  actionBody, buildCreateBody, buildListParams, buildPlansParams, buildPreviewBody, buildRunsParams,
+  WorkflowTemplate, actionBody, isTemplateCode, resolveTemplateCode, buildCreateBody, buildListParams, buildPlansParams, buildPreviewBody, buildRunsParams,
   buildSettingsBody, buildUpdateBody, pageParams, parseTriggerType, touchesTrigger,
 } from './input';
 import {
   Automation, RunResult, RunRow, describeAutomationError, renderActionResult, renderAutomationDetail,
   renderAutomationList, renderEvents, renderPlans, renderPreview, renderRunResult, renderRuns, renderSettings,
+  renderTemplates,
 } from './render';
 
 type OrgOpts = { orgId?: string; org?: string; json?: boolean };
@@ -43,6 +44,17 @@ export async function orgOf(o: OrgOpts): Promise<number> {
 }
 
 const base = (orgId: number) => `/api/v1/orgs/${orgId}/automations`;
+
+/** `GET /automations/workflow-templates` (design n2 §3.5): built-in first, then the org's published workflows. */
+export async function fetchTemplates(orgId: number): Promise<WorkflowTemplate[]> {
+  return extractRecords<WorkflowTemplate>(await apiClient.get(`${base(orgId)}/workflow-templates`));
+}
+
+/** Replaces a `--workflow <workflowKey>` with its `wf:<id>` code; codes need no lookup. */
+async function resolveWorkflowFlag(o: DefinitionFlags, orgId: number): Promise<void> {
+  if (o.workflow === undefined || isTemplateCode(o.workflow.trim())) return;
+  o.workflow = resolveTemplateCode(o.workflow, await fetchTemplates(orgId));
+}
 
 /** A manual run that did not start (--wait): its own message, exit code 3. */
 class NotStarted extends Error {}
@@ -94,6 +106,8 @@ function definitionOptions(cmd: Command, creating: boolean): Command {
     .option('--priority <list>', '任务筛选：优先级（逗号分隔，如 high,urgent）')
     .option('--executor <employeeId>', '任务筛选：只取预分配给该 AI 员工的任务')
     .option('--max-tasks <n>', '每次运行最多领取的任务数 1-20（默认 1）')
+    .option('--workflow <code>', '工作流模板：BUILTIN_LINEAR_V1（默认）、wf:<工作流 ID> 或已发布工作流的标识（见 automation templates）')
+    .option('--workflow-version <n>', '模板版本：版本号，或 latest = 启用时的最新版本（默认；之后发布的新版本要重新保存 / 启用才生效）')
     .option('--budget-tokens <n>', '单次运行 Token 上限（unlimited = 不限）')
     .option('--daily-budget-tokens <n>', '当日 Token 上限（unlimited = 不限）。注意：只给 --budget-tokens 时当日上限按"不限"保存')
     .option('--billing <subject>', `计费主体 ${BILLING.join('|')}（默认跟随组织计费模式）`)
@@ -152,11 +166,22 @@ export function registerAutomationCommands(program: Command) {
       emit(o.json, detail, () => renderAutomationDetail(detail ?? { id: aid }));
     }));
 
+  withOrg(automation.command('templates')
+    .description('列出可选的工作流模板（内置线性模板 + 本组织已发布的工作流）、版本与能否用于自动化')
+    .option('--all-versions', '列出每个版本（默认只看最新版本）')
+    .option('--json', '输出 JSON'))
+    .action((o: OrgOpts & { allVersions?: boolean }) => guard('获取工作流模板失败', async () => {
+      const templates = await fetchTemplates(await orgOf(o));
+      emit(o.json, templates, () => renderTemplates(templates, !!o.allVersions));
+    }));
+
   definitionOptions(automation.command('create')
     .description('新建自动化（保存为草稿，用 automation enable 启用）'), true)
     .action((o: DefinitionFlags & OrgOpts) => guard('新建自动化失败', async () => {
+      const orgId = await orgOf(o);
+      await resolveWorkflowFlag(o, orgId);
       const body = buildCreateBody(o);
-      const created: Automation = await apiClient.post(base(await orgOf(o)), body);
+      const created: Automation = await apiClient.post(base(orgId), body);
       emit(o.json, created, () => `✓ 已新建自动化 #${created?.id}「${created?.name ?? body.name}」（${created?.status ?? 'draft'}）` +
         `\n  启用：good7ob automation enable ${created?.id}    预览触发时刻：good7ob automation preview …`);
     }));
@@ -167,6 +192,7 @@ export function registerAutomationCommands(program: Command) {
       const aid = parseId(id, 'id');
       if (o.trigger !== undefined) parseTriggerType(o.trigger); // EVENT / typo rejected before any call
       const orgId = await orgOf(o);
+      await resolveWorkflowFlag(o, orgId);
       const current: Automation = await apiClient.get(`${base(orgId)}/${aid}`);
       let orgTimeZone: string | undefined;
       if (touchesTrigger(o) && o.timezone === undefined && current?.trigger?.timeZone) {
