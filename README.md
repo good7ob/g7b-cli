@@ -42,20 +42,32 @@ The CLI stores local configuration in:
 
 Default values:
 
-- `apiUrl`: `https://api.good7ob.net`
+- API address: fixed to `https://api.good7ob.com` (production). It cannot be configured, and `apiUrl` in the file is ignored.
 - `apiKey`: empty
+
+### Dev / test installs
+
+A release install always talks to production. To reach another environment, clone the repository a second time and mark
+that clone as a dev install by creating `dev-env.json` next to `package.json` (it is git-ignored and not published):
+
+```bash
+echo '{"name":"dev","apiUrl":"https://api-dev.good7ob.net"}' > dev-env.json
+npm install && npm run build
+```
+
+The dev clone talks to that address and keeps its own config and local state in `~/.good7ob-dev` (production uses
+`~/.good7ob`), so the two never share a key, an org, a project or a work slot and can be used side by side on one machine.
+A dev clone prints `[good7ob] 使用 dev 环境：<地址>` on stderr for every command. Give it its own command name, e.g.
+`alias good7ob-dev='node /path/to/dev-clone/dist/index.js'`.
 
 ### Common config commands
 
 ```bash
-# Set API base URL
-good7ob config set api-url https://api.good7ob.net
-
 # Set API key
 good7ob config set api-key g7b_sk_your_api_key_here
 
 # Read one value
-good7ob config get api-url
+good7ob config get api-key
 
 # List current config (API key is masked)
 good7ob config list
@@ -320,6 +332,28 @@ good7ob qc --help
 ```
 
 Quality-control commands for bug tracking and QA reporting.
+
+### `uc`
+
+User use cases (prd-0180): `list` / `show` / `add` / `update` / `delete`, `actors`, `link-fp` / `unlink-fp`, `link-test` / `unlink-test`, `entry`, `channels set`, `relation`, `candidates`, `status` / `metrics` / `gaps` (derived status, completion figures, P0 gap list), plus `push` and `render` for PlantUML diagrams and `import` for existing PlantUML use case diagrams.
+
+```bash
+good7ob uc list --product 10
+good7ob uc show UC-3 --product 10                      # UC-n needs --product (or GOOD7OB_PRODUCT_ID); a bare number is the id
+good7ob uc update UC-3 --priority P0 --clear note      # reads the use case, merges, PUTs (the PUT replaces every field)
+good7ob uc status UC-3 --product 10                    # why it is partial / not started, which gaps
+good7ob uc metrics --product 10 --release 3            # P0 first; a rate with nothing to divide shows —
+good7ob uc gaps --product 10                           # P0 use cases that are partial / not started
+good7ob uc list --product 10 --status partial,not_started --sort status
+good7ob uc push UC-3 flow.puml --type SEQUENCE --name invite
+good7ob uc render --product 10                         # every stale / unrendered picture; exit code 1 if any one fails
+good7ob uc import ./diagrams --product 10 --priority P1 --channels Web   # preview only
+good7ob uc import ./diagrams/login.puml --product 10 --priority P1 --channels App --apply
+```
+
+`uc import` reads `.puml` files (directories recursively) as text on this machine: nothing is rendered, uploaded or executed. `--priority` and `--channels` are required (never guessed); without `--apply` it only previews. Existing role + goal pairs are skipped, existing use cases are never changed. See `FEATURES.md` (uc section).
+
+Rendering happens on this machine and never uses an online PlantUML service. Install PlantUML, Graphviz and Java yourself, or point `GOOD7OB_PLANTUML_CMD` at `java -jar plantuml.jar` or `docker run --rm -i plantuml/plantuml:latest`. The CLI always renders with `PLANTUML_SECURITY_PROFILE=SANDBOX`; a different value in your environment is overridden. See `FEATURES.md` (uc section) for every command.
 
 ### `schema`
 

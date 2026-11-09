@@ -103,7 +103,7 @@ export function registerIdeaCommands(program: Command) {
     .action(createIdea);
 
   withIdeaFields(idea.command('update <id>'))
-    .description('Update an idea (omitted flags stay unchanged; locked once approved/archived; only --release stays editable through developing)')
+    .description('Update an idea (omitted flags stay unchanged; locked once approved/archived; only --release stays editable once approved)')
     .option('--title <title>', 'Title (max 200 chars)')
     .option('--source <source>', `Source (${oneOf(SOURCES)})`)
     .option('--release <id>', 'Link to a release of the same product (planned|in_progress|awaiting_approval)')
@@ -132,15 +132,31 @@ export function registerIdeaCommands(program: Command) {
 
   idea
     .command('status <id> <toStatus>')
-    .description(`Move an idea to ${oneOf(TRANSITIONS)}`)
+    .description(`Move an idea to ${oneOf(TRANSITIONS)} (archived = close, needs --reason)`)
+    .option('--reason <text>', 'Close reason, required when moving to archived (max 1000 chars)')
     .option('--json', 'Output as JSON')
     .action(async (id, toStatus, o) => {
       try {
         const target = parseTransition(toStatus);
-        const moved = await apiClient.post(`${BASE}/${parseId(id, 'id')}/status`, { toStatus: target });
+        const body = target === 'archived' ? { toStatus: target, ...buildReasonBody('reason', o.reason) } : { toStatus: target };
+        const moved = await apiClient.post(`${BASE}/${parseId(id, 'id')}/status`, body);
         emit(o.json, moved, () => `✓ Idea #${id} → ${target}`);
       } catch (error) {
         fail('变更 Idea 状态失败', error, IDEA_ERROR_CODES);
+      }
+    });
+
+  idea
+    .command('close <id>')
+    .description('Close an idea from any status (e.g. the feature is already developed); same as `status <id> archived --reason`')
+    .requiredOption('--reason <text>', 'Close reason (max 1000 chars)')
+    .option('--json', 'Output as JSON')
+    .action(async (id, o) => {
+      try {
+        const closed = await apiClient.post(`${BASE}/${parseId(id, 'id')}/status`, { toStatus: 'archived', ...buildReasonBody('reason', o.reason) });
+        emit(o.json, closed, () => `✓ Idea #${id} 已关闭 (archived)`);
+      } catch (error) {
+        fail('关闭 Idea 失败', error, IDEA_ERROR_CODES);
       }
     });
 

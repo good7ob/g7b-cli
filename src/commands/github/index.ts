@@ -7,8 +7,9 @@ import apiClient from '../../services/ApiClient';
 import { ConfigService } from '../../services/ConfigService';
 import { InputError, emit, guarded, parseDate, parseId, renderTable, requireOneOf, dash, fmtDateTime } from '../../utils/cliHelpers';
 import { resolveOrgId } from '../../utils/resolveOrgId';
-import { ghPrList, ghUser } from './gh';
-import { batchesOf, collectPrs, mapPr, sinceFor } from './logic';
+import { effectiveOf } from './effective';
+import { ghPrFiles, ghPrList, ghUser } from './gh';
+import { PrItem, batchesOf, collectPrs, mapPr, sinceFor } from './logic';
 
 const KINDS = ['code', 'docs', 'infra', 'other'] as const;
 const CODES = { 1001: '仓库未登记或已停用（整批被拒绝）', 1006: '该 GitHub 登录名已绑定到其他平台账号' };
@@ -99,7 +100,13 @@ export function registerGithubCommands(program: Command) {
         const { rows, capped } = await collectPrs(b.repoFullName, from, (s) => ghPrList(b.repoFullName, s));
         if (capped) console.error(`! ${b.repoFullName}: 超过 20 页仍未取完，请用 --since 缩小范围`);
         const total: RepoResult = { repo: b.repoFullName, since: from, fetched: rows.length, created: 0, updated: 0, skipped: 0, capped };
-        for (const items of batchesOf(rows.map((r) => mapPr(b.repoFullName, r)))) {
+        const mapped: PrItem[] = [];
+        for (const r of rows) {
+          const eff = await effectiveOf(r.files, r.changedFiles, () => ghPrFiles(b.repoFullName, r.number));
+          if (!eff) console.error(`! ${b.repoFullName}#${r.number}: 文件列表不完整，有效行数留空`);
+          mapped.push(mapPr(b.repoFullName, r, eff));
+        }
+        for (const items of batchesOf(mapped)) {
           const res: BatchResult = await apiClient.post(`/api/v1/orgs/${orgId}/github/pull-requests/batch`, { items });
           total.created += res.created; total.updated += res.updated; total.skipped += res.skipped;
           (res.unknownAuthors ?? []).forEach((l) => unknown.add(l));

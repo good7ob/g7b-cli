@@ -20,10 +20,11 @@ export const SOURCES = [
 ] as const;
 export const PRIORITIES = ['low', 'medium', 'high'] as const;
 export const STATUSES = [
-  'draft', 'evaluating', 'approved', 'rejected', 'archived', 'planning', 'developing', 'released', 'validated',
+  'draft', 'evaluating', 'approved', 'rejected', 'archived',
 ] as const;
 /** approved / rejected are only reachable through `idea select` / `idea reject`. */
-export const TRANSITIONS = ['evaluating', 'archived', 'planning', 'developing', 'released', 'validated'] as const;
+/** An idea's lifecycle ends at approval (g7b task 2584): the delivery stages planning/developing/released/validated are gone. */
+export const TRANSITIONS = ['evaluating', 'archived'] as const;
 
 export const MAX_TITLE = 200;
 export const MAX_EXPECTED_VALUE = 500;

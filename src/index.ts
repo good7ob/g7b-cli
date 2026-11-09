@@ -35,6 +35,7 @@ import { registerExportCommands } from './commands/export';
 import { registerHeartbeatCommands } from './commands/heartbeat';
 import { registerQuestionCommands } from './commands/question';
 import { registerSyncCommands } from './commands/sync';
+import { registerCacheCommands } from './commands/cache';
 import { registerGithubCommands } from './commands/github';
 import { registerUiCommands } from './commands/ui';
 import { registerProgressCommands } from './commands/progress';
@@ -45,6 +46,8 @@ import { registerArtifactCommands } from './commands/artifact';
 import { registerFeatCommands } from './commands/feat';
 import { registerDeliverableCommands } from './commands/deliverable';
 import { registerAutomationCommands } from './commands/automation';
+import { registerUcCommands } from './commands/uc';
+import { registerCompetitorCommands } from './commands/competitor';
 
 const program = new Command();
 
@@ -74,6 +77,7 @@ registerQuestionCommands(program);
 registerTemplateCommands(program);
 registerWhoamiCommands(program);
 registerSyncCommands(program);
+registerCacheCommands(program);
 registerGithubCommands(program);
 registerSchemaCommands(program);
 registerCloudArchCommands(program);
@@ -93,6 +97,8 @@ registerArtifactCommands(program);
 registerFeatCommands(program);
 registerDeliverableCommands(program);
 registerAutomationCommands(program);
+registerUcCommands(program);
+registerCompetitorCommands(program);
 
 // Called after the groups are registered so it only affects the root: without it the root
 // swallows a `--version` given after a subcommand (`release create --version 1.2.0` would
