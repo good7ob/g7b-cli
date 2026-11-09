@@ -44,12 +44,12 @@ describe('change-set create', () => {
     await expectRejected(args, needle);
   });
 
-  it('requires --title (commander) and maps 1007 (idea not approved/planning)', async () => {
+  it('requires --title (commander) and maps 1007 (idea not approved)', async () => {
     const missing = await cs(['create', '21']);
     expect(missing.exitCode).toBe(1);
     expect(noHttpCalls(missing)).toBe(true);
     const r = await cs(['create', '21', '--title', 'T'], bizError(1007, 'idea is draft'));
-    expect(r.stderr).toContain('approved/planning');
+    expect(r.stderr).toContain('Idea 为 approved');
     expect(r.stderr).toContain('idea is draft');
   });
 });
@@ -259,7 +259,7 @@ describe('change-set submit / cancel', () => {
 describe('change-set apply', () => {
   const applied = {
     changeSet: { ...changeSet, status: 'applied' }, moduleId: 40,
-    tasks: [{ itemId: 9, taskId: 101 }, { itemId: 10, taskId: 102 }], traceLinks: 3, ideaStatus: 'planning',
+    tasks: [{ itemId: 9, taskId: 101 }, { itemId: 10, taskId: 102 }], traceLinks: 3, ideaStatus: 'approved',
     summary: '变更集 CHG-2026-0001 已 Apply：2 个任务，3 条追溯',
   };
 
@@ -276,7 +276,7 @@ describe('change-set apply', () => {
     expect(r.stdout).toContain('#101');
     expect(r.stdout).toContain('#102');
     expect(r.stdout).toContain('模块 #40');
-    expect(r.stdout).toContain('planning');
+    expect(r.stdout).toContain('approved');
     expect(r.stdout).toContain('不会自动修改');
   });
 

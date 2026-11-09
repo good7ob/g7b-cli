@@ -25,6 +25,7 @@
 - [workspace — 我的工作台](#workspace--我的工作台)
 - [release — 发布管理](#release--发布管理)
 - [approval — 审批](#approval--审批)
+- [automation — 自动化](#automation--自动化)
 - [trace — 追溯关系](#trace--追溯关系)
 - [template — 模板中心](#template--模板中心)
 - [whoami — 当前身份](#whoami--当前身份)
@@ -32,6 +33,7 @@
 - [heartbeat — 本地 Agent 在线心跳](#heartbeat--本地-agent-在线心跳)
 - [run — 自动化运行与步骤回报](#run--自动化运行与步骤回报)
 - [worktree — 本机 worktree 占用登记](#worktree--本机-worktree-占用登记)
+- [uc — 用户用例](#uc--用户用例)
 - [输出格式](#输出格式)
 - [依赖列表](#依赖列表)
 
@@ -58,12 +60,14 @@ npm run dev -- <command>
 ```bash
 # 方式一：环境变量
 export GOOD7OB_API_KEY=g7b_sk_...
-export GOOD7OB_API_URL=https://api.good7ob.net
 
 # 方式二：配置文件 (~/.good7ob/config.json)
 good7ob config set api-key "your-api-key"
-good7ob config set api-url "https://api.good7ob.net"
 ```
+
+API 地址固定为生产 `https://api.good7ob.com`，不可配置。访问 dev / test：另 clone 一份仓库，在 `package.json` 同级放
+`dev-env.json`（`{"name":"dev","apiUrl":"https://api-dev.good7ob.net"}`，已 git 忽略、不随包发布），该 clone 的配置与
+本地状态独立放在 `~/.good7ob-dev`。
 
 ---
 
@@ -95,7 +99,8 @@ good7ob
 ├── template                 # 模板中心：检索/详情、创建与版本、提交发布、依赖与差异、收藏与评价、模板包、安装与实例化、升级提示、管理端审核
 ├── whoami                   # 当前 Key 的身份：人类用户或 AI 员工（昵称 / 角色 / 能力 / 产品范围）
 ├── heartbeat                # 本地 Agent 在线心跳（AI 员工 Key）：start / stop / beat / status
-└── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
+├── worktree                 # 本机 worktree 占用登记：claim / heartbeat / release / list（纯本地，不调后端）
+└── uc                       # 用户用例（prd-0180）：用例 / 角色 / 渠道与入口 / 关联 FP 与测试 / include·extend 关系；push 流程图、render 总图与过期图（本机 PlantUML）
 ```
 
 ---
@@ -1122,6 +1127,58 @@ good7ob approval reject 31 --comment "范围不清，补充测试报告后重提
 
 ---
 
+## automation — 自动化
+
+API 端点前缀：`/api/v1/orgs/{orgId}/automations`、`/api/v1/orgs/{orgId}/automation-settings`（prd-0135，backend #989）。
+组织：`--org-id <id>`（或 `--org <id>`）→ `GOOD7OB_ORG_ID` → `config set org-id` → Key 只属一个组织时自动取（多个组织时报错并列出）。
+定义状态：draft / enabled / paused / awaiting_approval / disabled。启用 = 授权：记录启用人与计费快照；组织开启「启用需审批」时启用 / 修改已启用的定义会进入审批（`approval` 命令组决定，`withdraw-approval` 撤回）。
+
+| 命令 | 说明 |
+|------|------|
+| `automation list` | 组织的自动化（下次运行升序）；列：名称、状态、触发方式、下次运行、最近结果、项目；`--status` `--project` `--trigger` `--keyword` `-p/--page` `--page-size`（≤100） |
+| `automation show <id>` | 详情：触发（含 cron / 时区）、运行窗口、下次运行、最近结果、目标与当前匹配任务数、预算、计费与启用人、审批中 / 进行中运行、Runner 告警、最近 10 次运行（含跳过）与最近事件 |
+| `automation create` | 新建草稿；必填 `--name` `--project` `--trigger cron\|periodic\|task-pool\|manual`，见下表 |
+| `automation update <id> …` | 只改给出的字段（同 create 的选项）；先读当前定义，被改到的段整体回写 |
+| `automation delete <id> [--yes]` | 删除（仅草稿 / 已停用，且无未结束运行）；非交互环境必须 `--yes` |
+| `automation run <id> [--wait] [--wait-timeout <分钟>]` | 手动运行（已启用 / 已暂停，仅 owner/admin）→ 运行 ID（= 执行计划 ID）、状态、任务；`--wait` 轮询直到 running 或未执行，最长一个宽限期 |
+| `automation enable\|pause\|resume\|disable <id> [--reason]` | 启用 / 暂停 / 恢复 / 停用（仅 owner/admin）；启用后显示计费主体、单次上限与下次运行 |
+| `automation withdraw-approval <id>` | 撤回审批中的启用 / 修改，回到原状态 |
+| `automation preview --cron <expr> \| --every …` | 触发时刻预览（`trigger-preview`，不保存）：平台时间 JST、触发器时区、是否在 `--window` 内；`--timezone` `--count`（1-20，默认 5） |
+| `automation runs <id>` | 运行（= 执行计划）与被跳过的触发，新的在前；`--status` `-p` `--page-size` |
+| `automation events <id>` | 定义事件（新建 / 修改 / 启用 / 暂停 / 审批 / 运行创建 / 跳过…） |
+| `automation plans` | 「计划」：自动化 + 项目执行计划；`--source automation\|manual`（manual = 手动建的执行计划）`--status` `--project` `--trigger` `--keyword`；末尾显示待审批的自动化 / 运行数 |
+| `automation settings get` | 组织设置：时区、启用需审批、每次运行需审批（生效值与来源）、审批超时、成员可编辑等 |
+| `automation settings set` | `--timezone` `--[no-]require-enable-approval` `--[no-]require-run-approval` `--run-approval-timeout <1-168 小时>` `--[no-]member-can-edit`（仅 owner/admin，只发给出的项） |
+
+create / update 的触发与目标选项：
+
+| 选项 | 请求字段 |
+|------|------|
+| `--trigger cron --cron "0 22 * * 1-5"` | `trigger: {type: CRON, cronExpr}`（五段，两次触发间隔 ≥ 5 分钟） |
+| `--trigger periodic --every daily\|weekly\|monthly --at HH:mm [--weekday mon,wed] [--day 1-28\|last]` | `trigger: {type: PERIODIC, periodic: {kind, time, weekdays\|monthDay}}`（星期 1=周一 … 7=周日） |
+| `--trigger task-pool [--pool-interval 5-1440]` | `trigger: {type: TASK_POOL, poolMinIntervalMinutes}` |
+| `--trigger manual` | `trigger: {type: MANUAL}`（只能 `automation run`） |
+| `--timezone` `--window 22:00-06:00` `--window-weekday` `--grace 1-60` | `trigger.timeZone / window{start,end,weekdays} / graceMinutes`（窗口可跨午夜；`--window none` 取消） |
+| `--project <id>` `--max-tasks 1-20` | `target: {type: TASK_FILTER, projectId, maxTasksPerRun}` |
+| `--tags a,b` `--priority high,urgent` `--executor <AI 员工 ID>` 或 `--task-filter '<json>'` | `target.taskFilter: {labels, priorities, executorEmployeeId}`（二选一；`--task-filter none` 清空） |
+| `--budget-tokens N` `--daily-budget-tokens N` | `budget: {runTokenBudget, dailyTokenBudget}`（`unlimited` = 不限；后端整段替换，只给一个时另一个按"不限"保存；单次 ≤ 当日） |
+| `--billing org-pool\|byok` | `billing: {subject: ORG_POOL\|BYOK}` |
+
+`--trigger event` 在 CLI 端直接拒绝（「第二期」，后端 EVENT 只能存草稿不能启用）。
+
+业务错误码（`AutomationErrorEnum`，按消息里的 KEY 区分同码）：`1001` 参数不合法 / `EVENT_TRIGGER_PHASE2` 第二期、`1002` 不存在、`1006` 同名、`2004` 无权（owner/admin）、`2702` 状态不允许、`2703` AI 员工 Key 只读、`2704` 计费主体不可用、`2705` 目标无效、`2706` 触发器不合法、`2707` 有未结束运行不能删、`2708` 已有进行中运行、`2709` 预算用尽、`2710` 无可用 Runner、`2711` 无待执行任务、`2712` 无 DEV 岗位 AI 员工、`2724` 预算不合法、`2726` 目标类型不支持。
+退出码：0 成功；3 跳过 / 冲突（`2702 2708 2709 2710 2711`，以及 `run --wait` 未开始）；1 其他错误。所有命令支持 `--json`。
+
+```bash
+good7ob automation create --name "夜间开发" --project 7 --trigger cron --cron "0 22 * * 1-5" --tags auto --budget-tokens 200000 --daily-budget-tokens 1000000
+good7ob automation update 12 --every weekly --weekday 1,3 --at 23:00
+good7ob automation preview --every monthly --day last --at 23:00 --timezone Asia/Shanghai
+good7ob automation run 12 --wait; echo $?      # 0 已开始 / 3 跳过或冲突 / 1 错误
+good7ob automation plans --source manual
+```
+
+---
+
 ## trace — 追溯关系
 
 API 端点前缀：`/forge/trace-links`（需登录 + 产品所属组织成员）。关系有方向：`source —linkType→ target`。
@@ -1410,6 +1467,57 @@ prd-0137（想法 #188，任务 #2226），后端 #992：`/api/v1/orgs/{orgId}/r
 
 ---
 
+## uc — 用户用例
+
+用户用例管理（prd-0180，契约 backend `docs/api/api-0180-use-case-management.md`）。`<uc>` 写 `UC-12`（产品内编号，需要 `--product` 或 `GOOD7OB_PRODUCT_ID`）或数字 id；`--product` 缺省读 `GOOD7OB_PRODUCT_ID`。所有命令都带 `--json`，并给请求加 `X-Client-Channel: cli`（动态里记为 CLI 来源）。查看需产品所属组织成员，编辑需组织 owner/admin；AI 员工 Key 暂时一律无权（#2357 之前）。
+
+| 命令 | 说明 |
+|---|---|
+| `uc list [--priority P0\|P1\|P2] [--actor <id>] [--sub-module <id>] [--channel <c>] [--status <列表>] [--gap <列表>] [--release <id>] [--milestone <id>] [--sort code\|priority\|status] [--order asc\|desc] [--page <n>] [--size <n>]` | 用例列表（默认按编号升序），每行带派生状态、缺口标记、流程图状态。`--status`（NOT_STARTED/PARTIAL/AVAILABLE/VERIFIED）和 `--gap`（缺口码，如 NO_ENTRY、TEST_FAILED、DIAGRAM_NOT_FRESH）可逗号分隔，满足其一即可，大小写不敏感；带它们或 `--sort status` 时服务端要先派生，范围内超过 2000 条返回 15014，加 `--priority` / `--sub-module` / `--release` / `--milestone` 缩小范围 |
+| `uc status <uc>` | 派生状态（未开始/部分/可用/已验证）及原因、逐渠道可达性（缺入口声明 / 承载 FP 未完成 / 承载 FP 已失效）与入口、缺口标记、已验证还缺哪几条（测试 / 流程图）、include 的用例状态；`--json` 原样输出 |
+| `uc metrics [--release <id>] [--milestone <id>]` | 完成度指标：先单独突出 P0，再 P1 / P2 / 合计；显示可用率、已验证率（0～1 小数显示为百分比，用例数为 0 时显示「—」不是 0%）和四种状态的数量分布。实时计算、没有历史，只作参考，不接审批或质量门禁 |
+| `uc gaps [--release <id>] [--milestone <id>]` | 缺口清单：P0 且状态为部分 / 未开始的用例，带缺口标记和「已通：API；缺：Web」 |
+| `uc show <uc>` | 详情：渠道与入口声明（未声明入口的渠道标 ⚠）、关联 FP（含失效原因）、测试用例及最近结果、四个方向的关系 |
+| `uc add --actor <id\|名称> --goal <文本> --priority <P0\|P1\|P2> --channel <WEB,APP,CLI,MCP,API> [--sub-module] [--note] [--release] [--milestone]` | 创建用例 |
+| `uc update <uc> [--actor] [--goal] [--priority] [--sub-module] [--note] [--release] [--milestone] [--clear sub-module,note,release,milestone]` | 修改。后端 PUT 是整体替换，所以先 GET 当前值、合并、再 PUT；没给的字段保持原值，要清空用 `--clear`；什么都没给不发请求 |
+| `uc delete <uc> [--confirm]` | 软删除。被其他用例 include/extend 引用时服务端返回 15007 并列出引用方，确认后加 `--confirm` 重发 |
+| `uc actors list\|add <名称>\|rename <id> <名称>\|disable <id>\|enable <id>\|delete <id>` | 产品的用例角色清单（被未删除用例引用的角色不能删，只能停用） |
+| `uc link-fp <uc> <fp>` / `uc unlink-fp <uc> <fp>` | 关联 / 取消关联 FP；`<fp>` 是 id 或编号（如 `fun-org-0001`，通过候选搜索按编号精确匹配） |
+| `uc link-test <uc> <用例>` / `uc unlink-test <uc> <用例>` | 关联 / 取消关联测试用例（id 或用例编号） |
+| `uc entry add <uc> --channel <c> --ref <入口> --fp <fp>` / `uc entry remove <uc> <entryId>` | 入口声明（承载 FP 必须已关联） |
+| `uc channels set <uc> <WEB,CLI,...>` | 设置要求渠道（完整集合；去掉的渠道其入口声明作废） |
+| `uc relation add <uc> --type include\|extend --target <uc> [--when <触发条件>]` / `uc relation remove <uc> <relationId>` | include / extend 关系；`<uc>` 是主语（`UC-4 extend UC-1`），extend 必须带 `--when`，include 不能带 |
+| `uc candidates fp [关键词]` / `uc candidates test [关键词]` `[--limit 1-50]` | 搜索可关联的 FP（含已取消/已移除并标失效）/ 测试用例（带最近结果） |
+| `uc diagrams <uc>` / `uc overviews` | 流程图 / 总图清单及新鲜度（最新、图已过期、未渲染） |
+| `uc push <uc> <源码文件> --type SEQUENCE\|ACTIVITY [--name <名称>]` | 本机渲染 PNG，**成功后才**提交源码 + 渲染记录 + PNG（一次 multipart）。渲染失败：打印 PlantUML 的报错与行号，不发任何请求，退出码非 0。`--name` 缺省取文件名；同用例内按名称找图，没有就新建、源码变了就追加版本 |
+| `uc render [--overview <key\|all>] [--diagrams] [--uc <uc>] [--all]` | 渲染并上传全部「过期或未渲染」的图（流程图 + 总图）；`--overview` / `--diagrams` / `--uc` 指定范围，`--all` 连已最新的一起重渲染。每张图独立成败，成功的保留，失败的逐张列出原因，任一失败则退出码非 0。上传遇 15013（数据已变）自动重新取源码再渲染一次 |
+| `uc import <文件或目录…> --priority P0\|P1\|P2 --channels WEB,APP,... [--product] [--submodule <id>] [--apply] [--verbose] [--json]` | 导入存量 PlantUML 用例图（prd-0180 FP-12）。**默认只预览**，加 `--apply` 才写入。详见下节「uc import」 |
+
+状态、缺口和度量都是服务端调用时现算的（不存储）；`metrics` / `gaps` 与带状态筛选的 `list` 一样，范围内用例超过 2000 条时报 15014，CLI 提示加筛选条件缩小范围。
+
+### uc import（存量用例图导入）
+
+`good7ob uc import <文件或目录…>`：把仓库里存量的 PlantUML 用例图（如 `./diagrams/*.puml`）导入为用例（`rp-ucase-0085`～`0092`）。
+
+- **只在本机做文本处理**：不渲染、不上传 `.puml` / `.png`、不执行任何 PlantUML 指令（`!include` 等当作普通行跳过）。目录**递归**查找，只收 `.puml`；显式给的非 `.puml` 文件算读取失败。
+- **只认三类行**：`actor "名称" as 别名`、`usecase "名称" as 别名`、`角色别名 --> 用例别名`（后面可带 `: 标签`）；`A ..> B : <<include>>` 导入为 include 关系（同一角色的两条用例之间各建一条）；`<<extend>>` 因缺触发条件不导入并写进报告；`rectangle` / `package` 分组、`note` 和其余虚线依赖（「基于」「审批对象」…，包括标签里写着 include / extend 但没有 `<<>>` 的）不转换，写进相关用例的补充说明。
+- **映射**：角色名取 actor 名称首行（同名角色复用，忽略大小写与空白；没有则新建）；目标取用例名称（换行改空格；超过 200 字报错、不截断）；一个节点连了多个角色，每个角色各建一条；没连角色的节点不导入并列出。
+- **必填不猜**：缺 `--priority` 或 `--channels` 直接拒绝（不读文件、不发请求）。`--submodule <id>` 可选，不给则「未分模块」。
+- **预览 / 写入**：预览列出将创建、将跳过（重复）、无法解析的行（带文件名和行号）；用产品的角色清单和用例列表做本地预判，连不上后端时仍能预览并明确提示「未做重复预判」。`--apply` 才创建，走与 `uc add` 相同的服务端校验和权限；服务端返回 15001（重复）计为「跳过」，**以服务端为准**；已有用例不会被修改。
+- **来源**：每条用例的补充说明记录「导入自 文件名」、图标题（含括号里的依据）、所在分组；**不关联 FP**，导入后带「未关联 FP」缺口，待人关联。「导入自 <文件>」的动态没有单独接口，由服务端的「创建用例」动态（来源 CLI）加补充说明承担。
+- **退出码**：无法解析的行、没连角色的节点、extend 都不算失败；有文件读取失败、或 `--apply` 时有创建失败（非重复）→ 退出码 1，成功的保留，失败的逐条列出。`--verbose` 逐条明细，`--json` 机读。
+
+### 本机渲染与安全
+
+渲染只发生在本机，不使用任何在线 PlantUML 服务，也不依赖后端渲染。依赖不随 CLI 打包：PlantUML、Graphviz（`dot`）、Java。渲染命令默认 `plantuml`，用 `GOOD7OB_PLANTUML_CMD` 覆盖（如 `java -jar /path/plantuml.jar`、`docker run --rm -i plantuml/plantuml:latest`）。
+
+- 安全档位固定 **SANDBOX**：渲染子进程环境里强制 `PLANTUML_SECURITY_PROFILE=SANDBOX`，用户环境里的值会被覆盖；PlantUML 还会优先读取 JVM 系统属性，所以 `JAVA_TOOL_OPTIONS` 等选项变量里若指定了档位会被丢弃，命令行里写档位会被拒绝。`docker run` 形式会在 `run` 之后插入 `-i --network none -e PLANTUML_SECURITY_PROFILE=SANDBOX`，并去掉用户写的同类 `-e` / `--network`。
+- 渲染前检查：命令存在、版本不低于 1.2022.0（识别不出版本也拒绝）、Java 与 Graphviz（容器形式只检查 docker）。不满足时拒绝渲染并给出安装方法，不提交任何内容。
+- PNG 超过对象文件单文件上限（100 MB）时不上传；超过 25 MB 时提示（服务端开启病毒扫描会拒绝）。
+- 源码哈希（SHA-256，换行规范化为 `\n`，UTF-8）与服务端 `UseCaseSourceHash` 一致；push 和 render 提交的都是被渲染的那份文本的哈希。
+
+---
+
 ## habit — 我的工作习惯与个人工作流
 
 API 端点：`/api/v1/me/work-habits`、`/api/v1/me/work-workflows`（prd-0127 FP-7，`rp-user-habit-0047~0051 / 0079`；契约 api-0122 / api-0124）。只操作本人数据（身份取自 API Key，接口不接收用户 ID）；规则（重名、上限、乐观锁）由后端保证，CLI 只做参数校验与展示。**CLI 不提供启动运行命令**，运行只由 Agent / AI 员工经 MCP 启动。内容只打印到终端或 `--out` 指定的文件，不写日志文件。时间按 JST 显示。`--json` 输出接口返回的原始 `data`（接口无返回数据的 `remove` / `reject` 输出 `{id, removed:true}` / `{id, rejected:true}`）。**本期不含** `extract` / `workflow generate` / 修订 / 草稿 / 示例子命令（api-0124 §13 不在 CLI 范围），AI 提取与生成请用页面。
@@ -1523,7 +1631,7 @@ good7ob habit workflow add --name 每日开工 --scene daily --step 看待办 --
 
 ## API 集成
 
-**Base URL：** `https://api.good7ob.net`（可通过环境变量覆盖）
+**Base URL：** `https://api.good7ob.com`（发布版固定生产；dev 见上文 `dev-env.json`）
 
 **认证方式：** `Authorization: Bearer <api-key>`
 

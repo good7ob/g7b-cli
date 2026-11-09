@@ -44,15 +44,29 @@ Configuration is stored in:
 
 Default values:
 
-- `apiUrl`: `https://api.good7ob.net`
+- API address: fixed to `https://api.good7ob.com` (production). It cannot be configured, and `apiUrl` in the file is ignored.
 - `apiKey`: empty
+
+### Dev / test installs
+
+A release install always talks to production. To reach another environment, clone the repository a second time and mark
+that clone as a dev install by creating `dev-env.json` next to `package.json` (it is git-ignored and not published):
+
+```bash
+echo '{"name":"dev","apiUrl":"https://api-dev.good7ob.net"}' > dev-env.json
+npm install && npm run build
+```
+
+The dev clone talks to that address and keeps its own config and local state in `~/.good7ob-dev` (production uses
+`~/.good7ob`), so the two never share a key, an org, a project or a work slot and can be used side by side on one machine.
+A dev clone prints `[good7ob] 使用 dev 环境：<地址>` on stderr for every command. Give it its own command name, e.g.
+`alias good7ob-dev='node /path/to/dev-clone/dist/index.js'`.
 
 ### Common config commands
 
 ```bash
-good7ob config set api-url https://api.good7ob.net
 good7ob config set api-key g7b_sk_your_api_key_here
-good7ob config get api-url
+good7ob config get api-key
 good7ob config list
 good7ob config clear-credentials
 good7ob config reset

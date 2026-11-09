@@ -6,3 +6,6 @@ dist/
 
 # Claude Code local state (settings.local.json, session traces)
 .claude/
+
+# marks a clone as a dev install (see src/services/flavor.ts); never committed or published
+dev-env.json

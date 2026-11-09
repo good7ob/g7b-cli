@@ -9,7 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { dataDir } from './flavor';
 
 export interface WorktreeEntry {
   taskId: string;
@@ -56,7 +56,7 @@ export class WorktreeStateService {
   constructor(private readonly options: WorktreeStateOptions = {}) {}
 
   private get stateDir(): string {
-    return this.options.stateDir ?? path.join(os.homedir(), '.good7ob');
+    return this.options.stateDir ?? dataDir();
   }
 
   get stateFile(): string {
