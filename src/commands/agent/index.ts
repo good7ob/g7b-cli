@@ -9,7 +9,9 @@
 import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import configService from '../../services/ConfigService';
-import { InputError, parseId } from '../../utils/cliHelpers';
+import { InputError, collect, parseId } from '../../utils/cliHelpers';
+import { describeRunError, doneBody, stepLost } from '../run/input';
+import { describeFinish, finishStep, resolveOrg } from '../run/steps';
 import { INTERVAL_MS as HEARTBEAT_INTERVAL_MS, finish as finishHeartbeat, sendBeat } from '../heartbeat';
 import { runLoop } from '../heartbeat/loop';
 import { writeEntry as writeHeartbeatEntry } from '../heartbeat/state';
@@ -278,14 +280,42 @@ export function registerAgentCommands(program: Command) {
 
   agent
     .command('done <taskId>')
-    .description('Mark the task finished on the backend and free the local slot')
-    .option('--status <status>', 'Target status (e.g. awaiting_completion_approval for gated tasks)', 'completed')
-    .action(async (taskId, opts) => {
+    .description('Finish the task and free the local slot. A slot holding a run step reports `run step done` (the run engine moves the task); otherwise the task status is set directly')
+    .option('--status <status>', 'Target status (e.g. awaiting_completion_approval for gated tasks); not used for a run step', 'completed')
+    .option('--summary <text>', 'Run step: completion summary (≤ 500 chars)')
+    .option('--pr <url>', 'Run step: PR link (repeatable)', collect, [])
+    .option('--no-step', 'Even when the slot holds a run step, set the task status directly (old path; the run engine follows the task status)')
+    .action(async (taskId, opts, cmd: Command) => {
+      let id: number;
+      let store: AgentStateStore;
+      let slot: AgentState;
       try {
-        const id = parseId(taskId, 'taskId');
+        id = parseId(taskId, 'taskId');
+        store = new AgentStateStore();
+        slot = store.read();
+      } catch (e) {
+        return fail('更新任务状态失败', e);
+      }
+      // prd-0137 / design n3 §7: a slot claimed from a scheduler assignment carries its step → report the step.
+      if (opts.step !== false && slot.status !== 'idle' && slot.taskId === id && slot.stepId != null && slot.runId != null) {
+        try {
+          if (cmd.getOptionValueSource('status') === 'cli') {
+            console.error(`! 本地工作槽持有运行 #${slot.runId} 的步骤 #${slot.stepId}：任务状态由运行引擎推进，--status ${opts.status} 未使用（需要直接改任务状态请加 --no-step）`);
+          }
+          const target = { runId: slot.runId, stepId: slot.stepId, fromSlot: true };
+          const orgId = await resolveOrg(apiClient, undefined, slot.orgId ?? undefined);
+          const r = await finishStep(apiClient, store, orgId, target, 'done', doneBody({ summary: opts.summary, pr: opts.pr }));
+          console.log(describeFinish('done', target, r));
+        } catch (e) {
+          console.error(e instanceof InputError ? `✗ 参数错误: ${e.message}` : `✗ 回报步骤完成失败: ${describeRunError(e)}`);
+          if (stepLost(e)) console.error('  该步骤已不属于本机：确认后用 good7ob agent reset --keep-runner 清空本地槽，或加 --no-step 直接改任务状态');
+          process.exit(1);
+        }
+        return;
+      }
+      try {
         // Backend state machine errors (e.g. gated tasks) are surfaced verbatim by ApiClient.
         await apiClient.put(`/progress/tasks/${id}`, { status: opts.status });
-        const store = new AgentStateStore();
         await store.withLock(async () => {
           const cur = store.read();
           if (cur.status !== 'idle' && cur.taskId !== id) {

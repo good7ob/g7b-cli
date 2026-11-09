@@ -2,7 +2,9 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { extractRecords } from '../../utils/extractRecords';
 import { registerAgentReportCommands } from './report';
-import { fmtDateTime } from '../../utils/cliHelpers';
+import { InputError, fmtDateTime } from '../../utils/cliHelpers';
+import { AgentState, AgentStateStore } from '../agent/state';
+import { workRecordRunLink } from '../run/input';
 
 export function registerLogCommands(program: Command) {
   const logCommand = program
@@ -31,9 +33,20 @@ export function registerLogCommands(program: Command) {
     .option('--tags <tags>', 'Comma-separated tags')
     .option('--remark <text>', 'Remarks')
     .option('--completed-at <datetime>', 'Completion time (ISO format, default: now)')
+    .option('--run-id <id>', 'Automation run ID (prd-0137; default: the run step held by the local agent slot)')
+    .option('--step-id <id>', 'Run step ID (must work on --task-id; default: the local agent slot\'s step)')
+    .option('--node-code <code>', 'Workflow node code (default: the local agent slot\'s node)')
+    .option('--no-run-link', 'Do not attach the run step held by the local agent slot')
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
+        let slot: AgentState | null = null;
+        try {
+          slot = new AgentStateStore().read();
+        } catch {
+          /* a corrupt slot file must not block saving the record */
+        }
+        const link = workRecordRunLink(options, slot);
         const body: any = {
           summary: options.summary,
           aiAgent: options.agent,
@@ -54,15 +67,28 @@ export function registerLogCommands(program: Command) {
         if (options.parentId) body.parentId = parseInt(options.parentId);
         if (options.tags) body.tags = options.tags;
         if (options.remark) body.remark = options.remark;
+        if (link.taskId !== undefined) body.taskId = link.taskId;
+        if (link.runId !== undefined) body.runId = link.runId;
+        if (link.stepId !== undefined) body.stepId = link.stepId;
+        if (link.nodeCode !== undefined) body.nodeCode = link.nodeCode;
+        if (link.fromSlot && !options.json) {
+          console.error(`· 已关联运行 #${link.runId ?? '-'} 步骤 #${link.stepId} 节点 ${link.nodeCode ?? '-'}（取自本地工作槽；--no-run-link 关闭）`);
+        }
 
         const record = await apiClient.post('/forge/ai-work-record', body);
         if (options.json) {
           console.log(JSON.stringify(record, null, 2));
           return;
         }
-        console.log(`✓ 工作日志已保存: [${record?.id || ''}] ${options.summary.substring(0, 60)}`);
+        console.log(`✓ 工作日志已保存: [${record?.id || ''}] ${options.summary.substring(0, 60)}${record?.stepId != null ? `（运行 #${record.runId ?? '-'} 步骤 #${record.stepId}）` : ''}`);
       } catch (error) {
-        console.error('✗ 保存工作日志失败:', error instanceof Error ? error.message : String(error));
+        if (error instanceof InputError) {
+          console.error(`✗ 参数错误: ${error.message}`);
+          process.exit(1);
+        }
+        const code = (error as { code?: unknown } | null)?.code;
+        const hint = code === 1001 && /步骤|step|runId/i.test(error instanceof Error ? error.message : '') ? '（--step-id 必须属于 --task-id 的任务；--no-run-link 可不关联本地槽的步骤）' : '';
+        console.error('✗ 保存工作日志失败:', `${error instanceof Error ? error.message : String(error)}${hint}`);
         process.exit(1);
       }
     });

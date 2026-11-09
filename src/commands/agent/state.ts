@@ -19,6 +19,10 @@ export interface SlotTask {
   runId?: number | null;
   stepId?: number | null;
   nodeCode?: string | null;
+  /** prd-0137: org of the run (when the queue item / claimed task carries it), so `run …` needs no --org-id. */
+  orgId?: number | null;
+  /** prd-0137 `run log append`: last log segment seq sent for this step (runner-local, from 1). */
+  logSeq?: number;
   /** ISO time the heartbeat told us to stop this step (the backend released it already). */
   stopRequestedAt?: string;
 }
@@ -83,6 +87,7 @@ export function busyState(
   if (t.runId != null) slot.runId = t.runId;
   if (t.stepId != null) slot.stepId = t.stepId;
   if (t.nodeCode) slot.nodeCode = t.nodeCode;
+  if (t.orgId != null) slot.orgId = t.orgId;
   return slot;
 }
 
