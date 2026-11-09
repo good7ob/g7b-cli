@@ -45,6 +45,7 @@ import { registerHabitCommands } from './commands/habit';
 import { registerArtifactCommands } from './commands/artifact';
 import { registerFeatCommands } from './commands/feat';
 import { registerDeliverableCommands } from './commands/deliverable';
+import { registerAutomationCommands } from './commands/automation';
 import { registerUcCommands } from './commands/uc';
 import { registerCompetitorCommands } from './commands/competitor';
 
@@ -95,6 +96,7 @@ registerHabitCommands(program);
 registerArtifactCommands(program);
 registerFeatCommands(program);
 registerDeliverableCommands(program);
+registerAutomationCommands(program);
 registerUcCommands(program);
 registerCompetitorCommands(program);
 
