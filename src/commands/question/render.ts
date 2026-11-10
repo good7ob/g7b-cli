@@ -62,6 +62,10 @@ export function renderQuestionDetail(q: Question): string {
   return lines.join('\n');
 }
 
+export function renderAmendOutcome(r: AnswerResult): string {
+  return `✓ 已修改 Question #${r.id} 的回答（旧答案留在审计记录里，创建人与原回答人会收到通知）`;
+}
+
 export function renderAnswerOutcome(r: AnswerResult): string {
   if (r.status === 'pending_approval') {
     return `✓ 已回答 Question #${r.id}，转入待审批${r.approvalId ? `，审批单 #${r.approvalId}（good7ob approval get ${r.approvalId}）` : ''}`;
