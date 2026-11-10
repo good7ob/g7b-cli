@@ -100,7 +100,7 @@ export interface Collected {
 
 /**
  * gh caps one query at 200 rows. When a page comes back full, repeat the query with an extra
- * `updated:<=<oldest updatedAt of that page>` (rows are newest-updated first) until a page has < 200 rows.
+ * `updated:<=<oldest updatedAt of that page>` (the query pins `sort:updated-desc`; gh's default is newest-CREATED first, which made the cutoff skip rows) until a page has < 200 rows.
  * The boundary row repeats, so rows are de-duplicated by PR number; a full page that adds nothing new
  * (200+ PRs sharing one timestamp) stops the loop. At most `maxPages` pages; `capped` tells the caller to warn.
  */
@@ -111,14 +111,16 @@ export async function collectPrs(
   maxPages: number = MAX_PAGES,
 ): Promise<Collected> {
   const byNumber = new Map<number, GhPr>();
-  let search = `updated:>=${since}`;
+  // fix: gh pr list --search defaults to created-desc; the paging below needs updated-desc or rows are skipped
+  const order = 'sort:updated-desc';
+  let search = `updated:>=${since} ${order}`;
   for (let page = 1; page <= maxPages; page++) {
     const rows = await fetchPage(search);
     const before = byNumber.size;
     rows.forEach((r) => byNumber.set(r.number, r));
     if (rows.length < PAGE_SIZE || byNumber.size === before) return { rows: [...byNumber.values()], capped: false };
     const oldest = rows.reduce((a, r) => (r.updatedAt < a ? r.updatedAt : a), rows[0].updatedAt);
-    search = `updated:>=${since} updated:<=${oldest}`;
+    search = `updated:>=${since} updated:<=${oldest} ${order}`;
   }
   return { rows: [...byNumber.values()], capped: true };
 }
