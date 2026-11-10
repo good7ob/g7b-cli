@@ -5,7 +5,7 @@ import {
   QUESTION_ERROR_CODES, SOURCES, STATUSES, TYPES, buildAnswerBody, buildCreateBody, buildListParams,
 } from './input';
 import {
-  AnswerResult, Question, renderAnswerOutcome, renderQuestionDetail, renderQuestionList,
+  AnswerResult, Question, renderAmendOutcome, renderAnswerOutcome, renderQuestionDetail, renderQuestionList,
 } from './render';
 
 /**
@@ -86,15 +86,21 @@ export function registerQuestionCommands(program: Command) {
     .description('Answer a question: --option <key> for choice, --text for text (or as a note on choice)')
     .option('--option <key>', 'Chosen option key (choice)')
     .option('--text <text>', 'Answer text (text) or supplementary note (choice)')
+    .option('--update', 'Amend the answer of an already answered question (only the answer and its time change)')
     .option('--json', 'Output as JSON')
     .action(async (id, o) => {
       try {
         const qid = parseId(id, 'id');
         const body = buildAnswerBody(o);
+        if (o.update) {
+          const amended: AnswerResult = await apiClient.put(`${BASE}/${qid}/answer`, body);
+          emit(o.json, amended, () => renderAmendOutcome(amended ?? { id: qid }));
+          return;
+        }
         const result: AnswerResult = await apiClient.post(`${BASE}/${qid}/answer`, body);
         emit(o.json, result, () => renderAnswerOutcome(result ?? { id: qid }));
       } catch (error) {
-        fail('回答 Question 失败', error, QUESTION_ERROR_CODES);
+        fail(o.update ? '修改回答失败' : '回答 Question 失败', error, QUESTION_ERROR_CODES);
       }
     });
 }

@@ -86,4 +86,19 @@ describe('question answer', () => {
     await expectRejected(['answer', '7'], '至少给一个');
     await expectRejected(['answer', 'x', '--text', 'hi'], 'id');
   });
+
+  it('--update PUTs the new answer instead of POSTing (g7b #2348)', async () => {
+    const r = await question(['answer', '7', '--option', 'b', '--update'], ok({ id: 7, status: 'answered', answerOptionKey: 'b' }));
+    expect(r.exitCode).toBeUndefined();
+    expect(r.http.put).toHaveBeenCalledWith('/forge/questions/7/answer', { answerOptionKey: 'b' });
+    expect(r.http.post).not.toHaveBeenCalled();
+    expect(r.stdout).toContain('已修改');
+  });
+
+  it('--update still needs an answer and maps 1007 (approval questions)', async () => {
+    await expectRejected(['answer', '7', '--update'], '至少给一个');
+    const r = await question(['answer', '7', '--text', 'x', '--update'], bizError(1007, '需要审批的问题暂不支持修改回答'));
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('修改回答失败');
+  });
 });
