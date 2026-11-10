@@ -20,6 +20,43 @@ function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: str
 
 const EXECUTOR_TYPES = ['HUMAN', 'AGENT'];
 
+/** Statuses shown in `--status` help (idea #210 adds awaiting_completion_approval = 完成待验收). */
+const STATUS_HELP =
+  'not_started|in_progress|completed|awaiting_completion_approval|blocked|cancelled|on_hold';
+
+/** Printed when a completion was stored as awaiting_completion_approval (idea #210). */
+export const ACCEPTANCE_SUBMITTED = '已提交验收（完成待验收），等待在成果验证中通过';
+
+const MAX_REASON = 500;
+
+/**
+ * `--skip-acceptance --reason <text>` → the update body fields (idea #210 R3). Only meaningful together with
+ * `--status completed`; the server decides who may skip (task owner only, never an AI employee).
+ */
+export function skipAcceptanceFields(options: {
+  skipAcceptance?: boolean;
+  reason?: string;
+  status?: string;
+}): Record<string, unknown> {
+  if (!options.skipAcceptance) {
+    if (options.reason !== undefined) throw new InputError('--reason 只能与 --skip-acceptance 一起使用');
+    return {};
+  }
+  if (options.status !== 'completed') {
+    throw new InputError('--skip-acceptance 需要同时指定 --status completed');
+  }
+  const reason = (options.reason ?? '').trim();
+  if (!reason) throw new InputError('--skip-acceptance 需要用 --reason 写明理由（如「已人工验证」）');
+  if (reason.length > MAX_REASON) throw new InputError(`--reason 不能超过 ${MAX_REASON} 字`);
+  return { skipAcceptance: true, skipAcceptanceReason: reason };
+}
+
+/** Whether the server routed a requested completion to acceptance (flag, or a different stored status). */
+export function wentToAcceptance(task: any, requestedStatus?: string): boolean {
+  if (task?.acceptanceRequired === true) return true;
+  return requestedStatus === 'completed' && task?.status === 'awaiting_completion_approval';
+}
+
 /**
  * An AI employee only owns a task whose executor is AGENT + `emp:<employeeId>` (prd-0089 rp-ws-ai-0002),
  * so `--ai-employee 5` is the short form of `--executor-type AGENT --executor-id emp:5`.
@@ -63,7 +100,7 @@ export function registerTaskCommands(pmCommand: Command) {
   taskCommand
     .command('list [project-id]')
     .description('List tasks in a project')
-    .option('--status <status>', 'Filter by status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
+    .option('--status <status>', `Filter by status (${STATUS_HELP})`)
     .option('--include-on-hold', 'Include on_hold tasks (hidden by default; --status on_hold also shows them)')
     .option('--priority <priority>', 'Filter by priority (high|medium|low)')
     .option('--tags <tags>', 'Filter by tag names (comma-separated)')
@@ -239,7 +276,14 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--description <desc>', 'Task description')
     .option(...prdOption)
     .option('--priority <priority>', 'Priority (high|medium|low)')
-    .option('--status <status>', 'Status (not_started|in_progress|completed|blocked|cancelled|on_hold)')
+    .option(
+      '--status <status>',
+      `Status (${STATUS_HELP}). In a product-linked project, completing an AI-implemented task stores ` +
+        'awaiting_completion_approval (完成待验收) until it is accepted on the product\'s 成果验证 tab'
+    )
+    .option('--skip-acceptance', 'With --status completed: complete without acceptance (task owner only, needs --reason)')
+    .option('--reason <text>', 'Why acceptance is skipped (1-500 chars, e.g. 已人工验证)')
+    .option('--json', 'Output the updated task as JSON')
     .option('--deadline <date>', 'Deadline (YYYY-MM-DD)')
     .option('--planned-start-date <date>', 'Planned start date (YYYY-MM-DD)')
     .option('--planned-end-date <date>', 'Expected completion / planned end date (YYYY-MM-DD)')
@@ -253,7 +297,7 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--executor-id <id>', 'Executor: user ID for HUMAN; AI employee ID / emp:<id> or agent id for AGENT')
     .action(async (id, options) => {
       try {
-        const body: any = { ...plannedDates(options), ...executorFields(options) };
+        const body: any = { ...plannedDates(options), ...executorFields(options), ...skipAcceptanceFields(options) };
         if (options.name) body.name = options.name;
         if (options.description) body.description = options.description;
         if (options.prd?.length) {
@@ -272,8 +316,16 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.estimatedHours) body.estimatedHours = parseFloat(options.estimatedHours);
         if (options.actualHours) body.actualHours = parseFloat(options.actualHours);
 
-        await apiClient.put(`/progress/tasks/${id}`, body);
-        console.log(`✓ 任务已更新: ${id}`);
+        const task = await apiClient.put(`/progress/tasks/${id}`, body);
+        if (options.json) {
+          console.log(JSON.stringify(task, null, 2));
+          return;
+        }
+        if (wentToAcceptance(task, options.status)) {
+          console.log(`✓ ${ACCEPTANCE_SUBMITTED}: ${id}`);
+        } else {
+          console.log(`✓ 任务已更新: ${id}`);
+        }
       } catch (error) {
         console.error('✗ 更新任务失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
@@ -439,22 +491,61 @@ export function registerTaskCommands(pmCommand: Command) {
     });
 
   taskCommand
+    .command('submit-acceptance <id>')
+    .description('提交验收：进行中 → 完成待验收（awaiting_completion_approval），在产品「成果验证」中由人通过 / 退回')
+    .option('--summary <text>', 'What was delivered, for the verifier (≤ 500 chars)')
+    .option('--json', 'Output the task as JSON')
+    .action(async (idArg, options) => {
+      try {
+        const id = parseId(idArg, '<id>');
+        const body: Record<string, string> = {};
+        if (options.summary !== undefined) {
+          const summary = String(options.summary).trim();
+          if (summary.length > MAX_REASON) throw new InputError(`--summary 不能超过 ${MAX_REASON} 字`);
+          if (summary) body.summary = summary;
+        }
+        const task = await apiClient.post(`/progress/tasks/${id}/submit-acceptance`, body);
+        if (options.json) {
+          console.log(JSON.stringify(task, null, 2));
+          return;
+        }
+        console.log(`✓ ${ACCEPTANCE_SUBMITTED}: ${id}`);
+      } catch (error) {
+        console.error('✗ 提交验收失败:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+    });
+
+  taskCommand
     .command('batch-update')
     .description('Batch update multiple tasks')
     .requiredOption('--ids <ids>', 'Comma-separated task IDs')
-    .option('--status <status>', 'New status for all tasks')
+    .option('--status <status>', `New status for all tasks (${STATUS_HELP})`)
     .option('--priority <priority>', 'New priority for all tasks')
     .option('--owner-id <id>', 'New owner for all tasks')
+    .option('--skip-acceptance', 'With --status completed: complete without acceptance (task owner only, needs --reason)')
+    .option('--reason <text>', 'Why acceptance is skipped (1-500 chars)')
     .action(async (options) => {
       try {
-        const ids = options.ids.split(',').map((id: string) => parseInt(id.trim()));
-        const updates: any = { ids };
+        const ids = String(options.ids)
+          .split(',')
+          .map((v: string) => v.trim())
+          .filter(Boolean)
+          .map((v: string) => parseId(v, '--ids'));
+        // the backend reads taskIds (BatchUpdateTaskDto); `ids` was silently ignored
+        const updates: any = { taskIds: ids, ...skipAcceptanceFields(options) };
         if (options.status) updates.status = options.status;
         if (options.priority) updates.priority = options.priority;
         if (options.ownerId) updates.ownerId = parseInt(options.ownerId);
 
-        await apiClient.put('/progress/tasks/batch', updates);
-        console.log(`✓ 已批量更新 ${ids.length} 个任务`);
+        const result = await apiClient.put('/progress/tasks/batch', updates);
+        // idea #210: { successCount, failedCount, acceptanceRequired, acceptanceRequiredTaskIds }; older servers: a count
+        const updated = typeof result === 'number' ? result : result?.successCount ?? ids.length;
+        console.log(`✓ 已批量更新 ${updated} 个任务`);
+        const awaiting: number[] = Array.isArray(result?.acceptanceRequiredTaskIds) ? result.acceptanceRequiredTaskIds : [];
+        if (awaiting.length) {
+          console.log(`✓ ${ACCEPTANCE_SUBMITTED}: ${awaiting.join(', ')}`);
+        }
       } catch (error) {
         console.error('✗ 批量更新失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);

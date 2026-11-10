@@ -544,6 +544,7 @@ API 端点前缀：`/progress/tasks`
 | `pm task get <id>` | 查看任务详情（含执行者类型、阻塞原因等） |
 | `pm task create` | 创建任务（project-id 和 name 必填） |
 | `pm task update <id>` | 更新任务 |
+| `pm task submit-acceptance <id>` | 提交验收：进行中 → 完成待验收，在产品「成果验证」中由人通过 / 退回 |
 | `pm task move <ids...>` | 把一个或多个任务移到另一个项目（带前置校验） |
 | `pm task delete <id>` | 删除任务（需 `-f` 确认） |
 | `pm task batch-update` | 批量更新多个任务的状态/优先级/负责人 |
@@ -552,7 +553,7 @@ API 端点前缀：`/progress/tasks`
 
 | 选项 | 说明 |
 |------|------|
-| `--status` | 状态过滤（not_started\|in_progress\|completed\|blocked\|cancelled） |
+| `--status` | 状态过滤（not_started\|in_progress\|completed\|awaiting_completion_approval\|blocked\|cancelled\|on_hold） |
 | `--priority` | 优先级过滤（high\|medium\|low） |
 | `--tags` | 按标签过滤（逗号分隔） |
 | `--parent-task-id` | 列出指定父任务的子任务 |
@@ -570,6 +571,13 @@ API 端点前缀：`/progress/tasks`
 | `--deadline` | 截止日期（YYYY-MM-DD） |
 | `--owner-id` | 负责人用户 ID |
 | `--parent-task-id` | 父任务 ID（创建子任务） |
+
+**完成与验收（想法 #210）：** 关联了产品的项目里，AI 员工（CLI / MCP / API 的 AI 员工 Key）把任务改为
+`completed`，或执行人是 AI 员工的任务被改为 `completed` 时，平台实际存为 `awaiting_completion_approval`（完成待验收），
+任务出现在产品「成果验证」页签。此时 `pm task update` / `batch-update` 打印
+「已提交验收（完成待验收），等待在成果验证中通过」。任务负责人可 `--status completed --skip-acceptance --reason <理由>`
+跳过验收直接完成（写任务动态与审计）；AI 员工不能跳过（2000）。`pm task submit-acceptance <id> [--summary <说明>]`
+显式提交验收（仅进行中的任务，否则 1007）。
 
 **`pm task move` 选项：**
 
@@ -608,6 +616,7 @@ API 端点前缀：`/progress/tasks`
 | `--status` | 批量设置状态 |
 | `--priority` | 批量设置优先级 |
 | `--owner-id` | 批量设置负责人 |
+| `--skip-acceptance` / `--reason` | 与 `--status completed` 一起：负责人跳过验收直接完成（理由 1–500 字） |
 
 ---
 
