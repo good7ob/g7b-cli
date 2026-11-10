@@ -160,3 +160,13 @@ describe('untrusted text', () => {
     expect(renderTable([['x', 'y\x1b[31m!']])).not.toContain('\x1b');
   });
 });
+
+describe('csvCell', () => {
+  it('quotes, doubles quotes and defuses a leading formula character', async () => {
+    const { csvCell } = await import('../cliHelpers');
+    expect(csvCell('a "b", c')).toBe('"a ""b"", c"');
+    expect(csvCell('=HYPERLINK("http://x")')).toBe('"\'=HYPERLINK(""http://x"")"');
+    expect(csvCell('-1+1')).toBe('"\'-1+1"');
+    expect(csvCell(null)).toBe('""');
+  });
+});

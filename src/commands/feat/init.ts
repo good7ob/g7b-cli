@@ -2,9 +2,10 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import apiClient from '../../services/ApiClient';
 import { generateEnvelopeTemplate } from '../../templates/taskEnvelope';
+import { buildMirrorPayload, mirrorArgs } from './mirror';
 
 function toKebabCase(str: string): string {
   return str
@@ -16,12 +17,14 @@ function toKebabCase(str: string): string {
 function safeGitBranch(repoDir: string, branchName: string) {
   try {
     if (!fs.existsSync(repoDir)) return;
-    const status = execSync('git status --porcelain', { cwd: repoDir, encoding: 'utf8' }).trim();
+    const status = execFileSync('git', ['status', '--porcelain'], { cwd: repoDir, encoding: 'utf8' }).trim();
     if (status.length > 0) {
       console.warn(chalk.yellow(`  ⚠ 仓库 ${path.basename(repoDir)} 存在未提交修改，已跳过自动分支切换以防代码覆盖`));
       return;
     }
-    execSync(`git checkout -B ${branchName}`, { cwd: repoDir, encoding: 'utf8', stdio: 'pipe' });
+    // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+    // argv, not a shell line: the branch name carries an id from the server
+    execFileSync('git', ['checkout', '-B', branchName], { cwd: repoDir, encoding: 'utf8', stdio: 'pipe' });
     console.log(chalk.gray(`  ✓ ${path.basename(repoDir)}: 切换至分支 '${branchName}'`));
   } catch (err: any) {
     console.warn(chalk.yellow(`  ⚠ ${path.basename(repoDir)} 分支切换跳过: ${err?.message || err}`));
@@ -124,33 +127,9 @@ export function registerInitCommand(featCommand: Command) {
         const adminDbPath = path.resolve(process.env.ADMIN_DB_PATH || '/Users/talkbear/Work/admin/prisma/dev.db');
         if (fs.existsSync(adminDbPath)) {
           try {
-            // Using sqlite3 CLI if available or python
-            const mirrorScript = `
-import sqlite3, uuid, datetime
-conn = sqlite3.connect('${adminDbPath}')
-cur = conn.cursor()
-cur.execute("SELECT id FROM Project WHERE good7obProjectId=${projectId}")
-row = cur.fetchone()
-if row:
-    proj_id = row[0]
-    p_id = 'c' + uuid.uuid4().hex[:24]
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    cur.execute("INSERT INTO Task (id, title, description, status, priority, good7obTaskId, good7obUrl, estimatedHours, projectId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (p_id, "${featName} 全生命周期规范实施", "标准流水线 Parent 任务", "not_started", "high", ${parentId}, "https://good7ob.net/projectManagement/detail/${projectId}?taskId=${parentId}", 15.0, proj_id, now, now))
-    cur.execute("INSERT INTO Task (id, title, description, status, priority, good7obTaskId, good7obUrl, estimatedHours, projectId, parentId, artifactType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ('c' + uuid.uuid4().hex[:24], "PRD: ${featName} (good7ob/prd)", "", "not_started", "high", ${sub1.id}, "https://good7ob.net/projectManagement/detail/${projectId}?taskId=${sub1.id}", 4.0, proj_id, p_id, "design_doc", now, now))
-    cur.execute("INSERT INTO Task (id, title, description, status, priority, good7obTaskId, good7obUrl, estimatedHours, projectId, parentId, artifactType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ('c' + uuid.uuid4().hex[:24], "Wireframe: ${featName} (good7ob/wireframe)", "", "not_started", "high", ${sub2.id}, "https://good7ob.net/projectManagement/detail/${projectId}?taskId=${sub2.id}", 3.5, proj_id, p_id, "design_doc", now, now))
-    cur.execute("INSERT INTO Task (id, title, description, status, priority, good7obTaskId, good7obUrl, estimatedHours, projectId, parentId, artifactType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ('c' + uuid.uuid4().hex[:24], "详细设计: ${featName} (good7ob/detailed-design-document)", "", "not_started", "high", ${sub3.id}, "https://good7ob.net/projectManagement/detail/${projectId}?taskId=${sub3.id}", 4.0, proj_id, p_id, "design_doc", now, now))
-    cur.execute("INSERT INTO Task (id, title, description, status, priority, good7obTaskId, good7obUrl, estimatedHours, projectId, parentId, artifactType, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        ('c' + uuid.uuid4().hex[:24], "测试用例与 E2E: ${featName} (front-web/e2e)", "", "not_started", "high", ${sub4.id}, "https://good7ob.net/projectManagement/detail/${projectId}?taskId=${sub4.id}", 3.5, proj_id, p_id, "test_report", now, now))
-    conn.commit()
-    print("OK")
-else:
-    print("NO_PROJECT")
-`;
-            const out = execSync(`python3 -c "${mirrorScript.replace(/"/g, '\\"')}"`, { encoding: 'utf8' }).trim();
+            // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+            // argv, not a shell line: the name and the ids are data for a constant script (see mirror.ts)
+            const out = execFileSync('python3', mirrorArgs(buildMirrorPayload(adminDbPath, projectId, featName, parentId, [sub1.id, sub2.id, sub3.id, sub4.id])), { encoding: 'utf8' }).trim();
             if (out.includes('OK')) {
               console.log(chalk.green('  ✓ 成功镜像至本地项目任务列表'));
             } else {

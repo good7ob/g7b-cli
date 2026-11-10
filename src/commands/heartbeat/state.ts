@@ -41,8 +41,9 @@ export function readEntry(agentPid: number): LoopEntry | null {
 }
 
 export function writeEntry(entry: LoopEntry): void {
-  fs.mkdirSync(dir(), { recursive: true });
-  fs.writeFileSync(fileOf(entry.agentPid), JSON.stringify(entry));
+  // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+  fs.mkdirSync(dir(), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(fileOf(entry.agentPid), JSON.stringify(entry), { mode: 0o600 });
 }
 
 export function removeEntry(agentPid: number): void {

@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough, Readable } from 'stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { saveUrlTo } from '../download';
+import { assertHttpsRedirect, saveUrlTo } from '../download';
 
 let dir: string;
 beforeEach(() => {
@@ -80,5 +80,18 @@ describe('saveUrlTo', () => {
     await expect(pending).rejects.toThrow('connection reset');
     expect(fs.readFileSync(existing, 'utf8')).toBe('old');
     expect(fs.readdirSync(dir)).toEqual(['keep2.txt']);
+  });
+});
+
+describe('assertHttpsRedirect', () => {
+  it('lets an https hop through and refuses anything else', () => {
+    expect(() => assertHttpsRedirect({ protocol: 'https:' })).not.toThrow();
+    expect(() => assertHttpsRedirect({ protocol: 'http:' })).toThrow('非 https');
+  });
+
+  it('is what saveUrlTo hands to axios for every redirect', async () => {
+    const get = vi.spyOn(axios, 'get').mockResolvedValue({ data: Readable.from([Buffer.from('x')]) });
+    await saveUrlTo('https://signed.example/x', path.join(dir, 'r.txt'));
+    expect((get.mock.calls[0][1] as { beforeRedirect?: unknown }).beforeRedirect).toBe(assertHttpsRedirect);
   });
 });
