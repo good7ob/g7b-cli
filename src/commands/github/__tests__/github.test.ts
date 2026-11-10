@@ -59,6 +59,8 @@ describe('collectPrs', () => {
     const r = await collectPrs('o/r', '2026-10-01', fetchPage);
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(fetchPage.mock.calls[1][0]).toContain('updated:<=2026-10-05T00:00:00Z');
+    // gh defaults to created-desc; without this every page after the first can skip PRs
+    fetchPage.mock.calls.forEach((c) => expect(c[0]).toContain('sort:updated-desc'));
     expect(r.rows).toHaveLength(201); // 801 de-duplicated
     expect(r.capped).toBe(false);
   });
