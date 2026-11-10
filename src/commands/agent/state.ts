@@ -118,9 +118,10 @@ export class AgentStateStore {
   }
 
   private writeRaw(raw: Record<string, any>): void {
-    fs.mkdirSync(this.dir, { recursive: true });
+    // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+    fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const tmp = `${this.file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(raw, null, 2), 'utf-8');
+    fs.writeFileSync(tmp, JSON.stringify(raw, null, 2), { encoding: 'utf-8', mode: 0o600 });
     fs.renameSync(tmp, this.file);
   }
 
@@ -156,7 +157,7 @@ export class AgentStateStore {
    * ponytail: two waiters seeing the same stale lock can race; only after a crash, add owner-pid check if it bites.
    */
   async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    fs.mkdirSync(this.dir, { recursive: true });
+    fs.mkdirSync(this.dir, { recursive: true, mode: 0o700 });
     const start = Date.now();
     for (;;) {
       try {

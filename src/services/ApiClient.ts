@@ -36,11 +36,11 @@ export interface MultipartPart {
 
 // fix: #564 https://github.com/good7ob/backend/issues/564
 // /api/infra/** is isolated per organization: the backend requires X-Org-Id on those calls.
-export function withInfraOrg(config: AxiosRequestConfig, orgId: number | undefined): AxiosRequestConfig {
+export function withInfraOrg<T extends AxiosRequestConfig>(config: T, orgId: number | undefined): T {
   if (!orgId || !config.url?.startsWith('/api/infra') || config.headers?.['X-Org-Id']) {
     return config;
   }
-  return { ...config, headers: { ...config.headers, 'X-Org-Id': String(orgId) } };
+  return { ...config, headers: { ...config.headers, 'X-Org-Id': String(orgId) } } as T;
 }
 
 export class ApiClient {

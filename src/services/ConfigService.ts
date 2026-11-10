@@ -73,7 +73,8 @@ export class ConfigService {
 
     try {
       if (!fs.existsSync(this.configDir)) {
-        fs.mkdirSync(this.configDir, { recursive: true });
+        // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+        fs.mkdirSync(this.configDir, { recursive: true, mode: 0o700 });
       }
 
       if (fs.existsSync(this.configFile)) {
@@ -92,10 +93,12 @@ export class ConfigService {
    */
   saveConfig(): void {
     try {
-      if (!fs.existsSync(this.configDir)) {
-        fs.mkdirSync(this.configDir, { recursive: true });
-      }
-      fs.writeFileSync(this.configFile, JSON.stringify(this.config, null, 2), 'utf-8');
+      // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+      // the file holds the API key and the webhook secret: owner-only, also for a directory / file made by an older version
+      fs.mkdirSync(this.configDir, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(this.configFile, JSON.stringify(this.config, null, 2), { encoding: 'utf-8', mode: 0o600 });
+      fs.chmodSync(this.configDir, 0o700);
+      fs.chmodSync(this.configFile, 0o600);
     } catch (error) {
       console.error('Failed to save configuration:', error);
     }

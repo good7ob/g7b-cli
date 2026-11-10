@@ -18,7 +18,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
-import { dash, fmtDateTime } from '../../../utils/cliHelpers';
+import { csvCell, dash, fmtDateTime } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
 import { resolveOrgId } from '../../../utils/resolveOrgId';
 import configService from '../../../services/ConfigService';
@@ -417,12 +417,13 @@ export function registerAppCommands(infraCommand: Command) {
           applications.forEach((app: any) => {
             const row = [
               app.id,
-              `"${app.name}"`,
+              // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+              csvCell(app.name),
               app.environment,
               app.status,
               app.ownerId,
               fmtDateTime(app.createdAt, ''),
-              `"${(app.description || '').replace(/"/g, '""')}"`,
+              csvCell(app.description),
             ].join(',');
             content += row + '\n';
           });

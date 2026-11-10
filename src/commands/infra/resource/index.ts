@@ -10,7 +10,7 @@
 
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
-import { dash, fmtDateTime } from '../../../utils/cliHelpers';
+import { csvCell, dash, fmtDateTime } from '../../../utils/cliHelpers';
 import { extractRecords } from '../../../utils/extractRecords';
 
 export function registerResourceCommands(infraCommand: Command) {
@@ -289,7 +289,8 @@ export function registerResourceCommands(infraCommand: Command) {
           resources.forEach((res: any) => {
             const row = [
               res.resourceId,
-              `"${res.resourceName}"`,
+              // fix: #109 https://github.com/good7ob/g7b-cli/issues/109
+              csvCell(res.resourceName),
               res.resourceType,
               res.cloudProvider,
               res.region || '',

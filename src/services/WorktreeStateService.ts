@@ -80,9 +80,9 @@ export class WorktreeStateService {
   }
 
   private write(entries: WorktreeEntry[]): void {
-    if (!fs.existsSync(this.stateDir)) fs.mkdirSync(this.stateDir, { recursive: true });
+    if (!fs.existsSync(this.stateDir)) fs.mkdirSync(this.stateDir, { recursive: true, mode: 0o700 });
     const tmp = `${this.stateFile}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ entries }, null, 2), 'utf-8');
+    fs.writeFileSync(tmp, JSON.stringify({ entries }, null, 2), { encoding: 'utf-8', mode: 0o600 });
     fs.renameSync(tmp, this.stateFile); // rename is atomic on the same filesystem — readers never see a half-written file
   }
 
@@ -98,7 +98,7 @@ export class WorktreeStateService {
     const LOCK_STALE_MS = this.options.lockStaleMs ?? 10_000;
     const TIMEOUT_MS = this.options.lockTimeoutMs ?? 5_000;
     const start = Date.now();
-    if (!fs.existsSync(this.stateDir)) fs.mkdirSync(this.stateDir, { recursive: true });
+    if (!fs.existsSync(this.stateDir)) fs.mkdirSync(this.stateDir, { recursive: true, mode: 0o700 });
     for (;;) {
       try {
         fs.closeSync(fs.openSync(this.lockFile, 'wx'));

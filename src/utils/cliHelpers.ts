@@ -242,3 +242,13 @@ export function renderTable(rows: string[][], columnConfig: Record<number, Colum
     drawHorizontalLine: () => false,
   }).replace(/[ \t]+$/gm, '').trimEnd();
 }
+
+/**
+ * One CSV cell of free text: always quoted, quotes doubled, and a leading = + - @ (or tab / CR) defused with an
+ * apostrophe so a spreadsheet shows the text instead of running it as a formula.
+ */
+export function csvCell(value: unknown): string {
+  const text = value == null ? '' : String(value);
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+}
