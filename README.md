@@ -81,6 +81,20 @@ good7ob config reset
 
 > Note: the supported config keys are `api-url`, `api-key`, `user-id`, and `theme`.
 
+## Version and forced upgrade
+
+The version lives in `package.json` only. `good7ob --version` prints it and every request reports it as
+`User-Agent: good7ob-cli/<version>`; bump it with each release.
+
+The backend can require a minimum version (admin console, system config key `cli.min_version`, e.g. `0.3.0`; empty =
+no minimum). A CLI below it gets HTTP 426 on every request, prints both versions with the upgrade steps and exits
+with code 1 without running the command:
+
+```text
+✗ good7ob CLI 版本过低：当前 0.3.0，服务端要求最低 0.4.0。命令没有执行。
+  升级：cd "/path/to/g7b-cli" && git pull && npm install && npm run build
+```
+
 ## Time fields
 
 The CLI sends `X-Time-Format: epoch-ms` on every request.

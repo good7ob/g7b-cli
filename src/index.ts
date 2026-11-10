@@ -49,13 +49,14 @@ import { registerDeliverableCommands } from './commands/deliverable';
 import { registerAutomationCommands } from './commands/automation';
 import { registerUcCommands } from './commands/uc';
 import { registerCompetitorCommands } from './commands/competitor';
+import { CLI_VERSION } from './services/version';
 
 const program = new Command();
 
 program
   .name('good7ob')
   .description('good7ob - Project management and cloud resource management CLI')
-  .version('0.2.0');
+  .version(CLI_VERSION);
 
 // Register command groups
 registerInfraCommands(program);

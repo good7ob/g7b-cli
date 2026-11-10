@@ -7,6 +7,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import configService from './ConfigService';
+import { USER_AGENT, upgradeNotice } from './version';
 
 /** Backend common/util/ApiTimes.HEADER / EPOCH_MS. */
 export const TIME_FORMAT_HEADER = 'X-Time-Format';
@@ -60,7 +61,8 @@ export class ApiClient {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'good7ob-cli/0.2.0',
+        // the backend reads the version from here to ask an outdated CLI to upgrade (see version.ts)
+        'User-Agent': USER_AGENT,
         // Date-times come back as epoch ms; rendered as JST by utils/cliHelpers fmtDate/fmtDateTime. --json passes them through.
         [TIME_FORMAT_HEADER]: TIME_FORMAT_EPOCH_MS,
       },
@@ -78,6 +80,12 @@ export class ApiClient {
     this.instance.interceptors.response.use(
       (response) => response,
       (error) => {
+        const notice = upgradeNotice(error.response);
+        if (notice) {
+          // every command would fail the same way: say it once, clearly, and stop
+          console.error(notice);
+          process.exit(1);
+        }
         if (error.response?.status === 401) {
           console.error('Authentication failed. Please check your API key.');
         } else if (error.response?.status === 403) {
