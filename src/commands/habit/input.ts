@@ -8,7 +8,7 @@ import { ErrorCodeMap, InputError, parseIntInRange, parseId, requireOneOf } from
  * 草稿数量等）由后端保证。长度按 Unicode 字符数（code point）计。
  */
 
-export const CATEGORIES = ['PROCESS', 'CODE', 'COMMUNICATION', 'TOOL', 'OTHER'] as const;
+export const CATEGORIES = ['PROCESS', 'CODE', 'COMMUNICATION', 'TOOL', 'OTHER', 'DECISION'] as const;
 export const LEVELS = ['STABLE', 'LOCAL'] as const;
 export const SOURCES = ['MANUAL', 'AI_EXTRACTED'] as const;
 export const STATUSES = ['ENABLED', 'DISABLED', 'PENDING'] as const;

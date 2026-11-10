@@ -1563,7 +1563,7 @@ API 端点：`/api/v1/me/work-habits`、`/api/v1/me/work-workflows`（prd-0127 F
 
 | 命令 | 说明 |
 |------|------|
-| `habit list [--category --level --source --status --keyword]` | 列出习惯，按分类分组；默认含启用与停用，不含待确认候选。枚举取英文码（不区分大小写）：category `PROCESS CODE COMMUNICATION TOOL OTHER`，level `STABLE LOCAL`，source `MANUAL AI_EXTRACTED`，status `ENABLED DISABLED` |
+| `habit list [--category --level --source --status --keyword]` | 列出习惯，按分类分组；默认含启用与停用，不含待确认候选。枚举取英文码（不区分大小写）：category `PROCESS CODE COMMUNICATION TOOL OTHER DECISION`，level `STABLE LOCAL`，source `MANUAL AI_EXTRACTED`，status `ENABLED DISABLED` |
 | `habit add --title --content --category [--level]` | 新增；标题 ≤50 字、内容 ≤500 字（按字符数），level 缺省 `LOCAL` |
 | `habit edit <id> [--title --content --category --level] [--version n]` | 只改给出的字段，其余取当前值整体提交；version 自动取当前值，`--version` 指定你看到的版本，不一致返回 1009 |
 | `habit enable <id>` / `habit disable <id>` | 启用 / 停用（取当前 version） |

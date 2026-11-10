@@ -18,14 +18,14 @@ const run = (prefix: string, fn: () => Promise<void>) => guarded(prefix, HABIT_E
 
 const withFilters = (c: Command) =>
   c.option('--keyword <text>', '标题或内容包含')
-    .option('--category <c>', 'PROCESS | CODE | COMMUNICATION | TOOL | OTHER')
+    .option('--category <c>', 'PROCESS | CODE | COMMUNICATION | TOOL | OTHER | DECISION')
     .option('--level <l>', 'STABLE | LOCAL')
     .option('--source <s>', 'MANUAL | AI_EXTRACTED');
 
 const editFlags = (c: Command) =>
   c.option('--title <text>', '标题（≤50 字）')
     .option('--content <text>', '内容（≤500 字）')
-    .option('--category <c>', 'PROCESS | CODE | COMMUNICATION | TOOL | OTHER')
+    .option('--category <c>', 'PROCESS | CODE | COMMUNICATION | TOOL | OTHER | DECISION')
     .option('--level <l>', 'STABLE（稳定偏好）| LOCAL（局部习惯，默认）');
 
 /** 读出习惯的当前 version（接口无单条 GET，从列表里找；候选用 status=PENDING）。 */

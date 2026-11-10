@@ -32,6 +32,11 @@ describe('habit list', () => {
     expect(r.stdout).toContain('稳定偏好');
     expect(r.stdout).toContain('共 1 条');
   });
+  it('--category DECISION filters and the table shows 决策倾向', async () => {
+    const r = await cli(['list', '--category', 'decision'], ok(grouped(habit({ category: 'DECISION' }))));
+    expect(r.http.get).toHaveBeenCalledWith(B, { params: { category: 'DECISION' } });
+    expect(r.stdout).toContain('决策倾向');
+  });
   it('--json prints the raw data', async () => {
     const data = grouped(habit());
     expect(JSON.parse((await cli(['list', '--json'], ok(data))).stdout)).toEqual(data);
@@ -53,6 +58,11 @@ describe('habit add', () => {
     const r = await cli(flags, ok(habit({ id: 7, title: ok1.title, category: 'COMMUNICATION' })));
     expect(r.http.post).toHaveBeenCalledWith(B, { title: '汇报用中文', content: '一律用中文。', category: 'COMMUNICATION' });
     expect(r.stdout).toContain('已新增习惯 #7');
+  });
+  it('accepts DECISION and sends it as-is; renders 决策倾向', async () => {
+    const r = await cli(['add', '--title', 't', '--content', 'c', '--category', 'DECISION'], ok(habit({ id: 8, category: 'DECISION' })));
+    expect(r.http.post).toHaveBeenCalledWith(B, { title: 't', content: 'c', category: 'DECISION' });
+    expect(r.stdout).toContain('决策倾向');
   });
   it('sends level when given', async () => {
     const r = await cli([...flags, '--level', 'local'], ok(habit()));
