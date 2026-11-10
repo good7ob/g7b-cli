@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import configService from './ConfigService';
 import { USER_AGENT, upgradeNotice } from './version';
+import { SESSION_HEADER, sessionHeaderValue } from './session';
 
 /** Backend common/util/ApiTimes.HEADER / EPOCH_MS. */
 export const TIME_FORMAT_HEADER = 'X-Time-Format';
@@ -72,6 +73,11 @@ export class ApiClient {
     this.instance.interceptors.request.use((config) => {
       if (this.apiKey && config.headers) {
         config.headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+      // task #2761: the backend uses this as the default session id of agent start/end; every other endpoint ignores it
+      const session = sessionHeaderValue();
+      if (session && config.headers) {
+        config.headers[SESSION_HEADER] = session;
       }
       return withInfraOrg(config, this.infraOrgId);
     });

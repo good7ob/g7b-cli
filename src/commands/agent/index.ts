@@ -353,7 +353,7 @@ export function registerAgentCommands(program: Command) {
   agent
     .command('start <taskId>')
     .description(`Mark the task as executed by this agent session (agent-exec lease; exit ${EXIT_HELD}: another session holds it). The task must be in_progress; same session again = renew`)
-    .option('--session <uuid>', 'Session id of this agent window (default: env G7B_SESSION_ID)')
+    .option('--session <uuid>', 'Session id of this agent window (default: env G7B_SESSION_ID, then CLAUDE_CODE_SESSION_ID)')
     .option('--json', 'Output as JSON')
     .action(async (taskId, opts) => {
       let r;
@@ -369,7 +369,7 @@ export function registerAgentCommands(program: Command) {
   agent
     .command('end <taskId>')
     .description(`End this session's execution of the task (nothing held = no-op; exit ${EXIT_HELD}: another session holds it)`)
-    .option('--session <uuid>', 'Session id of this agent window (default: env G7B_SESSION_ID; none = match on user + AI employee)')
+    .option('--session <uuid>', 'Session id of this agent window (default: env G7B_SESSION_ID, then CLAUDE_CODE_SESSION_ID; none = match on user + AI employee)')
     .option('--force', 'End somebody else\'s execution (task owner or project admin only)')
     .option('--json', 'Output as JSON')
     .action(async (taskId, opts) => {

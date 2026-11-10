@@ -8,10 +8,9 @@
  */
 
 import { InputError, fmtDateTime } from '../../utils/cliHelpers';
+import { CLAUDE_SESSION_ENV, SESSION_ENV, SESSION_SHAPE, envSessionId } from '../../services/session';
 
-export const SESSION_ENV = 'G7B_SESSION_ID';
-/** Same shape the backend accepts (ExecIdentity.SESSION_SHAPE); anything else is a 1001 there. */
-const SESSION_SHAPE = /^[A-Za-z0-9_-]{1,128}$/;
+export { SESSION_ENV };
 /** Somebody else holds the task (409), like `agent next`'s "slot busy". */
 export const EXIT_HELD = 3;
 
@@ -20,9 +19,9 @@ export interface ExecHolder {
   startedAt?: number | null;
 }
 
-/** `--session` wins over `G7B_SESSION_ID`; blank = none. */
+/** `--session` > `G7B_SESSION_ID` > `CLAUDE_CODE_SESSION_ID`; blank = none. */
 export function resolveSessionId(opt: string | undefined, env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const value = (opt ?? env[SESSION_ENV] ?? '').trim();
+  const value = (opt ?? '').trim() || envSessionId(env);
   if (!value) return undefined;
   if (!SESSION_SHAPE.test(value)) throw new InputError('sessionId 只能含字母、数字、- 和 _，长度 1~128');
   return value;
@@ -30,7 +29,7 @@ export function resolveSessionId(opt: string | undefined, env: NodeJS.ProcessEnv
 
 export function requireSessionId(opt: string | undefined, env: NodeJS.ProcessEnv = process.env): string {
   const id = resolveSessionId(opt, env);
-  if (!id) throw new InputError(`缺少会话 ID：用 --session <uuid> 指定，或设置环境变量 ${SESSION_ENV}`);
+  if (!id) throw new InputError(`缺少会话 ID：用 --session <uuid> 指定，或设置环境变量 ${SESSION_ENV}（Claude Code 内自带 ${CLAUDE_SESSION_ENV}）`);
   return id;
 }
 
