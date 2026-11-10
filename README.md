@@ -308,7 +308,7 @@ Who the configured API key acts as: a user, or an AI employee (id, nickname, org
 My work habits and personal workflows (prd-0127 FP-7; endpoints `/api/v1/me/work-habits`, `/me/work-workflows`). Acts as the logged-in user only. Starting a workflow run is not a CLI command — runs are started only by an Agent / AI employee via MCP. `--json` prints the raw `data` (`remove` prints `{id, removed:true}`, `reject` prints `{id, rejected:true}`).
 
 ```bash
-good7ob habit list [--category PROCESS|CODE|COMMUNICATION|TOOL|OTHER] [--level STABLE|LOCAL] [--source MANUAL|AI_EXTRACTED] [--status ENABLED|DISABLED] [--keyword <text>]
+good7ob habit list [--category PROCESS|CODE|COMMUNICATION|TOOL|OTHER|DECISION] [--level STABLE|LOCAL] [--source MANUAL|AI_EXTRACTED] [--status ENABLED|DISABLED] [--keyword <text>]
 good7ob habit add --title "汇报用中文" --content "回复和完成汇报一律用中文" --category COMMUNICATION [--level STABLE]
 good7ob habit edit <id> [--title ..] [--content ..] [--category ..] [--level ..] [--version <n>]
 good7ob habit enable <id> | disable <id> | remove <id> [--yes]

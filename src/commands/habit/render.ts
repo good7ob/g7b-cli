@@ -1,6 +1,6 @@
 import { dash, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 
-const CATEGORY: Record<string, string> = { PROCESS: '流程', CODE: '代码', COMMUNICATION: '沟通', TOOL: '工具', OTHER: '其他' };
+const CATEGORY: Record<string, string> = { PROCESS: '流程', CODE: '代码', COMMUNICATION: '沟通', TOOL: '工具', OTHER: '其他', DECISION: '决策倾向' };
 const LEVEL: Record<string, string> = { STABLE: '稳定偏好', LOCAL: '局部习惯' };
 const SOURCE: Record<string, string> = { MANUAL: '手动', AI_EXTRACTED: 'AI 提取', AI_GENERATE: 'AI 生成', AI_REVISE: 'AI 修订' };
 const STATUS: Record<string, string> = { ENABLED: '启用', DISABLED: '停用', PENDING: '待确认', DRAFT: '草稿' };
