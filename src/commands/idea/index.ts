@@ -6,7 +6,7 @@ import { registerChangeSetCommands } from './changeSetCommands';
 import { registerCollabCommands } from './collabCommands';
 import {
   IDEA_ERROR_CODES, TRANSITIONS, SOURCES, PRIORITIES, STATUSES,
-  buildCreateBody, buildListParams, buildReasonBody, buildSelectBody, buildStatusBody, buildUpdateBody, parseTransition,
+  buildCreateBody, buildListParams, buildReasonBody, buildSelectBody, buildUpdateBody, parseTransition,
 } from './input';
 import { IdeaDetail, renderIdeaDetail, renderIdeaList } from './render';
 import { registerReviewCommands } from './reviewCommands';
@@ -132,19 +132,15 @@ export function registerIdeaCommands(program: Command) {
 
   idea
     .command('status <id> <toStatus>')
-    .description(`Move an idea to ${oneOf(TRANSITIONS)} (archived = close, needs --reason). ` +
-      'planning needs a change request from the idea or a PRD document; developing needs a linked task ' +
-      '(IDEA -implements-> TASK) or an applied change request — otherwise 1007, unless --skip-precondition --reason')
-    .option('--reason <text>', 'Close reason when moving to archived (max 1000 chars); skip reason with --skip-precondition (max 500 chars)')
-    .option('--skip-precondition', 'Skip the missing preconditions of planning / developing (idea owner, product owner or org owner/admin; audited; AI employees are refused)')
+    .description(`Move an idea to ${oneOf(TRANSITIONS)} (archived = close, needs --reason)`)
+    .option('--reason <text>', 'Close reason, required when moving to archived (max 1000 chars)')
     .option('--json', 'Output as JSON')
     .action(async (id, toStatus, o) => {
       try {
         const target = parseTransition(toStatus);
-        const body = buildStatusBody(target, o);
+        const body = target === 'archived' ? { toStatus: target, ...buildReasonBody('reason', o.reason) } : { toStatus: target };
         const moved = await apiClient.post(`${BASE}/${parseId(id, 'id')}/status`, body);
-        const skipped = body.skipPrecondition ? '（已跳过前置条件，理由已记入审计）' : '';
-        emit(o.json, moved, () => `✓ Idea #${id} → ${target}${skipped}`);
+        emit(o.json, moved, () => `✓ Idea #${id} → ${target}`);
       } catch (error) {
         fail('变更 Idea 状态失败', error, IDEA_ERROR_CODES);
       }
