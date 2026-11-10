@@ -16,6 +16,18 @@ import { INTERVAL_MS as HEARTBEAT_INTERVAL_MS, finish as finishHeartbeat, sendBe
 import { runLoop } from '../heartbeat/loop';
 import { writeEntry as writeHeartbeatEntry } from '../heartbeat/state';
 import { AgentConfig, requireForward, resolveAgentConfig } from './config';
+import {
+  EXIT_HELD,
+  describeConflict,
+  describeEnd,
+  describeStart,
+  endBody,
+  execPath,
+  holderOf,
+  requireSessionId,
+  resolveSessionId,
+  startBody,
+} from './exec';
 import { ForwardTask, forwardCommand, forwardWebhook } from './forward';
 import { RoundDeps, releaseTask, runRound } from './round';
 import {
@@ -42,6 +54,15 @@ const stamp = (msg: string) => `[${new Date().toISOString()}] ${msg}`;
 function fail(prefix: string, e: unknown): never {
   console.error(e instanceof InputError ? `✗ 参数错误: ${e.message}` : `✗ ${prefix}: ${msgOf(e)}`);
   process.exit(1);
+}
+
+/** agent start / end failure: a 409 holder is a state (exit 3, like "busy"), anything else is a plain failure. */
+function failExec(prefix: string, e: unknown, json: boolean | undefined, hintForce: boolean): never {
+  const holder = holderOf(e);
+  if (!holder) return fail(prefix, e);
+  if (json) console.log(JSON.stringify({ status: 'conflict', message: msgOf(e), holder }, null, 2));
+  else console.error(describeConflict(e, holder, hintForce));
+  process.exit(EXIT_HELD);
 }
 
 function loadConfig(): AgentConfig {
@@ -327,6 +348,39 @@ export function registerAgentCommands(program: Command) {
       } catch (e) {
         fail('更新任务状态失败', e);
       }
+    });
+
+  agent
+    .command('start <taskId>')
+    .description(`Mark the task as executed by this agent session (agent-exec lease; exit ${EXIT_HELD}: another session holds it). The task must be in_progress; same session again = renew`)
+    .option('--session <uuid>', 'Session id of this agent window (default: env G7B_SESSION_ID)')
+    .option('--json', 'Output as JSON')
+    .action(async (taskId, opts) => {
+      let r;
+      try {
+        const id = parseId(taskId, 'taskId');
+        r = await apiClient.post(execPath(id, 'start'), startBody(requireSessionId(opts.session)));
+      } catch (e) {
+        return failExec('开始执行失败', e, opts.json, false);
+      }
+      console.log(opts.json ? JSON.stringify(r, null, 2) : describeStart(r));
+    });
+
+  agent
+    .command('end <taskId>')
+    .description(`End this session's execution of the task (nothing held = no-op; exit ${EXIT_HELD}: another session holds it)`)
+    .option('--session <uuid>', 'Session id of this agent window (default: env G7B_SESSION_ID; none = match on user + AI employee)')
+    .option('--force', 'End somebody else\'s execution (task owner or project admin only)')
+    .option('--json', 'Output as JSON')
+    .action(async (taskId, opts) => {
+      let r;
+      try {
+        const id = parseId(taskId, 'taskId');
+        r = await apiClient.post(execPath(id, 'end'), endBody(resolveSessionId(opts.session), !!opts.force));
+      } catch (e) {
+        return failExec('结束执行失败', e, opts.json, !opts.force);
+      }
+      console.log(opts.json ? JSON.stringify(r, null, 2) : describeEnd(r));
     });
 
   agent
