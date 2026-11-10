@@ -37,11 +37,11 @@ export const IDEA_ERROR_CODES: ErrorCodeMap = {
   1001: '参数值不合法',
   1002: 'Idea / 方案不存在（或已删除）',
   1006: '数据已存在：关联重复，或该 Idea 已有待审批的决策（审批完成前不能再次选定 / 发起审批 / 合并）',
-  1007: '当前状态不允许该操作（非法状态流转、字段已锁定、附件已达 20 个上限、合并 / 恢复条件不满足；选定方案要求 Idea 处于 evaluating 且尚未生成 PRD 会话）',
+  1007: '当前状态不允许该操作（非法状态流转、字段已锁定、附件已达 20 个上限、合并 / 恢复条件不满足；选定方案要求 Idea 处于 evaluating 且尚未生成 PRD 会话；进入规划 / 开始开发的前置条件不满足时，负责人可加 --skip-precondition --reason 跳过）',
   1008: '缺少 id',
   1009: '并发冲突（其他人刚刚修改了它），请重试',
   // task #2067: an AI employee Key is refused with 2000 until its owner switches 想法 on
-  2000: '无权访问：你不是该 Idea 所属产品的组织成员；使用 AI 员工 Key 时，需在 AI 员工编辑中开启「允许访问想法模块」',
+  2000: '无权访问：你不是该 Idea 所属产品的组织成员；使用 AI 员工 Key 时，需在 AI 员工编辑中开启「允许访问想法模块」；跳过前置条件仅限想法负责人 / 产品负责人 / 组织 owner·admin，AI 员工不能跳过',
 };
 
 /** Raw commander options -> validated request pieces. All throw before any HTTP call. */
@@ -110,6 +110,36 @@ export function parseTransition(raw: string): (typeof TRANSITIONS)[number] {
 
 export function buildReasonBody(field: 'reason' | 'decisionReason', raw: string | undefined): Record<string, string> {
   return { [field]: requireText(raw, MAX_REASON, '--reason') };
+}
+
+/**
+ * Idea #220 (prd-0088 rp-forge-idea-0187 / 0188 / 0193): 进入规划 (approved→planning) and 开始开发
+ * (planning→developing) need their preconditions; skipping them is explicit.
+ */
+export const GATED_TRANSITIONS = ['planning', 'developing'] as const;
+export const MAX_SKIP_REASON = 500;
+
+/**
+ * `idea status` body: archived carries the close reason (≤1000); `--skip-precondition` (planning / developing only)
+ * carries `skipPrecondition: true` and the skip reason (required, ≤500); any other `--reason` is not sent.
+ */
+export function buildStatusBody(
+  target: (typeof TRANSITIONS)[number],
+  o: { reason?: string; skipPrecondition?: boolean },
+): Record<string, unknown> {
+  if (target === 'archived') {
+    if (o.skipPrecondition) throw new InputError('--skip-precondition 只用于 planning / developing');
+    return { toStatus: target, ...buildReasonBody('reason', o.reason) };
+  }
+  if (!o.skipPrecondition) return { toStatus: target };
+  if (!(GATED_TRANSITIONS as readonly string[]).includes(target)) {
+    throw new InputError('--skip-precondition 只用于 planning / developing（进入规划 / 开始开发）');
+  }
+  return {
+    toStatus: target,
+    skipPrecondition: true,
+    reason: requireText(o.reason, MAX_SKIP_REASON, '--reason（跳过理由）'),
+  };
 }
 
 /** `<solutionId>:<text>` (split on the first colon) -> {solutionId, reason}. */
