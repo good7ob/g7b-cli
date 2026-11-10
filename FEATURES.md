@@ -863,7 +863,6 @@ API 端点前缀：`/forge/ideas`（需登录 + 该 Idea 所属产品的组织�
 | `idea delete <id>` | 软删除（可用 `idea restore` 恢复） |
 | `idea restore <id>` | 恢复：已删除 → 取消删除；已归档且未生成 PRD 会话 → draft |
 | `idea status <id> <evaluating\|archived\|planning\|developing\|released\|validated>` | 状态流转（合法路径 draft→evaluating→approved→planning→developing→released→validated，任意态可→archived；released 通常由 Release 发布自动同步） |
-| `idea status <id> <planning\|developing> --skip-precondition --reason <text>` | 想法 #220：进入规划须有以该想法为来源的变更请求或已产出的 PRD 文档，开始开发须有 implements 关联任务或已应用的变更请求，否则 1007；想法负责人 / 产品负责人 / 组织 owner·admin 可显式跳过（理由必填 ≤500，写审计；AI 员工 2000）。变更请求应用、首个任务开工时想法会自动推进 |
 | `idea reject <id> --reason <text>` | 驳回（evaluating → rejected） |
 | `idea solution add <ideaId> --name <n>` | 添加方案；备注类 `--description` `--cost-note` `--cycle-note` `--effect-note`；结构化估算见下 |
 | `idea solution update <ideaId> <solutionId>` | 修改方案（未给的字段不变；`--kpi` 整体替换 KPI 列表，`--clear-kpi` 清空） |

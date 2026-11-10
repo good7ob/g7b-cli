@@ -193,40 +193,6 @@ describe('idea update / delete / status / reject', () => {
     expect(noHttpCalls(missing) && noHttpCalls(long)).toBe(true);
   });
 
-  it('idea #220: --skip-precondition sends skipPrecondition + the skip reason (required, max 500)', async () => {
-    const good = await idea(['status', '5', 'developing', '--skip-precondition', '--reason', '任务在外部系统跟踪']);
-    expect(good.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', {
-      toStatus: 'developing', skipPrecondition: true, reason: '任务在外部系统跟踪',
-    });
-    expect(good.stdout).toContain('已跳过前置条件');
-    const planning = await idea(['status', '5', 'planning', '--skip-precondition', '--reason', '已线下评审']);
-    expect(planning.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', {
-      toStatus: 'planning', skipPrecondition: true, reason: '已线下评审',
-    });
-
-    const missing = await idea(['status', '5', 'developing', '--skip-precondition']);
-    expect(missing.stderr).toContain('--reason');
-    const blank = await idea(['status', '5', 'developing', '--skip-precondition', '--reason', '  ']);
-    expect(blank.stderr).toContain('不能为空');
-    const long = await idea(['status', '5', 'developing', '--skip-precondition', '--reason', 'x'.repeat(501)]);
-    expect(long.stderr).toContain('最多 500');
-    const notGated = await idea(['status', '5', 'released', '--skip-precondition', '--reason', 'r']);
-    expect(notGated.stderr).toContain('planning / developing');
-    const archived = await idea(['status', '5', 'archived', '--skip-precondition', '--reason', 'r']);
-    expect(archived.stderr).toContain('planning / developing');
-    expect([missing, blank, long, notGated, archived].every(noHttpCalls)).toBe(true);
-  });
-
-  it('idea #220: a refused move (1007 missing preconditions / 2000 not allowed to skip) shows the server reason', async () => {
-    const blocked = await idea(['status', '5', 'developing'], bizError(1007, '开始开发的前置条件不满足：缺少关联任务'));
-    expect(blocked.exitCode).toBe(1);
-    expect(blocked.stderr).toContain('--skip-precondition');
-    expect(blocked.stderr).toContain('缺少关联任务');
-    const denied = await idea(['status', '5', 'developing', '--skip-precondition', '--reason', 'r'],
-      bizError(2000, 'AI 员工不能跳过想法的前置条件'));
-    expect(denied.stderr).toContain('AI 员工不能跳过');
-  });
-
   it('close posts archived with the reason, requires it, and caps it at 1000 chars', async () => {
     const good = await idea(['close', '5', '--reason', '功能已完成开发']);
     expect(good.http.post).toHaveBeenCalledWith('/forge/ideas/5/status', { toStatus: 'archived', reason: '功能已完成开发' });
