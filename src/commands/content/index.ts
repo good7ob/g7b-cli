@@ -22,19 +22,14 @@ export function registerContentCommands(program: Command) {
     .requiredOption('--product-id <id>', 'Product ID (org_products.id)')
     .option('--category <category>', 'Filter by category, e.g. login')
     .option('--key <keyword>', 'Filter by key keyword')
-    .option('--locale <locale>', 'Filter by locale, e.g. zh/en/ja')
+    .option('--locale <locale>', 'Filter by locale, e.g. zh/en/jp')
+    .option('--app-id <id>', 'Filter by app (org_product_app.id), e.g. web/admin/mobile of the product')
     .option('-p, --page <num>', 'Page number', '1')
     .option('-l, --limit <num>', 'Items per page', '100')
     .option('--format <format>', 'Output format: table|json|csv', 'table')
     .action(async (options) => {
       try {
-        const params: any = {
-          page: parseInt(options.page, 10) || 1,
-          pageSize: parseInt(options.limit, 10) || 100,
-        };
-        if (options.category) params.category = options.category;
-        if (options.key) params.key = options.key;
-        if (options.locale) params.locale = options.locale;
+        const params = buildListParams(options);
 
         const result = await apiClient.get(
           `/api/v1/orgs/products/${options.productId}/copy-resources`,
@@ -49,7 +44,8 @@ export function registerContentCommands(program: Command) {
         }
 
         if (format === 'csv') {
-          console.log('id,category,key,locale,value,updatedBy,updatedAt');
+          // appId is appended last so existing column-position consumers keep working
+          console.log('id,category,key,locale,value,updatedBy,updatedAt,appId');
           records.forEach((r: any) => {
             console.log(
               [
@@ -60,6 +56,7 @@ export function registerContentCommands(program: Command) {
                 csvField(r.value),
                 r.updatedBy ?? '',
                 fmtDateTime(r.updatedAt, ''),
+                r.appId ?? '',
               ].join(',')
             );
           });
@@ -75,6 +72,7 @@ export function registerContentCommands(program: Command) {
         console.log('─'.repeat(90));
         console.log(
           'ID'.padEnd(8) +
+          'App'.padEnd(6) +
           '分类'.padEnd(14) +
           'Key'.padEnd(28) +
           '语言'.padEnd(8) +
@@ -84,6 +82,7 @@ export function registerContentCommands(program: Command) {
         records.forEach((r: any) => {
           console.log(
             String(r.id).padEnd(8) +
+            String(r.appId ?? '-').padEnd(6) +
             (r.category || '-').padEnd(14) +
             (r.key || '-').substring(0, 26).padEnd(28) +
             (r.locale || '-').padEnd(8) +
@@ -107,6 +106,33 @@ export function registerContentCommands(program: Command) {
     });
 
   return contentCommand;
+}
+
+export interface ContentListOptions {
+  page?: string;
+  limit?: string;
+  category?: string;
+  key?: string;
+  locale?: string;
+  appId?: string;
+}
+
+/** Builds the query params for GET .../copy-resources; throws on a bad --app-id. */
+export function buildListParams(options: ContentListOptions): Record<string, string | number> {
+  const params: Record<string, string | number> = {
+    page: parseInt(options.page ?? '1', 10) || 1,
+    pageSize: parseInt(options.limit ?? '100', 10) || 100,
+  };
+  if (options.category) params.category = options.category;
+  if (options.key) params.key = options.key;
+  if (options.locale) params.locale = options.locale;
+  if (options.appId !== undefined) {
+    if (!/^[1-9]\d*$/.test(options.appId)) {
+      throw new Error(`--app-id 必须是正整数，收到: ${options.appId}`);
+    }
+    params.appId = Number(options.appId);
+  }
+  return params;
 }
 
 export function csvField(value: unknown): string {
