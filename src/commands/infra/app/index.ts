@@ -26,6 +26,15 @@ import configService from '../../../services/ConfigService';
 const ORG_OPTION = '--org-id <id>';
 const ORG_OPTION_DESC = '组织 ID（必填；也可用 GOOD7OB_ORG_ID 或 config set org-id）';
 
+/**
+ * The org an app command lists in: its own --org-id, else the org the `infra` preAction resolved
+ * (`infra --org-id`, GOOD7OB_ORG_ID, `config set org-id`). Reading only the subcommand's option
+ * made `infra --org-id 58 app list` fall back to the env var / config for the request body.
+ */
+function appOrgId(options: { orgId?: string }): number {
+  return resolveOrgId(options.orgId ?? apiClient.getInfraOrgId(), configService.get('orgId'));
+}
+
 /** Page size used when walking the full application list. */
 const FETCH_ALL_PAGE_SIZE = 200;
 
@@ -244,7 +253,7 @@ export function registerAppCommands(infraCommand: Command) {
       try {
         const params: any = {
           // g7b#1408: the backend lists one org's applications only
-          orgId: resolveOrgId(options.orgId, configService.get('orgId')),
+          orgId: appOrgId(options),
           pageNo: parseInt(options.page) || 1,
           pageSize: parseInt(options.limit) || 20,
         };
@@ -391,7 +400,7 @@ export function registerAppCommands(infraCommand: Command) {
 
         // Build query parameters
         // g7b#1408: the backend lists one org's applications only
-        const filters: any = { orgId: resolveOrgId(options.orgId, configService.get('orgId')) };
+        const filters: any = { orgId: appOrgId(options) };
 
         if (options.environment) filters.environment = options.environment;
         if (options.ownerId) filters.ownerId = options.ownerId;
@@ -661,7 +670,7 @@ export function registerAppCommands(infraCommand: Command) {
     .option(ORG_OPTION, ORG_OPTION_DESC)
     .action(async (options) => {
       try {
-        const orgId = resolveOrgId(options.orgId, configService.get('orgId'));
+        const orgId = appOrgId(options);
         console.log('执行应用清单健康检查...');
         console.log('─'.repeat(50));
 

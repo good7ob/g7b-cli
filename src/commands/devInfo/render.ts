@@ -38,7 +38,8 @@ export interface EffectiveVo {
   ownerType?: string | null;
   ownerId?: number | null;
   entries?: EffectiveEntry[] | null;
-  apps?: Array<{ id: number; name?: string | null; repoUrl?: string | null; defaultBranch?: string | null; deployTarget?: string | null }> | null;
+  /** the product's apps; the backend names their id / name `appId` / `appName` */
+  apps?: Array<{ appId: number | string; appName?: string | null; repoUrl?: string | null; defaultBranch?: string | null; deployTarget?: string | null }> | null;
 }
 
 export interface ClearanceVo {
@@ -80,7 +81,7 @@ export function renderEffective(vo: EffectiveVo): string {
   const lines = [head, renderTable(rows, { 3: { truncate: 28 }, 6: { truncate: 80 } })];
   const apps = vo.apps ?? [];
   if (apps.length) {
-    lines.push('', '应用:', ...apps.map((a) => `  #${a.id} ${dash(a.name)}  ${dash(a.repoUrl)}  ${dash(a.defaultBranch)}  ${dash(a.deployTarget)}`));
+    lines.push('', '应用:', ...apps.map((a) => `  #${dash(a.appId)} ${dash(a.appName)}  ${dash(a.repoUrl)}  ${dash(a.defaultBranch)}  ${dash(a.deployTarget)}`));
   }
   lines.push('', '查看明文: good7ob dev-info get --<对象> <id> --item <条目ID> --reveal <字段>');
   return lines.join('\n');

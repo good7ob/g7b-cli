@@ -9,6 +9,7 @@ import * as path from 'path';
 import configService from './ConfigService';
 import { USER_AGENT, upgradeNotice } from './version';
 import { SESSION_HEADER, sessionHeaderValue } from './session';
+import { longSafeTransformResponse } from '../utils/longSafeJson';
 
 /** Backend common/util/ApiTimes.HEADER / EPOCH_MS. */
 export const TIME_FORMAT_HEADER = 'X-Time-Format';
@@ -67,6 +68,9 @@ export class ApiClient {
         // Date-times come back as epoch ms; rendered as JST by utils/cliHelpers fmtDate/fmtDateTime. --json passes them through.
         [TIME_FORMAT_HEADER]: TIME_FORMAT_EPOCH_MS,
       },
+      // Snowflake ids beyond Number.MAX_SAFE_INTEGER that arrive as JSON numbers (a bare Long `data`)
+      // come back as exact strings instead of being rounded by JSON.parse.
+      transformResponse: [longSafeTransformResponse],
     });
 
     // Add request interceptor for authentication
@@ -306,6 +310,11 @@ export class ApiClient {
   /** The org every /api/infra call of this run acts on (set by the `infra` command's preAction). */
   setInfraOrgId(orgId: number): void {
     this.infraOrgId = orgId;
+  }
+
+  /** The org resolved by the `infra` preAction (undefined outside an infra command). */
+  getInfraOrgId(): number | undefined {
+    return this.infraOrgId;
   }
 
   /**
