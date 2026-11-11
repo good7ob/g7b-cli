@@ -7,6 +7,17 @@ import { registerDepCommands } from './dep';
 import { registerTimeCommands } from './time';
 import { prdOption, registerRequirementCommands, resolveSources, upsertSources } from './requirement';
 import { fmtDate, fmtDateTime, InputError, parseDate, parseId } from '../../../utils/cliHelpers';
+import {
+  checkUpdateTagOptions,
+  collectTagList,
+  createTagFields,
+  currentTagNames,
+  listTagParam,
+  mergeTagNames,
+  needsCurrentTags,
+  normalizeTagNames,
+  updateTagFields,
+} from './tagInput';
 
 function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: string }): Record<string, string> {
   const dates: Record<string, string> = {};
@@ -103,7 +114,8 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--status <status>', `Filter by status (${STATUS_HELP})`)
     .option('--include-on-hold', 'Include on_hold tasks (hidden by default; --status on_hold also shows them)')
     .option('--priority <priority>', 'Filter by priority (high|medium|low)')
-    .option('--tags <tags>', 'Filter by tag names (comma-separated)')
+    .option('--tags <tags>', 'Filter by tag names (comma-separated; a task matching any of them is listed)')
+    .option('--tag <name>', 'Filter by tag name (repeatable or comma-separated; same as --tags)', collectTagList, [])
     .option('--parent-task-id <id>', 'List sub-tasks of a parent task')
     .option('--sort <field>', 'Sort field', 'createdAt')
     .option('--order <direction>', 'Sort direction (asc|desc)', 'desc')
@@ -117,7 +129,8 @@ export function registerTaskCommands(pmCommand: Command) {
         // on_hold tasks are ignored unless asked for
         params.includeOnHold = Boolean(options.includeOnHold) || options.status === 'on_hold';
         if (options.priority) params.priority = options.priority;
-        if (options.tags) params.tags = options.tags;
+        const tags = listTagParam(options);
+        if (tags) params.tags = tags;
         if (options.parentTaskId) params.parentTaskId = options.parentTaskId;
 
         const result = await apiClient.get(`/progress/projects/${projectId}/tasks`, params);
@@ -239,10 +252,13 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--ai-employee <id>', 'Hand the task to this AI employee (executor AGENT, emp:<id>)')
     .option('--executor-type <type>', 'Executor type (HUMAN|AGENT)')
     .option('--executor-id <id>', 'Executor: user ID for HUMAN; AI employee ID / emp:<id> or agent id for AGENT')
+    .option('--tag <name>', 'Tag name (repeatable or comma-separated); a name you do not have yet is created as your tag', collectTagList, [])
+    .option('--tag-id <id>', 'Tag ID (repeatable or comma-separated; see `pm tag list`); not with --tag', collectTagList, [])
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
         const body: any = {
+          ...createTagFields(options),
           projectId: currentProjectId(options.projectId),
           name: options.name,
           priority: options.priority,
@@ -262,7 +278,8 @@ export function registerTaskCommands(pmCommand: Command) {
           console.log(JSON.stringify(task, null, 2));
           return;
         }
-        console.log(`✓ 任务已创建: [${task?.id || ''}] ${options.name}`);
+        const tagNames = currentTagNames(task);
+        console.log(`✓ 任务已创建: [${task?.id || ''}] ${options.name}${tagNames.length ? `（标签: ${tagNames.join(', ')}）` : ''}`);
       } catch (error) {
         console.error('✗ 创建任务失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);
@@ -295,16 +312,29 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--ai-employee <id>', 'Hand the task to this AI employee (executor AGENT, emp:<id>)')
     .option('--executor-type <type>', 'Executor type (HUMAN|AGENT)')
     .option('--executor-id <id>', 'Executor: user ID for HUMAN; AI employee ID / emp:<id> or agent id for AGENT')
+    .option('--tag <name>', 'Replace ALL tags with these names (repeatable or comma-separated; missing ones are created)', collectTagList, [])
+    .option('--tag-id <id>', 'Replace ALL tags with these tag IDs (repeatable or comma-separated)', collectTagList, [])
+    .option('--add-tag <name>', 'Add a tag, keeping the others (repeatable or comma-separated; created if missing)', collectTagList, [])
+    .option('--remove-tag <name>', 'Remove a tag, keeping the others (repeatable or comma-separated)', collectTagList, [])
+    .option('--clear-tags', 'Remove all tags from the task')
     .action(async (id, options) => {
       try {
+        checkUpdateTagOptions(options);
         const body: any = { ...plannedDates(options), ...executorFields(options), ...skipAcceptanceFields(options) };
+        let current: any;
+        const currentTask = async () => (current ??= await apiClient.get(`/progress/tasks/${id}`));
         if (options.name) body.name = options.name;
         if (options.description) body.description = options.description;
         if (options.prd?.length) {
           // without --description the source lines go into the description the task has now
-          const base = options.description ?? (await apiClient.get(`/progress/tasks/${id}`)).description;
+          const base = options.description ?? (await currentTask()).description;
           body.description = upsertSources(base, await resolveSources(options.prd));
         }
+        // idea #245: a PUT with tags replaces the whole set, so add/remove start from the tags the task has now
+        const tagFields = updateTagFields(
+          options,
+          needsCurrentTags(options) ? currentTagNames(await currentTask()) : undefined
+        );
         if (options.priority) body.priority = options.priority;
         if (options.status) body.status = options.status;
         if (options.deadline) body.deadline = options.deadline;
@@ -315,16 +345,26 @@ export function registerTaskCommands(pmCommand: Command) {
         // `pm task update` never exposed it, so add the matching numeric option here.
         if (options.estimatedHours) body.estimatedHours = parseFloat(options.estimatedHours);
         if (options.actualHours) body.actualHours = parseFloat(options.actualHours);
+        if (tagFields === null && !Object.keys(body).length) {
+          // only --add-tag / --remove-tag, and the task already has exactly that set: nothing to write
+          if (options.json) console.log(JSON.stringify(current, null, 2));
+          else console.log(`✓ 任务 ${id} 的标签无变化: ${currentTagNames(current).join(', ') || '（无）'}`);
+          return;
+        }
+        Object.assign(body, tagFields);
 
         const task = await apiClient.put(`/progress/tasks/${id}`, body);
         if (options.json) {
           console.log(JSON.stringify(task, null, 2));
           return;
         }
+        const tagNote = tagFields && (tagFields.tags || tagFields.tagIds)
+          ? `（标签: ${tagFields.tags ? tagFields.tags.join(', ') : tagFields.tagIds!.length ? `ID ${tagFields.tagIds!.join(', ')}` : '已清空'}）`
+          : '';
         if (wentToAcceptance(task, options.status)) {
-          console.log(`✓ ${ACCEPTANCE_SUBMITTED}: ${id}`);
+          console.log(`✓ ${ACCEPTANCE_SUBMITTED}: ${id}${tagNote}`);
         } else {
-          console.log(`✓ 任务已更新: ${id}`);
+          console.log(`✓ 任务已更新: ${id}${tagNote}`);
         }
       } catch (error) {
         console.error('✗ 更新任务失败:', error instanceof Error ? error.message : String(error));
@@ -525,6 +565,8 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--owner-id <id>', 'New owner for all tasks')
     .option('--skip-acceptance', 'With --status completed: complete without acceptance (task owner only, needs --reason)')
     .option('--reason <text>', 'Why acceptance is skipped (1-500 chars)')
+    .option('--add-tag <name>', 'Add a tag to every task, keeping their other tags (repeatable or comma-separated)', collectTagList, [])
+    .option('--remove-tag <name>', 'Remove a tag from every task (repeatable or comma-separated)', collectTagList, [])
     .action(async (options) => {
       try {
         const ids = String(options.ids)
@@ -532,11 +574,30 @@ export function registerTaskCommands(pmCommand: Command) {
           .map((v: string) => v.trim())
           .filter(Boolean)
           .map((v: string) => parseId(v, '--ids'));
+        checkUpdateTagOptions({ addTag: options.addTag, removeTag: options.removeTag });
+        const tagging = needsCurrentTags(options);
         // the backend reads taskIds (BatchUpdateTaskDto); `ids` was silently ignored
         const updates: any = { taskIds: ids, ...skipAcceptanceFields(options) };
         if (options.status) updates.status = options.status;
         if (options.priority) updates.priority = options.priority;
         if (options.ownerId) updates.ownerId = parseInt(options.ownerId);
+
+        if (tagging) {
+          // idea #245: BatchUpdateTaskDto has no tags, so each task gets its own merged set (PUT replaces the set)
+          let changed = 0;
+          for (const taskId of ids) {
+            const before = currentTagNames(await apiClient.get(`/progress/tasks/${taskId}`));
+            const next = mergeTagNames(before, options);
+            if (before.length === next.length && before.every((t) => next.includes(t))) continue;
+            await apiClient.put(`/progress/tasks/${taskId}`, next.length ? { tags: next } : { tagIds: [] });
+            changed += 1;
+          }
+          const add = normalizeTagNames(options.addTag, '--add-tag');
+          const remove = normalizeTagNames(options.removeTag, '--remove-tag');
+          const what = [add.length && `+${add.join(', +')}`, remove.length && `-${remove.join(', -')}`].filter(Boolean).join(' ');
+          console.log(`✓ 已更新 ${changed} 个任务的标签（${what}），${ids.length - changed} 个无变化`);
+          if (Object.keys(updates).length === 1) return;
+        }
 
         const result = await apiClient.put('/progress/tasks/batch', updates);
         // idea #210: { successCount, failedCount, acceptanceRequired, acceptanceRequiredTaskIds }; older servers: a count

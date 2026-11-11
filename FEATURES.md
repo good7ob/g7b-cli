@@ -547,7 +547,7 @@ API 端点前缀：`/progress/tasks`
 | `pm task submit-acceptance <id>` | 提交验收：进行中 → 完成待验收，在产品「成果验证」中由人通过 / 退回 |
 | `pm task move <ids...>` | 把一个或多个任务移到另一个项目（带前置校验） |
 | `pm task delete <id>` | 删除任务（需 `-f` 确认） |
-| `pm task batch-update` | 批量更新多个任务的状态/优先级/负责人 |
+| `pm task batch-update` | 批量更新多个任务的状态/优先级/负责人，批量增删标签 |
 
 **`pm task list` 选项：**
 
@@ -555,7 +555,7 @@ API 端点前缀：`/progress/tasks`
 |------|------|
 | `--status` | 状态过滤（not_started\|in_progress\|completed\|awaiting_completion_approval\|blocked\|cancelled\|on_hold） |
 | `--priority` | 优先级过滤（high\|medium\|low） |
-| `--tags` | 按标签过滤（逗号分隔） |
+| `--tags` / `--tag` | 按标签名过滤（`--tags a,b` 逗号分隔；`--tag` 可重复，两者合并；命中任一标签即列出） |
 | `--parent-task-id` | 列出指定父任务的子任务 |
 | `--json` / `--csv` | 输出格式 |
 
@@ -571,6 +571,29 @@ API 端点前缀：`/progress/tasks`
 | `--deadline` | 截止日期（YYYY-MM-DD） |
 | `--owner-id` | 负责人用户 ID |
 | `--parent-task-id` | 父任务 ID（创建子任务） |
+| `--tag` | 标签名（可重复或逗号分隔）；系统标签和自己的标签按名称匹配，没有的自动创建为自己的标签 |
+| `--tag-id` | 标签 ID（可重复或逗号分隔，见 `pm tag list`）；不能与 `--tag` 同时使用 |
+
+**任务标签（想法 #245）：** `pm task update` 的标签选项：
+
+| 选项 | 说明 |
+|------|------|
+| `--tag <名称>` | 整体替换为这些标签（可重复或逗号分隔，缺失的自动创建） |
+| `--tag-id <ID>` | 按标签 ID 整体替换 |
+| `--add-tag <名称>` | 追加标签，保留原有标签（先读任务当前标签再合并写回） |
+| `--remove-tag <名称>` | 移除标签，保留其余标签 |
+| `--clear-tags` | 清空全部标签 |
+
+`--tag` / `--tag-id` / `--clear-tags` 互斥，且不能与 `--add-tag` / `--remove-tag` 同用；`--add-tag` 与 `--remove-tag` 可组合。
+增删后标签集合没有变化时不写入。标签名 1–50 字符，按名称精确匹配（区分大小写），同时支持中文逗号「，」分隔。
+AI 员工 Key（task_write）同样可以按名称建标签，标签归属 Key 的签发人；`pm tag create` 需要后端放开 `POST /progress/tags`（同一想法的后端 PR）。
+
+```bash
+good7ob pm task create --project-id 4 --name "导出报表" --tag 想法#245 --tag CLI
+good7ob pm task update 2900 --add-tag 后端 --remove-tag 待评估
+good7ob pm task batch-update --ids 2747,2748 --add-tag AI员工二期
+good7ob pm task list 4 --tag AI员工二期
+```
 
 **完成与验收（想法 #210）：** 关联了产品的项目里，AI 员工（CLI / MCP / API 的 AI 员工 Key）把任务改为
 `completed`，或执行人是 AI 员工的任务被改为 `completed` 时，平台实际存为 `awaiting_completion_approval`（完成待验收），
@@ -617,6 +640,7 @@ API 端点前缀：`/progress/tasks`
 | `--priority` | 批量设置优先级 |
 | `--owner-id` | 批量设置负责人 |
 | `--skip-acceptance` / `--reason` | 与 `--status completed` 一起：负责人跳过验收直接完成（理由 1–500 字） |
+| `--add-tag` / `--remove-tag` | 逐个任务增删标签（保留其它标签，未变化的任务不写入），可与上面的选项同用 |
 
 ---
 
