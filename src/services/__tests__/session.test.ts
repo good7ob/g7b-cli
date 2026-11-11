@@ -14,6 +14,13 @@ describe('sessionHeaderValue', () => {
     expect(sessionHeaderValue({ G7B_SESSION_ID: 'zzzzzzzzzz-1', CLAUDE_CODE_SESSION_ID: SID })).toBe('zzzzzzzzzz');
     expect(sessionHeaderValue({ G7B_SESSION_ID: 'short' })).toBe('short');
   });
+
+  it('counts the 10 chars the way the backend does: dashes removed first (a UUID, same identity as its body form)', () => {
+    // backend ExecIdentity.session10Of: id.replace("-", "") then the first 10 characters
+    expect(sessionHeaderValue({ CLAUDE_CODE_SESSION_ID: '7ebc2aab-5894-4f19-9a3e-2b7d0c1e8f44' })).toBe('7ebc2aab58');
+    expect(sessionHeaderValue({ G7B_SESSION_ID: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' })).toBe('a1b2c3d4e5');
+    expect(sessionHeaderValue({ G7B_SESSION_ID: '---' })).toBeUndefined();
+  });
   it('is undefined without an id or with an illegal shape', () => {
     expect(sessionHeaderValue({})).toBeUndefined();
     expect(sessionHeaderValue({ G7B_SESSION_ID: '  ' })).toBeUndefined();
