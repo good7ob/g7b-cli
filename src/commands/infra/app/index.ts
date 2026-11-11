@@ -531,10 +531,11 @@ export function registerAppCommands(infraCommand: Command) {
           process.exit(1);
         }
 
-        const resourceIds = options.resourceIds
+        // Resource ids are snowflakes: keep them as digit strings (parseInt would round ids above 2^53).
+        const resourceIds: string[] = options.resourceIds
           .split(',')
-          .map((id: string) => parseInt(id.trim()))
-          .filter((id: number) => !isNaN(id));
+          .map((id: string) => id.trim())
+          .filter((id: string) => /^\d+$/.test(id));
 
         if (resourceIds.length === 0) {
           console.error('错误: 无效的资源ID');
@@ -557,7 +558,9 @@ export function registerAppCommands(infraCommand: Command) {
           replace: options.replace || false,
         };
 
-        await apiClient.post(`/api/infra/applications/${appId}/resources`, resourceIds);
+        // Bug 2119700413758672898: send the object so relationType / replace reach the backend (backend#1222);
+        // posting the bare id array made every binding "primary" and ignored --replace.
+        await apiClient.post(`/api/infra/applications/${appId}/resources`, payload);
         console.log(`✓ 成功绑定 ${resourceIds.length} 个资源`);
         console.log(`  关联类型: ${relationType}`);
       } catch (error) {
