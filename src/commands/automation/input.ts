@@ -18,18 +18,20 @@ import {
 } from '../../utils/cliHelpers';
 
 export const STATUSES = ['draft', 'enabled', 'paused', 'awaiting_approval', 'disabled'] as const;
-export const TRIGGERS = ['cron', 'periodic', 'task-pool', 'manual'] as const;
+export const TRIGGERS = ['cron', 'periodic', 'task-pool', 'manual', 'window-loop'] as const;
+export const SPAWN_PRIORITIES = ['low', 'medium', 'high'] as const;
 export const EVERY = ['daily', 'weekly', 'monthly'] as const;
 export const BILLING = ['org-pool', 'byok'] as const;
 export const SOURCES = ['automation', 'manual'] as const;
 export const MAX_PAGE_SIZE = 100;
 
-type TriggerCode = 'CRON' | 'PERIODIC' | 'TASK_POOL' | 'MANUAL' | 'EVENT';
+type TriggerCode = 'CRON' | 'PERIODIC' | 'TASK_POOL' | 'MANUAL' | 'EVENT' | 'WINDOW_LOOP';
 const TRIGGER_CODE: Record<string, TriggerCode> = {
   cron: 'CRON', periodic: 'PERIODIC', 'task-pool': 'TASK_POOL', task_pool: 'TASK_POOL', manual: 'MANUAL', event: 'EVENT',
+  'window-loop': 'WINDOW_LOOP', window_loop: 'WINDOW_LOOP',
 };
 
-export const EVENT_PHASE2 = 'EVENT（事件触发）属第二期，CLI 不支持创建或改为事件触发；请用 cron / periodic / task-pool / manual';
+export const EVENT_PHASE2 = 'EVENT（事件触发）属第二期，CLI 不支持创建或改为事件触发；请用 cron / periodic / task-pool / manual / window-loop';
 
 // ── Error codes (backend AutomationErrorEnum @ e5532151 + the platform codes these endpoints answer with) ──
 
@@ -55,7 +57,7 @@ export const AUTOMATION_ERROR_CODES: ErrorCodeMap = {
   2710: '目标岗位当前没有在线且有空槽的 Runner（先让 Runner 上线，见 good7ob agent）',
   2711: '目标项目没有符合筛选条件的待 AI 执行（pending_agent）任务',
   2712: '组织没有具备开发（DEV）岗位的 AI 员工，无法启用',
-  2724: '预算不合法（Token 上限须 > 0 且单次 ≤ 当日；步骤超时 5-1440 分钟；运行超时 15-4320 分钟）',
+  2724: '预算不合法（Token 上限须 > 0 且单次 ≤ 当日；步骤超时 5-1440 分钟；运行超时 15-4320 分钟；window-loop 下步骤超时不能超过由硬截止推导的运行时限）',
   2726: '目标类型暂不支持（工作流模板第一期不能启用）',
 };
 
@@ -144,6 +146,8 @@ export interface Window { start: string; end: string; weekdays?: number[] }
 export interface Trigger {
   type: string; cronExpr?: string; timeZone?: string; periodic?: Periodic; poolMinIntervalMinutes?: number;
   window?: Window; graceMinutes?: number; skipNotifyThreshold?: number; display?: string; consecutiveSkips?: number;
+  /** WINDOW_LOOP (prd-0187): HH:mm inside the window */
+  stopAcceptingAt?: string; hardDeadlineAt?: string; reserveMinutes?: number; maxConcurrency?: number;
 }
 export interface TaskFilter { priorities?: string[]; labels?: string[]; executorEmployeeId?: number }
 export interface Target {
@@ -155,6 +159,8 @@ export interface Budget {
   runTokenBudget?: number | null; dailyTokenBudget?: number | null; stepTimeoutMinutes?: number; runTimeoutMinutes?: number;
   estimatedPricePerMillion?: number | null; estimatedPriceCurrency?: string | null; todayUsedTokens?: number;
 }
+/** prd-0187 rp-auto-loop-0031: limits on tasks an AI employee builds itself. */
+export interface SpawnLimits { maxPerRun?: number; maxDepth?: number; maxPriority?: string; requireLink?: boolean }
 export interface Billing {
   subject?: string; confirmEmployeeId?: number | null; runApprovalRequired?: boolean; enabledBy?: number;
   enabledByName?: string; enabledAt?: unknown; effectiveRunApproval?: string; runApprovalSource?: string;
@@ -171,13 +177,18 @@ export interface DefinitionFlags {
   taskFilter?: string; tags?: string; priority?: string; executor?: string; maxTasks?: string;
   budgetTokens?: string; dailyBudgetTokens?: string; billing?: string;
   workflow?: string; workflowVersion?: string;
+  stopAccepting?: string; hardDeadline?: string; maxConcurrency?: string; reserveMinutes?: string; maxTasksPerRun?: string;
+  spawnMaxPerRun?: string; spawnMaxDepth?: string; spawnMaxPriority?: string; spawnRequireLink?: string;
 }
 
 const TRIGGER_FLAGS: (keyof DefinitionFlags)[] = [
   'trigger', 'cron', 'every', 'at', 'weekday', 'day', 'timezone', 'poolInterval', 'window', 'windowWeekday', 'grace',
+  'stopAccepting', 'hardDeadline', 'maxConcurrency', 'reserveMinutes',
 ];
+const LOOP_FLAGS: (keyof DefinitionFlags)[] = ['stopAccepting', 'hardDeadline', 'maxConcurrency', 'reserveMinutes'];
+const SPAWN_FLAGS: (keyof DefinitionFlags)[] = ['spawnMaxPerRun', 'spawnMaxDepth', 'spawnMaxPriority', 'spawnRequireLink'];
 const FILTER_FLAGS: (keyof DefinitionFlags)[] = ['taskFilter', 'tags', 'priority', 'executor'];
-const TARGET_FLAGS: (keyof DefinitionFlags)[] = ['project', 'maxTasks', 'workflow', 'workflowVersion', ...FILTER_FLAGS];
+const TARGET_FLAGS: (keyof DefinitionFlags)[] = ['project', 'maxTasks', 'maxTasksPerRun', 'workflow', 'workflowVersion', ...FILTER_FLAGS];
 const BUDGET_FLAGS: (keyof DefinitionFlags)[] = ['budgetTokens', 'dailyBudgetTokens'];
 const given = (o: DefinitionFlags, keys: (keyof DefinitionFlags)[]) => keys.some((k) => o[k] !== undefined);
 
@@ -257,6 +268,45 @@ export function parseWindow(raw: string): Pick<Window, 'start' | 'end'> | null {
   return { start, end };
 }
 
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+/** Minutes from the window start to `time` (the window may cross midnight); undefined when outside the window. */
+function windowOffset(w: Pick<Window, 'start' | 'end'>, time: string): number | undefined {
+  const length = (toMinutes(w.end) - toMinutes(w.start) + 1440) % 1440;
+  const offset = (toMinutes(time) - toMinutes(w.start) + 1440) % 1440;
+  return offset <= length ? offset : undefined;
+}
+
+type LoopFlags = Pick<DefinitionFlags, 'stopAccepting' | 'hardDeadline' | 'maxConcurrency' | 'reserveMinutes'>;
+
+/**
+ * WINDOW_LOOP trigger fields (prd-0187 rp-auto-loop-0001): the window, `--stop-accepting` and `--hard-deadline` are
+ * required (flag or current value), both times lie inside the window and the deadline is not before the stop.
+ * The backend re-checks everything (1001 `INVALID_FIELD: <field>: <reason>`).
+ */
+export function buildLoopFields(o: LoopFlags, window: Pick<Window, 'start' | 'end'> | null, base?: Trigger): Partial<Trigger> {
+  if (!window) throw new InputError('--trigger window-loop 需要运行窗口 --window HH:mm-HH:mm（可跨午夜，如 22:00-06:00）');
+  const stop = o.stopAccepting !== undefined ? parseTime(o.stopAccepting, '--stop-accepting') : base?.stopAcceptingAt;
+  const hard = o.hardDeadline !== undefined ? parseTime(o.hardDeadline, '--hard-deadline') : base?.hardDeadlineAt;
+  if (!stop) throw new InputError('--trigger window-loop 需要 --stop-accepting HH:mm（窗口内的时刻，到点后不再领取新任务）');
+  if (!hard) throw new InputError('--trigger window-loop 需要 --hard-deadline HH:mm（窗口内的时刻，到点强制收尾；可等于窗口结束）');
+  const range = `${window.start}-${window.end}`;
+  const stopAt = windowOffset(window, stop);
+  const hardAt = windowOffset(window, hard);
+  if (stopAt === undefined) throw new InputError(`--stop-accepting ${stop} 不在运行窗口 ${range} 内`);
+  if (hardAt === undefined) throw new InputError(`--hard-deadline ${hard} 不在运行窗口 ${range} 内`);
+  if (hardAt < stopAt) throw new InputError(`--hard-deadline ${hard} 不能早于 --stop-accepting ${stop}`);
+  const out: Partial<Trigger> = { stopAcceptingAt: stop, hardDeadlineAt: hard };
+  const reserve = o.reserveMinutes !== undefined ? parseIntInRange(o.reserveMinutes, '--reserve-minutes', 0, 1440) : base?.reserveMinutes;
+  const concurrency = o.maxConcurrency !== undefined ? parseIntInRange(o.maxConcurrency, '--max-concurrency', 1, 20) : base?.maxConcurrency;
+  if (reserve !== undefined) out.reserveMinutes = reserve;
+  if (concurrency !== undefined) out.maxConcurrency = concurrency;
+  return out;
+}
+
 /**
  * Trigger section. `base` is the current trigger on update (whose type is kept unless --trigger changes it);
  * `keepTimeZone` is the zone to carry over when --timezone is absent (undefined = follow the organisation).
@@ -277,6 +327,7 @@ export function buildTrigger(o: DefinitionFlags, base?: Trigger, keepTimeZone?: 
   if (type !== 'CRON') misplaced(['cron'], '--trigger cron');
   if (type !== 'PERIODIC') misplaced(['every', 'at', 'weekday', 'day'], '--trigger periodic');
   if (type !== 'TASK_POOL') misplaced(['poolInterval'], '--trigger task-pool');
+  if (type !== 'WINDOW_LOOP') misplaced(LOOP_FLAGS, '--trigger window-loop');
 
   const out: Trigger = { type };
   if (type === 'CRON') {
@@ -302,6 +353,8 @@ export function buildTrigger(o: DefinitionFlags, base?: Trigger, keepTimeZone?: 
   } else if (o.windowWeekday !== undefined) {
     throw new InputError('--window-weekday 需要与 --window HH:mm-HH:mm 一起使用');
   }
+
+  if (type === 'WINDOW_LOOP') Object.assign(out, buildLoopFields(o, window, sameType ? base : undefined));
 
   const grace = o.grace !== undefined ? parseIntInRange(o.grace, '--grace', 1, 60) : base?.graceMinutes;
   if (grace !== undefined) out.graceMinutes = grace;
@@ -336,13 +389,24 @@ export function buildTaskFilter(o: DefinitionFlags, base?: TaskFilter | null): T
   return out;
 }
 
-export function buildTarget(o: DefinitionFlags, base?: Target): Target {
+/** `--max-tasks` (every trigger, 1-20) or `--max-tasks-per-run` (the same field; window-loop: 1-1000 over the whole run). */
+function parseMaxTasks(o: DefinitionFlags, triggerType: string | undefined): number | undefined {
+  if (o.maxTasks !== undefined && o.maxTasksPerRun !== undefined) {
+    throw new InputError('--max-tasks 与 --max-tasks-per-run 是同一个字段，只能给一个');
+  }
+  const label = o.maxTasksPerRun !== undefined ? '--max-tasks-per-run' : '--max-tasks';
+  const raw = o.maxTasksPerRun ?? o.maxTasks;
+  if (raw === undefined) return undefined;
+  return parseIntInRange(raw, label, 1, triggerType === 'WINDOW_LOOP' ? 1000 : 20);
+}
+
+export function buildTarget(o: DefinitionFlags, base?: Target, triggerType?: string): Target {
   const projectId = o.project !== undefined ? parseId(o.project, '--project') : base?.projectId;
   if (!projectId) throw new InputError('缺少 --project <项目 ID>（自动化从该项目领取待 AI 执行的任务）');
   const out: Target = { type: base?.type ?? 'TASK_FILTER', projectId };
   const filter = buildTaskFilter(o, base?.taskFilter);
   if (filter) out.taskFilter = filter;
-  const max = o.maxTasks !== undefined ? parseIntInRange(o.maxTasks, '--max-tasks', 1, 20) : base?.maxTasksPerRun;
+  const max = parseMaxTasks(o, triggerType) ?? base?.maxTasksPerRun;
   if (max !== undefined) out.maxTasksPerRun = max;
   // --workflow must already be a code here (index resolves workflow keys before building the body)
   const code = o.workflow !== undefined ? o.workflow.trim() : base?.workflowTemplateCode;
@@ -385,8 +449,26 @@ export function buildBilling(raw: string, base?: Billing): Billing {
   return out;
 }
 
+/** `--spawn-*` → `spawnLimits`, only the given fields (the backend keeps the others); undefined when none is given. */
+export function buildSpawnLimits(o: DefinitionFlags): SpawnLimits | undefined {
+  if (!given(o, SPAWN_FLAGS)) return undefined;
+  const out: SpawnLimits = {};
+  if (o.spawnMaxPerRun !== undefined) out.maxPerRun = parseIntInRange(o.spawnMaxPerRun, '--spawn-max-per-run', 1, 1000);
+  if (o.spawnMaxDepth !== undefined) out.maxDepth = parseIntInRange(o.spawnMaxDepth, '--spawn-max-depth', 0, 3);
+  if (o.spawnMaxPriority !== undefined) {
+    out.maxPriority = requireOneOf(o.spawnMaxPriority.trim().toLowerCase(), SPAWN_PRIORITIES, '--spawn-max-priority');
+  }
+  if (o.spawnRequireLink !== undefined) {
+    const v = o.spawnRequireLink.trim().toLowerCase();
+    if (v !== 'true' && v !== 'false') throw new InputError(`--spawn-require-link 取值 true | false，收到: ${o.spawnRequireLink}`);
+    out.requireLink = v === 'true';
+  }
+  return out;
+}
+
 export interface SaveBody {
   name?: string; description?: string; trigger?: Trigger; target?: Target; budget?: Budget; billing?: Billing;
+  spawnLimits?: SpawnLimits;
 }
 
 /** `POST /automations`: name, project and trigger are required; optional sections only when flagged. */
@@ -395,9 +477,11 @@ export function buildCreateBody(o: DefinitionFlags): SaveBody {
   if (o.description !== undefined) body.description = requireText(o.description, 2000, '--description');
   if (o.trigger === undefined) throw new InputError(`缺少 --trigger（${TRIGGERS.join(' | ')}）`);
   body.trigger = buildTrigger(o);
-  body.target = buildTarget(o);
+  body.target = buildTarget(o, undefined, body.trigger.type);
   if (given(o, BUDGET_FLAGS)) body.budget = buildBudget(o);
   if (o.billing !== undefined) body.billing = buildBilling(o.billing);
+  const spawnLimits = buildSpawnLimits(o);
+  if (spawnLimits) body.spawnLimits = spawnLimits;
   return body;
 }
 
@@ -413,10 +497,12 @@ export function buildUpdateBody(o: DefinitionFlags, current: CurrentDefinition, 
     const zone = current.trigger?.timeZone;
     body.trigger = buildTrigger(o, current.trigger, zone && zone !== orgTimeZone ? zone : undefined);
   }
-  if (given(o, TARGET_FLAGS)) body.target = buildTarget(o, current.target);
+  if (given(o, TARGET_FLAGS)) body.target = buildTarget(o, current.target, body.trigger?.type ?? current.trigger?.type);
   if (given(o, BUDGET_FLAGS)) body.budget = buildBudget(o, current.budget);
   if (o.billing !== undefined) body.billing = buildBilling(o.billing, current.billing);
-  if (!Object.keys(body).length) throw new InputError('没有要修改的内容：至少指定一个字段（如 --name、--cron、--max-tasks、--budget-tokens）');
+  const spawnLimits = buildSpawnLimits(o);
+  if (spawnLimits) body.spawnLimits = spawnLimits;
+  if (!Object.keys(body).length) throw new InputError('没有要修改的内容：至少指定一个字段（如 --name、--cron、--max-tasks、--budget-tokens、--spawn-max-per-run）');
   return body;
 }
 
@@ -424,8 +510,9 @@ export function buildUpdateBody(o: DefinitionFlags, current: CurrentDefinition, 
 
 export function buildPreviewBody(o: {
   cron?: string; every?: string; at?: string; weekday?: string; day?: string; timezone?: string;
-  window?: string; windowWeekday?: string; count?: string;
+  window?: string; windowWeekday?: string; count?: string; trigger?: string; stopAccepting?: string; hardDeadline?: string;
 }): Record<string, unknown> {
+  if (o.trigger !== undefined || o.stopAccepting !== undefined || o.hardDeadline !== undefined) return buildLoopPreviewBody(o);
   if ((o.cron === undefined) === (o.every === undefined)) {
     throw new InputError('指定 --cron "<表达式>" 或 --every daily|weekly|monthly 之一（任务池 / 手动触发没有固定时刻）');
   }
@@ -442,6 +529,27 @@ export function buildPreviewBody(o: {
   } else if (o.windowWeekday !== undefined) {
     throw new InputError('--window-weekday 需要与 --window 一起使用');
   }
+  body.count = parseIntInRange(o.count ?? '5', '--count', 1, 20);
+  return body;
+}
+
+/** `--trigger window-loop --window … --stop-accepting … --hard-deadline …` → the WINDOW_LOOP preview request. */
+function buildLoopPreviewBody(o: Parameters<typeof buildPreviewBody>[0]): Record<string, unknown> {
+  if (o.trigger === undefined || parseTriggerType(o.trigger) !== 'WINDOW_LOOP') {
+    throw new InputError('--stop-accepting / --hard-deadline 要与 --trigger window-loop 一起使用（cron / periodic 触发用 --cron / --every，不带 --trigger）');
+  }
+  if (o.cron !== undefined || o.every !== undefined || o.at !== undefined || o.weekday !== undefined || o.day !== undefined) {
+    throw new InputError('--trigger window-loop 不能与 --cron / --every / --at / --weekday / --day 同时使用');
+  }
+  const window = o.window !== undefined ? parseWindow(o.window) : null;
+  const fields = buildLoopFields(o, window);
+  const body: Record<string, unknown> = {
+    triggerType: 'WINDOW_LOOP',
+    window: o.windowWeekday !== undefined ? { ...window, weekdays: parseWeekdays(o.windowWeekday, '--window-weekday') } : window,
+    stopAcceptingAt: fields.stopAcceptingAt,
+    hardDeadlineAt: fields.hardDeadlineAt,
+  };
+  if (o.timezone !== undefined) body.timeZone = parseTimeZone(o.timezone);
   body.count = parseIntInRange(o.count ?? '5', '--count', 1, 20);
   return body;
 }

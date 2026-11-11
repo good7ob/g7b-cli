@@ -23,6 +23,10 @@ export interface Envelope {
 export const ok = (data: unknown): Envelope => ({ code: 200, msg: '操作成功', success: true, data });
 export const bizError = (code: number, msg = 'boom'): Envelope => ({ code, msg, success: false });
 
+/** A real HTTP error status (axios rejects, with the body on `response.data`), e.g. a 409 whose `code` is a string. */
+export const httpError = (status: number, data: unknown): Envelope =>
+  ({ __httpError: { message: `Request failed with status code ${status}`, response: { status, data } } } as unknown as Envelope);
+
 /** One envelope for every call, or a function choosing it per call (multi-request commands like `use --dry-run`). */
 export type Responder = Envelope | ((method: Method, url: string) => Envelope);
 
@@ -46,8 +50,12 @@ export async function runCli(
   response: Responder = ok(null)
 ): Promise<CliRun> {
   const http = apiClient['instance'];
-  const reply = (m: Method, url: string) =>
-    ({ data: typeof response === 'function' ? response(m, url) : response } as AxiosResponse);
+  const reply = (m: Method, url: string) => {
+    const envelope = typeof response === 'function' ? response(m, url) : response;
+    const rejection = (envelope as { __httpError?: unknown }).__httpError;
+    if (rejection) throw rejection;
+    return { data: envelope } as AxiosResponse;
+  };
   const spies = Object.fromEntries(
     METHODS.map((m) => [m, vi.spyOn(http, m).mockImplementation((async (url: string) => reply(m, url)) as never)])
   ) as Record<Method, SpyInstance>;

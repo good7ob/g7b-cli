@@ -573,6 +573,15 @@ API 端点前缀：`/progress/tasks`
 | `--parent-task-id` | 父任务 ID（创建子任务） |
 | `--tag` | 标签名（可重复或逗号分隔）；系统标签和自己的标签按名称匹配，没有的自动创建为自己的标签 |
 | `--tag-id` | 标签 ID（可重复或逗号分隔，见 `pm tag list`）；不能与 `--tag` 同时使用 |
+| `--fp-id` / `--rp-id` | 功能点 / 规则点 ID，放请求体 `functionPointId` / `rulePointId`（AI 自建任务的关联；人类调用后端不处理） |
+| `--run-id` / `--step-id` | 自动化运行 / 步骤 ID，放请求头 `X-Automation-Run-Id` / `X-Automation-Step-Id`（不在请求体）；必须同时给，原样发送（由后端校验，不查询）；都不给时读本机 `agent listen` 状态文件里当前步骤，并先 `GET /api/v1/orgs/{orgId}/runs/{runId}`（组织取步骤所属组织，其次 `GOOD7OB_ORG_ID` / `config set org-id` / Key 的唯一组织），响应 `loop` 非空（窗口长运行）才带头；`loop` 为空（普通运行）、没有占用、查询失败（stderr 一行警告，不影响创建）都不带头 |
+| `--no-run-context` | 不查询也不带运行上下文，即使 `agent listen` 正占用着一个步骤 |
+
+**AI 员工自建任务（窗口长 Run，prd-0187）：** 用 AI 员工 Key 调用时服务端强制执行者为该员工（不需要 `--ai-employee` / `--executor-type`），
+并按自动化的自建限额过守卫。响应 `data.spawnResult` 决定输出，三种结果退出码均为 0：
+`CREATED` →「已创建任务 #N」；`DEDUPED` →「已存在任务 #N（去重）」；`DRAFTED` →「已提交草案 #D（原因：POLICY|QUOTA|DEPTH|PRIORITY|NO_LINK）」
+（`draftExisted=true` 时加「同键草案已存在」；草案由人 `automation draft approve` 批准后才创建任务）。没有 `spawnResult`（人类 / 无运行上下文）保持原输出；`--json` 原样输出响应数据。
+运行上下文无效 → HTTP 409 `SPAWN_CONTEXT_INVALID`：打印「运行上下文无效…」并以退出码 1 结束，不创建任务也不落草案。
 
 **任务标签（想法 #245）：** `pm task update` 的标签选项：
 
@@ -590,6 +599,7 @@ AI 员工 Key（task_write）同样可以按名称建标签，标签归属 Key �
 
 ```bash
 good7ob pm task create --project-id 4 --name "导出报表" --tag 想法#245 --tag CLI
+good7ob pm task create --project-id 4 --name "补集成测试" --fp-id 12 --rp-id 34 --run-id 7 --step-id 31   # AI 自建任务
 good7ob pm task update 2900 --add-tag 后端 --remove-tag 待评估
 good7ob pm task batch-update --ids 2747,2748 --add-tag AI员工二期
 good7ob pm task list 4 --tag AI员工二期
@@ -1171,14 +1181,17 @@ API 端点前缀：`/api/v1/orgs/{orgId}/automations`、`/api/v1/orgs/{orgId}/au
 | 命令 | 说明 |
 |------|------|
 | `automation list` | 组织的自动化（下次运行升序）；列：名称、状态、触发方式、下次运行、最近结果、项目；`--status` `--project` `--trigger` `--keyword` `-p/--page` `--page-size`（≤100） |
-| `automation show <id>` | 详情：触发（含 cron / 时区）、运行窗口、下次运行、最近结果、目标与当前匹配任务数、预算、计费与启用人、审批中 / 进行中运行、Runner 告警、最近 10 次运行（含跳过）与最近事件 |
-| `automation create` | 新建草稿；必填 `--name` `--project` `--trigger cron\|periodic\|task-pool\|manual`，见下表 |
+| `automation show <id>` | 详情：触发（含 cron / 时区）、运行窗口、窗口长运行的停止接单 / 硬截止 / 并发 / 预留、进行中长运行（阶段、等待原因、停止接单与硬截止倒计时）、自建限额、下次运行、最近结果、目标与当前匹配任务数、预算、计费与启用人、审批中 / 进行中运行、Runner 告警、最近 10 次运行（含跳过）与最近事件 |
+| `automation create` | 新建草稿；必填 `--name` `--project` `--trigger cron\|periodic\|task-pool\|manual\|window-loop`，见下表 |
 | `automation update <id> …` | 只改给出的字段（同 create 的选项）；先读当前定义，被改到的段整体回写 |
 | `automation delete <id> [--yes]` | 删除（仅草稿 / 已停用，且无未结束运行）；非交互环境必须 `--yes` |
-| `automation run <id> [--wait] [--wait-timeout <分钟>]` | 手动运行（已启用 / 已暂停，仅 owner/admin）→ 运行 ID（= 执行计划 ID）、状态、任务；`--wait` 轮询直到 running 或未执行，最长一个宽限期 |
+| `automation run <id> [--wait] [--wait-timeout <分钟>]` | 手动运行（已启用 / 已暂停，仅 owner/admin；window-loop 只由窗口自动触发，手动运行返回 `2702`）→ 运行 ID（= 执行计划 ID）、状态、任务；`--wait` 轮询直到 running 或未执行，最长一个宽限期 |
 | `automation enable\|pause\|resume\|disable <id> [--reason]` | 启用 / 暂停 / 恢复 / 停用（仅 owner/admin）；启用后显示计费主体、单次上限与下次运行 |
 | `automation withdraw-approval <id>` | 撤回审批中的启用 / 修改，回到原状态 |
-| `automation preview --cron <expr> \| --every …` | 触发时刻预览（`trigger-preview`，不保存）：平台时间 JST、触发器时区、是否在 `--window` 内；`--timezone` `--count`（1-20，默认 5） |
+| `automation preview --cron <expr> \| --every …` | 触发时刻预览（`trigger-preview`，不保存）：平台时间 JST、触发器时区、是否在 `--window` 内；`--timezone` `--count`（1-20，默认 5）。窗口长运行：`--trigger window-loop --window … --stop-accepting … --hard-deadline …`，列出每个窗口的开始 / 停止接单 / 硬截止 / 结束 |
+| `automation draft list` | AI 员工自建任务落成的草案（新的在前）；`--automation-id` `--run-id` `--status pending\|approved\|rejected\|expired` `--limit`（1-200，默认 50）；`GET …/automations/task-drafts` |
+| `automation draft approve <draftId>` | 批准草案并创建任务（`pending_agent`）；`POST …/task-drafts/{id}/approve`，无请求体；只能用人类 Key（AI 员工 Key 后端返回 `2703`），启用人或组织 owner/admin；幂等 |
+| `automation draft reject <draftId>` | 驳回草案，不创建任务；同上 |
 | `automation runs <id>` | 运行（= 执行计划）与被跳过的触发，新的在前；`--status` `-p` `--page-size` |
 | `automation events <id>` | 定义事件（新建 / 修改 / 启用 / 暂停 / 审批 / 运行创建 / 跳过…） |
 | `automation plans` | 「计划」：自动化 + 项目执行计划；`--source automation\|manual`（manual = 手动建的执行计划）`--status` `--project` `--trigger` `--keyword`；末尾显示待审批的自动化 / 运行数 |
@@ -1194,14 +1207,16 @@ create / update 的触发与目标选项：
 | `--trigger task-pool [--pool-interval 5-1440]` | `trigger: {type: TASK_POOL, poolMinIntervalMinutes}` |
 | `--trigger manual` | `trigger: {type: MANUAL}`（只能 `automation run`） |
 | `--timezone` `--window 22:00-06:00` `--window-weekday` `--grace 1-60` | `trigger.timeZone / window{start,end,weekdays} / graceMinutes`（窗口可跨午夜；`--window none` 取消） |
-| `--project <id>` `--max-tasks 1-20` | `target: {type: TASK_FILTER, projectId, maxTasksPerRun}` |
+| `--trigger window-loop --window 22:00-06:00 --stop-accepting 05:30 --hard-deadline 06:00 [--max-concurrency 1-20] [--reserve-minutes 0-1440]` | `trigger: {type: WINDOW_LOOP, window, stopAcceptingAt, hardDeadlineAt, maxConcurrency, reserveMinutes}`（窗口、停止接单、硬截止必填，两个时刻须在窗口内且硬截止不早于停止接单，硬截止可等于窗口结束；`--stop-accepting` 等只用于 window-loop；update 只给其中一项时其余沿用当前值） |
+| `--project <id>` `--max-tasks 1-20` / `--max-tasks-per-run` | `target: {type: TASK_FILTER, projectId, maxTasksPerRun}`（两个选项同一字段，只能给一个；window-loop 下上限 1000 = 整个长运行累计领取数） |
+| `--spawn-max-per-run 1-1000` `--spawn-max-depth 0-3` `--spawn-max-priority low\|medium\|high` `--spawn-require-link true\|false` | `spawnLimits: {maxPerRun, maxDepth, maxPriority, requireLink}`（AI 自建任务限额，只发给出的字段；缺省取后端默认 1000 / 1 / medium / true；AI 员工 Key 不能写自动化，`2703`） |
 | `--tags a,b` `--priority high,urgent` `--executor <AI 员工 ID>` 或 `--task-filter '<json>'` | `target.taskFilter: {labels, priorities, executorEmployeeId}`（二选一；`--task-filter none` 清空） |
 | `--budget-tokens N` `--daily-budget-tokens N` | `budget: {runTokenBudget, dailyTokenBudget}`（`unlimited` = 不限；后端整段替换，只给一个时另一个按"不限"保存；单次 ≤ 当日） |
 | `--billing org-pool\|byok` | `billing: {subject: ORG_POOL\|BYOK}` |
 
 `--trigger event` 在 CLI 端直接拒绝（「第二期」，后端 EVENT 只能存草稿不能启用）。
 
-业务错误码（`AutomationErrorEnum`，按消息里的 KEY 区分同码）：`1001` 参数不合法 / `EVENT_TRIGGER_PHASE2` 第二期、`1002` 不存在、`1006` 同名、`2004` 无权（owner/admin）、`2702` 状态不允许、`2703` AI 员工 Key 只读、`2704` 计费主体不可用、`2705` 目标无效、`2706` 触发器不合法、`2707` 有未结束运行不能删、`2708` 已有进行中运行、`2709` 预算用尽、`2710` 无可用 Runner、`2711` 无待执行任务、`2712` 无 DEV 岗位 AI 员工、`2724` 预算不合法、`2726` 目标类型不支持。
+业务错误码（`AutomationErrorEnum`，按消息里的 KEY 区分同码）：`1001` 参数不合法 / `EVENT_TRIGGER_PHASE2` 第二期、`1002` 不存在、`1006` 同名、`2004` 无权（owner/admin）、`2702` 状态不允许、`2703` AI 员工 Key 只读、`2704` 计费主体不可用、`2705` 目标无效、`2706` 触发器不合法、`2707` 有未结束运行不能删、`2708` 已有进行中运行、`2709` 预算用尽、`2710` 无可用 Runner、`2711` 无待执行任务、`2712` 无 DEV 岗位 AI 员工、`2724` 预算不合法（window-loop 下步骤超时不能超过由硬截止推导的运行时限）、`2726` 目标类型不支持。window-loop 的 `1001` 形如 `INVALID_FIELD: trigger.hardDeadlineAt: …`，原样附在提示后。草案命令另有：`1002` 草案不存在、`2000` 不是启用人也不是 owner/admin、`2702` 草案已不是待处理、`2703` AI 员工 Key。
 退出码：0 成功；3 跳过 / 冲突（`2702 2708 2709 2710 2711`，以及 `run --wait` 未开始）；1 其他错误。所有命令支持 `--json`。
 
 ```bash

@@ -5,6 +5,7 @@ import { currentProjectId } from '../../../utils/resolveProjectId';
 import { planMove } from './movePlan';
 import { registerDepCommands } from './dep';
 import { registerTimeCommands } from './time';
+import { describeSpawnContextError, linkFields, renderSpawnResult, runContextHeaders } from './spawn';
 import { prdOption, registerRequirementCommands, resolveSources, upsertSources } from './requirement';
 import { fmtDate, fmtDateTime, InputError, parseDate, parseId } from '../../../utils/cliHelpers';
 import {
@@ -254,11 +255,17 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--executor-id <id>', 'Executor: user ID for HUMAN; AI employee ID / emp:<id> or agent id for AGENT')
     .option('--tag <name>', 'Tag name (repeatable or comma-separated); a name you do not have yet is created as your tag', collectTagList, [])
     .option('--tag-id <id>', 'Tag ID (repeatable or comma-separated; see `pm tag list`); not with --tag', collectTagList, [])
+    .option('--fp-id <id>', 'Function point ID to link (AI self-built tasks in a window-loop run; sent as functionPointId)')
+    .option('--rp-id <id>', 'Rule point ID to link (sent as rulePointId)')
+    .option('--run-id <id>', 'Automation run ID (X-Automation-Run-Id; with --step-id; sent as given). Default: the step `agent listen` holds, only when its run is a window-loop long run')
+    .option('--step-id <id>', 'Automation step ID (X-Automation-Step-Id; with --run-id)')
+    .option('--no-run-context', 'Do not look up or send the run context, even when `agent listen` holds a step')
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
         const body: any = {
           ...createTagFields(options),
+          ...linkFields(options),
           projectId: currentProjectId(options.projectId),
           name: options.name,
           priority: options.priority,
@@ -273,15 +280,24 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.parentTaskId) body.parentTaskId = parseInt(options.parentTaskId);
         if (options.estimatedHours) body.estimatedHours = parseFloat(options.estimatedHours);
 
-        const task = await apiClient.post('/progress/tasks', body);
+        const headers = await runContextHeaders(options);
+        const task = headers
+          ? await apiClient.post('/progress/tasks', body, { headers })
+          : await apiClient.post('/progress/tasks', body);
         if (options.json) {
           console.log(JSON.stringify(task, null, 2));
+          return;
+        }
+        const spawned = renderSpawnResult(task, options.name);
+        if (spawned) {
+          console.log(spawned);
           return;
         }
         const tagNames = currentTagNames(task);
         console.log(`✓ 任务已创建: [${task?.id || ''}] ${options.name}${tagNames.length ? `（标签: ${tagNames.join(', ')}）` : ''}`);
       } catch (error) {
-        console.error('✗ 创建任务失败:', error instanceof Error ? error.message : String(error));
+        const spawnError = describeSpawnContextError(error);
+        console.error('✗ 创建任务失败:', spawnError ?? (error instanceof Error ? error.message : String(error)));
         process.exit(1);
       }
     });

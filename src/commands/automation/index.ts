@@ -1,6 +1,6 @@
 /**
  * `good7ob automation` (prd-0135 FP-7 `fun-auto-def-0007`, design n1 §6, backend #989): organisation automations —
- * definitions with a trigger (CRON / PERIODIC / TASK_POOL / MANUAL; EVENT is phase 2), their lifecycle
+ * definitions with a trigger (CRON / PERIODIC / TASK_POOL / MANUAL / WINDOW_LOOP; EVENT is phase 2), their lifecycle
  * (enable = authorise, pause / resume / disable, manual run), runs, events, the 「计划」 tab and org settings.
  *
  * Every endpoint lives under /api/v1/orgs/{orgId}. The org comes from --org-id / --org, GOOD7OB_ORG_ID,
@@ -16,10 +16,11 @@ import { extractRecords } from '../../utils/extractRecords';
 import { resolveOrgId } from '../../utils/resolveOrgId';
 import { confirmOrThrow } from '../habit/input';
 import {
-  BILLING, DefinitionFlags, EVERY, EXIT_SKIPPED, SKIP_CODES, SOURCES, STATUSES, SettingsFlags, TRIGGERS,
+  BILLING, DefinitionFlags, EVERY, SPAWN_PRIORITIES, EXIT_SKIPPED, SKIP_CODES, SOURCES, STATUSES, SettingsFlags, TRIGGERS,
   WorkflowTemplate, actionBody, isTemplateCode, resolveTemplateCode, buildCreateBody, buildListParams, buildPlansParams, buildPreviewBody, buildRunsParams,
   buildSettingsBody, buildUpdateBody, pageParams, parseTriggerType, touchesTrigger,
 } from './input';
+import { DRAFT_ERROR_CODES, DRAFT_STATUSES, TaskDraft, buildDraftListParams, renderDraftDecision, renderDraftList } from './draft';
 import {
   Automation, RunResult, RunRow, describeAutomationError, renderActionResult, renderAutomationDetail,
   renderAutomationList, renderEvents, renderPlans, renderPreview, renderRunResult, renderRuns, renderSettings,
@@ -60,7 +61,7 @@ async function resolveWorkflowFlag(o: DefinitionFlags, orgId: number): Promise<v
 class NotStarted extends Error {}
 
 /** One-line error; 3 for the skipped / conflict codes, 1 otherwise. */
-function failAutomation(prefix: string, error: unknown): never {
+function failAutomation(prefix: string, error: unknown, codes?: Record<number, string>): never {
   if (error instanceof NotStarted) {
     console.error(`✗ ${error.message}`);
     process.exit(EXIT_SKIPPED);
@@ -70,15 +71,15 @@ function failAutomation(prefix: string, error: unknown): never {
     process.exit(1);
   }
   const code = (error as { code?: unknown } | null)?.code;
-  console.error(`✗ ${prefix}: ${describeAutomationError(error)}`);
+  console.error(`✗ ${prefix}: ${describeAutomationError(error, codes)}`);
   process.exit(typeof code === 'number' && SKIP_CODES.has(code) ? EXIT_SKIPPED : 1);
 }
 
-async function guard(prefix: string, fn: () => Promise<void>): Promise<void> {
+async function guard(prefix: string, fn: () => Promise<void>, codes?: Record<number, string>): Promise<void> {
   try {
     await fn();
   } catch (error) {
-    failAutomation(prefix, error);
+    failAutomation(prefix, error, codes);
   }
 }
 
@@ -89,7 +90,7 @@ function definitionOptions(cmd: Command, creating: boolean): Command {
   req('--name <name>', '名称（组织内唯一，1-100 字）');
   cmd.option('--description <text>', '说明（≤2000 字）');
   req('--project <id>', '目标项目：从该项目领取待 AI 执行（pending_agent）的任务');
-  req('--trigger <type>', `触发方式 ${TRIGGERS.join('|')}（event 属第二期，不支持）`);
+  req('--trigger <type>', `触发方式 ${TRIGGERS.join('|')}（event 属第二期，不支持；window-loop = 窗口长 Run，需 --window --stop-accepting --hard-deadline）`);
   return withOrg(cmd
     .option('--cron <expr>', 'cron 触发：五段表达式（分 时 日 月 周），两次触发间隔 ≥ 5 分钟，如 "0 22 * * 1-5"')
     .option('--every <period>', `周期触发：${EVERY.join('|')}`)
@@ -105,7 +106,16 @@ function definitionOptions(cmd: Command, creating: boolean): Command {
     .option('--tags <tags>', '任务筛选：带任一标签（逗号分隔）')
     .option('--priority <list>', '任务筛选：优先级（逗号分隔，如 high,urgent）')
     .option('--executor <employeeId>', '任务筛选：只取预分配给该 AI 员工的任务')
-    .option('--max-tasks <n>', '每次运行最多领取的任务数 1-20（默认 1）')
+    .option('--max-tasks <n>', '每次运行最多领取的任务数 1-20（默认 1）；window-loop 下上限 1000，同 --max-tasks-per-run')
+    .option('--max-tasks-per-run <n>', '同 --max-tasks；window-loop 下 = 整个长运行累计领取数 1-1000，其他触发 1-20')
+    .option('--stop-accepting <HH:mm>', 'window-loop：窗口内的时刻，到点后不再领取新任务（必填）')
+    .option('--hard-deadline <HH:mm>', 'window-loop：窗口内的时刻，不早于 --stop-accepting，可等于窗口结束；到点强制收尾（必填）')
+    .option('--max-concurrency <n>', 'window-loop：同时未结束的任务组上限 1-20（默认 3）')
+    .option('--reserve-minutes <n>', 'window-loop：预留分钟数 0-1440（默认 20；目前只保存）')
+    .option('--spawn-max-per-run <n>', 'AI 自建任务限额：每次运行最多自建 1-1000（默认 1000）')
+    .option('--spawn-max-depth <n>', 'AI 自建任务限额：自建深度 0-3（默认 1；0 = 一律落草案）')
+    .option('--spawn-max-priority <p>', `AI 自建任务限额：允许直接创建的最高优先级 ${SPAWN_PRIORITIES.join('|')}（默认 medium）`)
+    .option('--spawn-require-link <bool>', 'AI 自建任务限额：必须关联功能点 / 规则点 / 父任务 true|false（默认 true）')
     .option('--workflow <code>', '工作流模板：BUILTIN_LINEAR_V1（默认）、wf:<工作流 ID> 或已发布工作流的标识（见 automation templates）')
     .option('--workflow-version <n>', '模板版本：版本号，或 latest = 启用时的最新版本（默认；之后发布的新版本要重新保存 / 启用才生效）')
     .option('--budget-tokens <n>', '单次运行 Token 上限（unlimited = 不限）')
@@ -218,7 +228,7 @@ export function registerAutomationCommands(program: Command) {
     }));
 
   withOrg(automation.command('run <id>')
-    .description('手动运行一次（已启用或已暂停；仅 owner/admin）：返回运行 ID（= 执行计划 ID）与状态')
+    .description('手动运行一次（已启用或已暂停；仅 owner/admin）：返回运行 ID（= 执行计划 ID）与状态；window-loop 只由窗口自动触发，不支持手动运行（2702）')
     .option('--wait', '等待运行开始（running）或被跳过，最长一个宽限期')
     .option('--wait-timeout <minutes>', '--wait 的最长等待分钟数（默认取该自动化的宽限期）')
     .option('--json', '输出 JSON'))
@@ -272,14 +282,17 @@ export function registerAutomationCommands(program: Command) {
     }));
 
   withOrg(automation.command('preview')
-    .description('预览 cron / 周期触发接下来的触发时刻（不保存）')
+    .description('预览 cron / 周期触发接下来的触发时刻，或 window-loop 的窗口 / 停止接单 / 硬截止时刻（不保存）')
+    .option('--trigger <type>', '只支持 window-loop（与 --window --stop-accepting --hard-deadline 一起用）；cron / 周期触发不带此项')
+    .option('--stop-accepting <HH:mm>', 'window-loop：窗口内的停止接单时刻')
+    .option('--hard-deadline <HH:mm>', 'window-loop：窗口内的硬截止时刻')
     .option('--cron <expr>', '五段 cron，如 "0 22 * * 1-5"')
     .option('--every <period>', `周期：${EVERY.join('|')}`)
     .option('--at <HH:mm>', '周期触发的时刻')
     .option('--weekday <days>', '每周的星期（1-7 或 mon…sun）')
     .option('--day <day>', '每月的日期（1-28 或 last）')
     .option('--timezone <tz>', 'IANA 时区（默认组织时区）')
-    .option('--window <HH:mm-HH:mm>', '运行窗口：标出每个时刻是否在窗口内')
+    .option('--window <HH:mm-HH:mm>', '运行窗口：标出每个时刻是否在窗口内（window-loop 必填）')
     .option('--window-weekday <days>', '运行窗口生效的星期')
     .option('--count <n>', '预览次数 1-20', '5')
     .option('--json', '输出 JSON'))
@@ -329,6 +342,35 @@ export function registerAutomationCommands(program: Command) {
       const res = await apiClient.get(`${base(await orgOf(o))}/plans`, params);
       emit(o.json, res, () => renderPlans(res, Number(params.page), Number(params.pageSize)));
     }));
+
+  const draft = automation.command('draft')
+    .description('AI 员工自建任务落成的草案（窗口长 Run，prd-0187）：列表 / 批准 / 驳回（批准与驳回只能用人类 Key）');
+  const draftUrl = async (o: OrgOpts) => `${base(await orgOf(o))}/task-drafts`;
+
+  withOrg(draft.command('list')
+    .description('列出任务草案（新的在前）')
+    .option('--automation-id <id>', '按自动化过滤')
+    .option('--run-id <id>', '按运行过滤')
+    .option('--status <status>', `按状态过滤（${DRAFT_STATUSES.join('|')}）`)
+    .option('--limit <n>', '最多条数 1-200（默认 50）')
+    .option('--json', '输出 JSON'))
+    .action((o) => guard('获取任务草案失败', async () => {
+      const params = buildDraftListParams(o);
+      const res = await apiClient.get(await draftUrl(o), params);
+      emit(o.json, res, () => renderDraftList(res));
+    }, DRAFT_ERROR_CODES));
+
+  for (const [name, desc, failPrefix] of [
+    ['approve', '批准草案：创建任务（pending_agent，负责人为批准人）；幂等；仅人类 Key，启用人或组织 owner/admin', '批准草案失败'],
+    ['reject', '驳回草案：不创建任务；幂等；仅人类 Key，启用人或组织 owner/admin', '驳回草案失败'],
+  ] as const) {
+    withOrg(draft.command(`${name} <draftId>`).description(desc).option('--json', '输出 JSON'))
+      .action((draftId, o: OrgOpts) => guard(failPrefix, async () => {
+        const id = parseId(draftId, 'draftId');
+        const res: TaskDraft | undefined = await apiClient.post(`${await draftUrl(o)}/${id}/${name}`);
+        emit(o.json, res, () => renderDraftDecision(res, id, name));
+      }, DRAFT_ERROR_CODES));
+  }
 
   const settings = automation.command('settings').description('组织自动化设置（成员可读，owner/admin 可改）');
 

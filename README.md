@@ -247,9 +247,13 @@ good7ob automation enable 12                          # enable = authorise (owne
 good7ob automation run 12 --wait                      # manual run -> run id (= execution plan id)
 good7ob automation pause 12 --reason "maintenance"
 good7ob automation settings set --require-enable-approval
+# window-loop (prd-0187): one long run per window; the window, --stop-accepting and --hard-deadline are required
+good7ob automation create --name "夜间长跑" --project 7 --trigger window-loop --window 22:00-06:00 --stop-accepting 05:30 --hard-deadline 06:00 --max-tasks-per-run 200 --spawn-max-per-run 50 --spawn-require-link true
+good7ob automation preview --trigger window-loop --window 22:00-06:00 --stop-accepting 05:30 --hard-deadline 06:00
+good7ob automation draft list --status pending        # task drafts AI employees proposed in a run
+good7ob automation draft approve 5                    # human key only; creates the task (pending_agent)
 ```
-
-Organisation automations (prd-0135, backend #989): definitions with a cron / periodic / task-pool / manual trigger (EVENT is phase 2 and rejected client-side), lifecycle (enable / pause / resume / disable / withdraw-approval), runs, events, the plans view and org settings. `--workflow` picks the workflow template (`BUILTIN_LINEAR_V1`, `wf:<id>` or a published workflow key; idea #187 N-2), `--workflow-version` a version or `latest` (fixed when enabled). Org from `--org-id`/`--org`, `GOOD7OB_ORG_ID`, `config set org-id`, or the key's only org. Exit code 3 = skipped / conflict (2702, 2708-2711). See `FEATURES.md`.
+Organisation automations (prd-0135, backend #989): definitions with a cron / periodic / task-pool / manual trigger (EVENT is phase 2 and rejected client-side), lifecycle (enable / pause / resume / disable / withdraw-approval), runs, events, the plans view and org settings. `--workflow` picks the workflow template (`BUILTIN_LINEAR_V1`, `wf:<id>` or a published workflow key; idea #187 N-2), `--workflow-version` a version or `latest` (fixed when enabled). Org from `--org-id`/`--org`, `GOOD7OB_ORG_ID`, `config set org-id`, or the key's only org. Exit code 3 = skipped / conflict (2702, 2708-2711). Window-loop (`--trigger window-loop`, prd-0187): `--stop-accepting` / `--hard-deadline` / `--max-concurrency` / `--reserve-minutes`, AI self-build limits `--spawn-max-per-run|depth|priority|require-link`; `draft list|approve|reject` handle the tasks a guard turned into drafts (approve / reject need a human key). See `FEATURES.md`.
 
 ### `trace`
 
@@ -466,6 +470,11 @@ good7ob pm task update 456 --add-tag urgent --remove-tag later   # keeps the oth
 good7ob pm task update 456 --tag a,b                             # replaces all tags (--clear-tags removes all)
 good7ob pm task batch-update --ids 456,457 --add-tag urgent
 good7ob pm task list 123 --tag urgent
+
+# AI self-built task in a window-loop run (prd-0187): run context headers come from --run-id/--step-id,
+# else from the step `agent listen` holds, only when that run is a window-loop long run (looked up via GET /runs/{id}; lookup failure = warning, no headers; --no-run-context to skip); --fp-id/--rp-id link a function / rule point.
+# Output: 已创建任务 #N | 已存在任务 #N（去重） | 已提交草案 #D（原因：…）, all exit 0; 409 SPAWN_CONTEXT_INVALID exits 1
+good7ob pm task create --project-id 123 --name "Add tests" --fp-id 12 --rp-id 34 --run-id 7 --step-id 31
 ```
 
 Task planned dates use `YYYY-MM-DD` (Asia/Tokyo), with day precision. Invalid dates
