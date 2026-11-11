@@ -15,7 +15,8 @@ const EFFECTIVE = {
   entries: [
     { item: DB_ITEM, sourceLayer: 'PROJECT', sourceOwnerId: 9, sourceOwnerName: 'shop', readOnly: true, overridesUpper: true, overrides: [] },
   ],
-  apps: [{ id: 3, name: 'api', repoUrl: 'git@x:a/b.git', defaultBranch: 'main', deployTarget: 'ecs' }],
+  // field names as GET /dev-info/{owner}/{id}/effective returns them (bug 2119700421094510594)
+  apps: [{ appId: 3, appName: 'api', repoUrl: 'git@x:a/b.git', defaultBranch: 'main', deployTarget: 'ecs' }],
 };
 
 afterEach(() => vi.restoreAllMocks());
@@ -39,6 +40,12 @@ describe('dev-info get', () => {
     expect(r.stdout).toContain('PROJECT shop');
     expect(r.stdout).toContain('覆盖上层');
     expect(r.stdout).toContain('git@x:a/b.git');
+  });
+
+  it('lists the linked apps by appId / appName, never as #undefined (bug 2119700421094510594)', async () => {
+    const r = await dev(['get', '--product', '10'], ok(EFFECTIVE));
+    expect(r.stdout).toContain('  #3 api  git@x:a/b.git  main  ecs');
+    expect(r.stdout).not.toContain('undefined');
   });
 
   it.each([['--project', 'project'], ['--product', 'product'], ['--org', 'org']])('%s targets /dev-info/%s/<id>/effective', async (flag, seg) => {
