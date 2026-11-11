@@ -1,7 +1,7 @@
 import { ApiDate, AUTH_CODES, DASH, dash, describeError, fmtDateTime, renderTable } from '../../utils/cliHelpers';
 import { extractRecords, extractTotal } from '../../utils/extractRecords';
 import {
-  AUTOMATION_ERROR_CODES, AUTOMATION_ERROR_KEYS, Billing, Budget, Target, TaskFilter, TemplateVersion, Trigger, WorkflowTemplate,
+  AUTOMATION_ERROR_CODES, AUTOMATION_ERROR_KEYS, Billing, Budget, SpawnLimits, Target, TaskFilter, TemplateVersion, Trigger, WorkflowTemplate,
 } from './input';
 
 export interface LastRun { runId?: number | null; result?: string | null; reasonCode?: string | null; at?: ApiDate }
@@ -21,6 +21,13 @@ export interface Automation {
   definitionVersion?: number | null; runnerWarning?: boolean | null; activeRunId?: number | null;
   permissions?: { canEdit?: boolean; canEnable?: boolean; canRun?: boolean; canDelete?: boolean } | null;
   recentRuns?: RunRow[] | null; recentEvents?: EventRow[] | null;
+  spawnLimits?: SpawnLimits | null; loop?: LoopState | null;
+}
+
+/** `loop` of a window-loop definition / run that has a live long run (api-0187 §4.4). */
+export interface LoopState {
+  phase?: string | null; waitReason?: string | null; windowStartAt?: ApiDate; stopAcceptingAt?: ApiDate;
+  hardDeadlineAt?: ApiDate; minutesToStopAccepting?: number | null; minutesToHardDeadline?: number | null;
 }
 
 // ── Errors ──
@@ -29,12 +36,12 @@ export interface Automation {
  * The backend answers `KEY: field: reason`; the key picks the message when one code means several things
  * (1001 = bad field or EVENT phase 2, 1006 = duplicate name). The server text is always kept after it.
  */
-export function describeAutomationError(error: unknown): string {
+export function describeAutomationError(error: unknown, codes: Record<number, string> = AUTOMATION_ERROR_CODES): string {
   const message = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: unknown } | null)?.code;
   const key = /^([A-Z][A-Z0-9_]+):/.exec(message)?.[1];
-  if (typeof code !== 'number' || !key || !AUTOMATION_ERROR_KEYS[key]) return describeError(error, AUTOMATION_ERROR_CODES);
-  return describeError(error, { ...AUTH_CODES, ...AUTOMATION_ERROR_CODES, [code]: AUTOMATION_ERROR_KEYS[key] });
+  if (typeof code !== 'number' || !key || !AUTOMATION_ERROR_KEYS[key]) return describeError(error, codes);
+  return describeError(error, { ...AUTH_CODES, ...codes, [code]: AUTOMATION_ERROR_KEYS[key] });
 }
 
 // ── Labels ──
@@ -71,6 +78,23 @@ function filterLabel(f: TaskFilter | null | undefined): string {
     f?.executorEmployeeId ? `指定 AI 员工 #${f.executorEmployeeId}` : '',
   ].filter(Boolean);
   return parts.length ? parts.join(' / ') : '全部待 AI 执行任务';
+}
+
+const PHASE_CN: Record<string, string> = { ACCEPTING: '接单中', DRAINING: '排空中', FINALIZING: '收尾中' };
+const WAIT_CN: Record<string, string> = { WAITING_TASKS: '等待任务（没有可补取的任务）' };
+const minutesLeft = (m: number | null | undefined) => (m === null || m === undefined ? '' : `（剩 ${m} 分钟）`);
+
+export function loopLines(loop: LoopState): string[] {
+  const phase = loop.phase ? `${loop.phase}（${PHASE_CN[loop.phase] ?? loop.phase}）` : DASH;
+  return [
+    `长运行:   阶段 ${phase}${loop.waitReason ? `；${WAIT_CN[loop.waitReason] ?? loop.waitReason}` : ''}`,
+    `          窗口开始 ${fmtDateTime(loop.windowStartAt)}；停止接单 ${fmtDateTime(loop.stopAcceptingAt)}${minutesLeft(loop.minutesToStopAccepting)}；` +
+      `硬截止 ${fmtDateTime(loop.hardDeadlineAt)}${minutesLeft(loop.minutesToHardDeadline)}`,
+  ];
+}
+
+export function spawnLimitsLabel(l: SpawnLimits): string {
+  return `每次运行最多 ${dash(l.maxPerRun)} 个，深度 ≤ ${dash(l.maxDepth)}，优先级 ≤ ${dash(l.maxPriority)}，必须关联 ${yesNo(l.requireLink)}`;
 }
 
 const tokens = (n: number | null | undefined) => (n === null || n === undefined ? '不限' : `${n} Token`);
@@ -128,6 +152,12 @@ export function renderAutomationDetail(a: Automation): string {
     `触发:     ${triggerLabel(t)}${triggerTech ? `（${triggerTech}）` : ''}`,
   ];
   if (t?.window) lines.push(`运行窗口: ${t.window.start}-${t.window.end} ${weekdays(t.window.weekdays)}`);
+  if (t?.type === 'WINDOW_LOOP') {
+    lines.push(`窗口长跑: 停止接单 ${dash(t.stopAcceptingAt)}，硬截止 ${dash(t.hardDeadlineAt)}，` +
+      `最多并发 ${dash(t.maxConcurrency)} 个任务组，预留 ${dash(t.reserveMinutes)} 分钟`);
+  }
+  if (a.loop) lines.push(...loopLines(a.loop));
+  if (a.spawnLimits) lines.push(`自建限额: ${spawnLimitsLabel(a.spawnLimits)}`);
   lines.push(
     `宽限:     ${t?.graceMinutes ? `${t.graceMinutes} 分钟` : DASH}    连续跳过: ${dash(t?.consecutiveSkips)}`,
     `下次运行: ${fmtDateTime(a.nextRunAt)}`,
@@ -250,15 +280,20 @@ export function renderPlans(result: unknown, page: number, pageSize: number): st
 
 // ── preview / settings ──
 
+export interface LoopWindowPreview { windowStart?: string; stopAcceptingAt?: string; hardDeadlineAt?: string; windowEnd?: string }
 export interface Preview {
   triggerType?: string; timeZone?: string; cronExpr?: string; display?: string; next?: string[]; nextLocal?: string[];
-  inWindow?: boolean[]; note?: string;
+  inWindow?: boolean[]; note?: string; windows?: LoopWindowPreview[];
 }
 
 export function renderPreview(p: Preview): string {
   const lines = [`触发: ${dash(p.display)}（${[p.triggerType, p.cronExpr ? `cron ${p.cronExpr}` : '', p.timeZone ? `时区 ${p.timeZone}` : ''].filter(Boolean).join('，')}）`];
   const next = p.next ?? [];
-  if (!next.length) {
+  if (p.windows?.length) {
+    lines.push(`接下来 ${p.windows.length} 个窗口（JST；第一个若在窗口内即正在进行的窗口）:`, renderTable([['#', '窗口开始', '停止接单', '硬截止', '窗口结束']].concat(
+      p.windows.map((w, i) => [String(i + 1), dash(w.windowStart), dash(w.stopAcceptingAt), dash(w.hardDeadlineAt), dash(w.windowEnd)])
+    )));
+  } else if (!next.length) {
     lines.push('没有固定的触发时刻。');
   } else {
     lines.push(`接下来 ${next.length} 次触发:`, renderTable([['#', '平台时间 (JST)', '触发器时区', '在运行窗口内']].concat(
