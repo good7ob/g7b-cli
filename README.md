@@ -459,6 +459,13 @@ good7ob pm task create --project-id 123 --name "Scheduled task" --planned-end-da
 
 # View planned dates
 good7ob pm task get 456
+
+# Task tags (idea #245): names are matched exactly; missing ones are created as your tag
+good7ob pm task create --project-id 123 --name "Tagged task" --tag backend --tag 想法#245
+good7ob pm task update 456 --add-tag urgent --remove-tag later   # keeps the other tags
+good7ob pm task update 456 --tag a,b                             # replaces all tags (--clear-tags removes all)
+good7ob pm task batch-update --ids 456,457 --add-tag urgent
+good7ob pm task list 123 --tag urgent
 ```
 
 Task planned dates use `YYYY-MM-DD` (Asia/Tokyo), with day precision. Invalid dates
