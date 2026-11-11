@@ -1,10 +1,11 @@
 /** prd-0187 FP-7 (g7b #2839): `pm task create` run context headers, links and the three spawn results. */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 import { registerTaskCommands } from '../index';
-import { describeSpawnContextError, linkFields, renderSpawnResult, runContextHeaders } from '../spawn';
+import { describeSpawnContextError, isLoopRun, linkFields, renderSpawnResult, runContextHeaders } from '../spawn';
+import apiClient from '../../../../services/ApiClient';
 import { AgentState, AgentStateStore, IDLE } from '../../../agent/state';
-import { httpError, noHttpCalls, ok, runCli } from '../../../../utils/__tests__/cliHarness';
+import { Envelope, bizError, httpError, noHttpCalls, ok, runCli } from '../../../../utils/__tests__/cliHarness';
 
 const register = (program: Command) => registerTaskCommands(program.command('pm'));
 const busy = (extra: object = {}): AgentState =>
@@ -17,44 +18,75 @@ const slot = (state: AgentState | Error) =>
     return state;
   });
 
-const create = (args: string[], response = ok({ id: 55, name: 'Child' })) =>
-  runCli(register, ['pm', 'task', 'create', '--project-id', '4', '--name', 'Child', ...args], response);
+/** Answers `GET …/runs/<id>` with `run`, everything else (the create) with `created`. */
+const respond = (created: Envelope, run: Envelope = ok({ id: 7, loop: null })) => (m: string, url: string) =>
+  m === 'get' && url.includes('/runs/') ? run : created;
+
+const create = (args: string[], response: Envelope | ((m: string, url: string) => Envelope) = ok({ id: 55, name: 'Child' })) =>
+  runCli(register, ['pm', 'task', 'create', '--project-id', '4', '--name', 'Child', ...args], response as never);
 
 afterEach(() => vi.restoreAllMocks());
 
 describe('runContextHeaders', () => {
   const idle = () => IDLE;
-  it('builds both headers from --run-id / --step-id', () =>
-    expect(runContextHeaders({ runId: '7', stepId: '31' }, idle)).toEqual({ 'X-Automation-Run-Id': '7', 'X-Automation-Step-Id': '31' }));
-  it('needs both flags together', () => {
-    expect(() => runContextHeaders({ runId: '7' }, idle)).toThrow('同时给出');
-    expect(() => runContextHeaders({ stepId: '31' }, idle)).toThrow('同时给出');
+  const HEADERS = { 'X-Automation-Run-Id': '7', 'X-Automation-Step-Id': '31' };
+  const loopYes = vi.fn(async () => true);
+  const loopNo = vi.fn(async () => false);
+  beforeEach(() => {
+    loopYes.mockClear();
+    loopNo.mockClear();
   });
-  it.each([['abc', '3'], ['0', '3'], ['7', '-1']])('rejects non-numeric / non-positive ids %s %s', (r, st) =>
-    expect(() => runContextHeaders({ runId: r, stepId: st }, idle)).toThrow(/--(run|step)-id/));
-  it('falls back to the step agent listen is working on', () =>
-    expect(runContextHeaders({}, () => busy({ runId: 7, stepId: 31 }))).toEqual({ 'X-Automation-Run-Id': '7', 'X-Automation-Step-Id': '31' }));
-  it('also while the slot is in timeout', () =>
-    expect(runContextHeaders({}, () => busy({ status: 'timeout', runId: 7, stepId: 31 }))).toBeDefined());
-  it('sends nothing when idle', () => expect(runContextHeaders({}, idle)).toBeUndefined());
-  it('sends nothing when the slot holds a plain task (no run / step)', () => {
-    expect(runContextHeaders({}, () => busy())).toBeUndefined();
-    expect(runContextHeaders({}, () => busy({ runId: 7 }))).toBeUndefined();
+
+  it('builds both headers from --run-id / --step-id without any lookup', async () => {
+    expect(await runContextHeaders({ runId: '7', stepId: '31' }, idle, loopNo)).toEqual(HEADERS);
+    expect(loopNo).not.toHaveBeenCalled();
   });
-  it('explicit flags win over the slot', () =>
-    expect(runContextHeaders({ runId: '8', stepId: '2' }, () => busy({ runId: 7, stepId: 31 }))).toEqual({
-      'X-Automation-Run-Id': '8', 'X-Automation-Step-Id': '2',
-    }));
-  it('--no-run-context skips the slot and conflicts with explicit ids', () => {
-    const read = vi.fn(() => busy({ runId: 7, stepId: 31 }));
-    expect(runContextHeaders({ runContext: false }, read)).toBeUndefined();
-    expect(read).not.toHaveBeenCalled();
-    expect(() => runContextHeaders({ runContext: false, runId: '1', stepId: '2' }, read)).toThrow('--no-run-context');
+  it('needs both flags together', async () => {
+    await expect(runContextHeaders({ runId: '7' }, idle)).rejects.toThrow('同时给出');
+    await expect(runContextHeaders({ stepId: '31' }, idle)).rejects.toThrow('同时给出');
   });
-  it('a corrupt state file warns and sends nothing', () => {
+  it.each([['abc', '3'], ['0', '3'], ['7', '-1']])('rejects non-numeric / non-positive ids %s %s', async (r, st) => {
+    await expect(runContextHeaders({ runId: r, stepId: st }, idle)).rejects.toThrow(/--(run|step)-id/);
+  });
+  it('slot step of a long run: sends the headers (and looked up that run)', async () => {
+    expect(await runContextHeaders({}, () => busy({ runId: 7, stepId: 31, orgId: 3 }), loopYes)).toEqual(HEADERS);
+    expect(loopYes).toHaveBeenCalledWith({ runId: 7, stepId: 31, orgId: 3 });
+  });
+  it('also while the slot is in timeout', async () =>
+    expect(await runContextHeaders({}, () => busy({ status: 'timeout', runId: 7, stepId: 31 }), loopYes)).toEqual(HEADERS));
+  it('slot step of an ordinary run (no loop): sends nothing', async () =>
+    expect(await runContextHeaders({}, () => busy({ runId: 7, stepId: 31 }), loopNo)).toBeUndefined());
+  it('a failed lookup sends nothing, warns once and does not throw', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    expect(runContextHeaders({}, () => { throw new Error('损坏'); })).toBeUndefined();
+    const headers = await runContextHeaders({}, () => busy({ runId: 7, stepId: 31 }), async () => { throw new Error('Network Error'); });
+    expect(headers).toBeUndefined();
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining('查询运行 #7 失败'));
+  });
+  it('sends nothing, and looks nothing up, when idle or the slot holds a plain task', async () => {
+    expect(await runContextHeaders({}, idle, loopYes)).toBeUndefined();
+    expect(await runContextHeaders({}, () => busy(), loopYes)).toBeUndefined();
+    expect(await runContextHeaders({}, () => busy({ runId: 7 }), loopYes)).toBeUndefined();
+    expect(loopYes).not.toHaveBeenCalled();
+  });
+  it('explicit flags win over the slot and skip the lookup', async () => {
+    expect(await runContextHeaders({ runId: '8', stepId: '2' }, () => busy({ runId: 7, stepId: 31 }), loopNo)).toEqual({
+      'X-Automation-Run-Id': '8', 'X-Automation-Step-Id': '2',
+    });
+    expect(loopNo).not.toHaveBeenCalled();
+  });
+  it('--no-run-context skips the slot and the lookup, and conflicts with explicit ids', async () => {
+    const read = vi.fn(() => busy({ runId: 7, stepId: 31 }));
+    expect(await runContextHeaders({ runContext: false }, read, loopYes)).toBeUndefined();
+    expect(read).not.toHaveBeenCalled();
+    expect(loopYes).not.toHaveBeenCalled();
+    await expect(runContextHeaders({ runContext: false, runId: '1', stepId: '2' }, read)).rejects.toThrow('--no-run-context');
+  });
+  it('a corrupt state file warns and sends nothing', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await runContextHeaders({}, () => { throw new Error('损坏'); }, loopYes)).toBeUndefined();
     expect(err).toHaveBeenCalledWith(expect.stringContaining('损坏'));
+    expect(loopYes).not.toHaveBeenCalled();
   });
 });
 
@@ -104,10 +136,35 @@ describe('pm task create (CLI)', () => {
     expect(r.stdout).toContain('已创建任务 #55');
   });
 
-  it('takes the run context from the agent slot when the flags are absent', async () => {
-    slot(busy({ runId: 7, stepId: 31 }));
-    const r = await create([], ok({ id: 55, spawnResult: 'CREATED' }));
+  it('slot step of a long run: looks the run up in the step org and sends the headers', async () => {
+    slot(busy({ runId: 7, stepId: 31, orgId: 3 }));
+    const r = await create([], respond(ok({ id: 55, spawnResult: 'CREATED' }), ok({ id: 7, loop: { phase: 'ACCEPTING' } })));
+    expect(r.http.get.mock.calls[0][0]).toBe('/api/v1/orgs/3/runs/7');
     expect(r.http.post.mock.calls[0][2].headers).toEqual({ 'X-Automation-Run-Id': '7', 'X-Automation-Step-Id': '31' });
+  });
+
+  it('slot step of an ordinary run (loop null): no headers, old output', async () => {
+    slot(busy({ runId: 7, stepId: 31, orgId: 3 }));
+    const r = await create([], respond(ok({ id: 55, name: 'Child' })));
+    expect(r.http.get).toHaveBeenCalledTimes(1);
+    expect(r.http.post.mock.calls[0]).toHaveLength(2);
+    expect(r.stdout).toContain('✓ 任务已创建: [55] Child');
+  });
+
+  it('a failed run lookup (404 / no permission) still creates the task, without headers, with a warning', async () => {
+    slot(busy({ runId: 7, stepId: 31, orgId: 3 }));
+    const r = await create([], respond(ok({ id: 55, name: 'Child' }), bizError(1002, '运行不存在') as Envelope));
+    expect(r.exitCode).toBeUndefined();
+    expect(r.stderr).toContain('查询运行 #7 失败');
+    expect(r.http.post.mock.calls[0]).toHaveLength(2);
+    expect(r.stdout).toContain('任务已创建');
+  });
+
+  it('explicit --run-id / --step-id never query the run', async () => {
+    slot(busy({ runId: 7, stepId: 31, orgId: 3 }));
+    const r = await create(['--run-id', '8', '--step-id', '2'], respond(ok({ id: 55, spawnResult: 'CREATED' })));
+    expect(r.http.get).not.toHaveBeenCalled();
+    expect(r.http.post.mock.calls[0][2].headers).toEqual({ 'X-Automation-Run-Id': '8', 'X-Automation-Step-Id': '2' });
   });
 
   it('stays as before when idle: no headers, old output', async () => {
@@ -119,8 +176,9 @@ describe('pm task create (CLI)', () => {
   });
 
   it('--no-run-context ignores a busy slot', async () => {
-    slot(busy({ runId: 7, stepId: 31 }));
+    slot(busy({ runId: 7, stepId: 31, orgId: 3 }));
     const r = await create(['--no-run-context']);
+    expect(r.http.get).not.toHaveBeenCalled();
     expect(r.http.post.mock.calls[0]).toHaveLength(2);
   });
 
@@ -170,5 +228,17 @@ describe('pm task create (CLI)', () => {
     expect(r.exitCode).toBeUndefined();
     expect(r.stderr).toContain('损坏');
     expect(r.http.post.mock.calls[0]).toHaveLength(2);
+  });
+});
+
+describe('isLoopRun', () => {
+  const answer = (data: unknown) => {
+    const get = vi.spyOn(apiClient, 'get').mockResolvedValue(data);
+    return isLoopRun({ runId: 7, stepId: 31, orgId: 3 }).then((v) => ({ v, url: get.mock.calls[0][0] }));
+  };
+  it('is true only when the run detail carries a loop object', async () => {
+    expect(await answer({ id: 7, loop: { phase: 'DRAINING' } })).toEqual({ v: true, url: '/api/v1/orgs/3/runs/7' });
+    expect((await answer({ id: 7, loop: null })).v).toBe(false);
+    expect((await answer({ id: 7 })).v).toBe(false);
   });
 });

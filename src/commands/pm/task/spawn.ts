@@ -3,8 +3,11 @@
  * headers `X-Automation-Run-Id` / `X-Automation-Step-Id` (never in the body), the links as body fields
  * `functionPointId` / `rulePointId`, and the answer carries `data.spawnResult` (CREATED / DEDUPED / DRAFTED).
  */
+import apiClient from '../../../services/ApiClient';
 import { InputError, parseId } from '../../../utils/cliHelpers';
 import { AgentState, AgentStateStore } from '../../agent/state';
+import { runBase } from '../../run/input';
+import { resolveOrg } from '../../run/steps';
 
 export const SPAWN_CONTEXT_INVALID = 'SPAWN_CONTEXT_INVALID';
 export const RUN_HEADER = 'X-Automation-Run-Id';
@@ -27,26 +30,43 @@ export function linkFields(o: SpawnFlags): Record<string, number> {
   return out;
 }
 
+export interface SlotStep { runId: number; stepId: number; orgId?: number | null }
+
+const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 /** The step `agent listen` is working on right now, or undefined (idle / not a run step / unreadable file). */
-function currentStep(readSlot: () => AgentState): { runId: number; stepId: number } | undefined {
+function currentStep(readSlot: () => AgentState): SlotStep | undefined {
   try {
     const s = readSlot();
     if (s.status === 'idle' || s.runId == null || s.stepId == null) return undefined;
-    return { runId: s.runId, stepId: s.stepId };
+    return { runId: s.runId, stepId: s.stepId, orgId: s.orgId };
   } catch (e) {
-    console.error(`⚠ 读取 agent 状态文件失败，本次不带运行上下文：${e instanceof Error ? e.message : String(e)}`);
+    console.error(`⚠ 读取 agent 状态文件失败，本次不带运行上下文：${reason(e)}`);
     return undefined;
   }
 }
 
 /**
- * Headers for the create call. `--run-id` and `--step-id` go together; with neither, the step in the local agent
- * slot is used (none when idle, or with `--no-run-context`) and the call stays as it was.
+ * Whether the run is a long run: `GET /api/v1/orgs/{orgId}/runs/{runId}` answers `loop` only for WINDOW_LOOP runs
+ * (null for an ordinary run). The org is the step's own, then GOOD7OB_ORG_ID / config, then the key's only org.
  */
-export function runContextHeaders(
+export async function isLoopRun(step: SlotStep): Promise<boolean> {
+  const orgId = await resolveOrg(apiClient, undefined, step.orgId);
+  const run = await apiClient.get(`${runBase(orgId)}/${step.runId}`);
+  return run?.loop != null;
+}
+
+/**
+ * Headers for the create call. `--run-id` and `--step-id` go together and are sent as given (the backend validates
+ * them). With neither, the step in the local agent slot is used, but only when its run is a long run (the backend
+ * answers 409 for a context that is not a window-loop run's step): an ordinary run, a failed lookup (warned on
+ * stderr, never fatal), an idle slot or `--no-run-context` all leave the call as it was.
+ */
+export async function runContextHeaders(
   o: SpawnFlags,
-  readSlot: () => AgentState = () => new AgentStateStore().read()
-): Record<string, string> | undefined {
+  readSlot: () => AgentState = () => new AgentStateStore().read(),
+  loopRun: (step: SlotStep) => Promise<boolean> = isLoopRun
+): Promise<Record<string, string> | undefined> {
   if ((o.runId === undefined) !== (o.stepId === undefined)) {
     throw new InputError('--run-id 与 --step-id 必须同时给出（只给一个无法确定运行上下文）');
   }
@@ -56,7 +76,14 @@ export function runContextHeaders(
   }
   if (o.runContext === false) return undefined;
   const step = currentStep(readSlot);
-  return step ? { [RUN_HEADER]: String(step.runId), [STEP_HEADER]: String(step.stepId) } : undefined;
+  if (!step) return undefined;
+  try {
+    if (!(await loopRun(step))) return undefined;
+  } catch (e) {
+    console.error(`⚠ 查询运行 #${step.runId} 失败，本次不带运行上下文：${reason(e)}`);
+    return undefined;
+  }
+  return { [RUN_HEADER]: String(step.runId), [STEP_HEADER]: String(step.stepId) };
 }
 
 /** The text for a guarded answer, or undefined when the answer has no `spawnResult` (human / no context: old output). */
@@ -78,7 +105,7 @@ export function renderSpawnResult(data: any, name: string): string | undefined {
 export function describeSpawnContextError(error: unknown): string | undefined {
   const e = error as { code?: unknown; message?: string } | null;
   if (e?.code !== SPAWN_CONTEXT_INVALID && !e?.message?.startsWith(`${SPAWN_CONTEXT_INVALID}:`)) return undefined;
-  const reason = (e.message ?? '').replace(new RegExp(`^${SPAWN_CONTEXT_INVALID}:?\\s*`), '');
-  return `运行上下文无效（SPAWN_CONTEXT_INVALID）：${reason || '步骤不属于该 AI 员工、不是窗口长 Run 的步骤，或步骤已结束'}。` +
+  const text = (e.message ?? '').replace(new RegExp(`^${SPAWN_CONTEXT_INVALID}:?\\s*`), '');
+  return `运行上下文无效（SPAWN_CONTEXT_INVALID）：${text || '步骤不属于该 AI 员工、不是窗口长 Run 的步骤，或步骤已结束'}。` +
     '任务未创建，也没有草案。检查 --run-id / --step-id 与 agent 当前步骤；不想带上下文可加 --no-run-context';
 }

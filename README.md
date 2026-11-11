@@ -472,7 +472,7 @@ good7ob pm task batch-update --ids 456,457 --add-tag urgent
 good7ob pm task list 123 --tag urgent
 
 # AI self-built task in a window-loop run (prd-0187): run context headers come from --run-id/--step-id,
-# else from the step `agent listen` holds (--no-run-context to skip); --fp-id/--rp-id link a function / rule point.
+# else from the step `agent listen` holds, only when that run is a window-loop long run (looked up via GET /runs/{id}; lookup failure = warning, no headers; --no-run-context to skip); --fp-id/--rp-id link a function / rule point.
 # Output: 已创建任务 #N | 已存在任务 #N（去重） | 已提交草案 #D（原因：…）, all exit 0; 409 SPAWN_CONTEXT_INVALID exits 1
 good7ob pm task create --project-id 123 --name "Add tests" --fp-id 12 --rp-id 34 --run-id 7 --step-id 31
 ```

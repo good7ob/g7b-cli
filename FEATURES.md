@@ -574,8 +574,8 @@ API 端点前缀：`/progress/tasks`
 | `--tag` | 标签名（可重复或逗号分隔）；系统标签和自己的标签按名称匹配，没有的自动创建为自己的标签 |
 | `--tag-id` | 标签 ID（可重复或逗号分隔，见 `pm tag list`）；不能与 `--tag` 同时使用 |
 | `--fp-id` / `--rp-id` | 功能点 / 规则点 ID，放请求体 `functionPointId` / `rulePointId`（AI 自建任务的关联；人类调用后端不处理） |
-| `--run-id` / `--step-id` | 自动化运行 / 步骤 ID，放请求头 `X-Automation-Run-Id` / `X-Automation-Step-Id`（不在请求体）；必须同时给；都不给时读本机 `agent listen` 状态文件里当前步骤（没有占用则不带头） |
-| `--no-run-context` | 不带运行上下文，即使 `agent listen` 正占用着一个步骤 |
+| `--run-id` / `--step-id` | 自动化运行 / 步骤 ID，放请求头 `X-Automation-Run-Id` / `X-Automation-Step-Id`（不在请求体）；必须同时给，原样发送（由后端校验，不查询）；都不给时读本机 `agent listen` 状态文件里当前步骤，并先 `GET /api/v1/orgs/{orgId}/runs/{runId}`（组织取步骤所属组织，其次 `GOOD7OB_ORG_ID` / `config set org-id` / Key 的唯一组织），响应 `loop` 非空（窗口长运行）才带头；`loop` 为空（普通运行）、没有占用、查询失败（stderr 一行警告，不影响创建）都不带头 |
+| `--no-run-context` | 不查询也不带运行上下文，即使 `agent listen` 正占用着一个步骤 |
 
 **AI 员工自建任务（窗口长 Run，prd-0187）：** 用 AI 员工 Key 调用时服务端强制执行者为该员工（不需要 `--ai-employee` / `--executor-type`），
 并按自动化的自建限额过守卫。响应 `data.spawnResult` 决定输出，三种结果退出码均为 0：

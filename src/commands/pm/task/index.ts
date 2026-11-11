@@ -257,9 +257,9 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--tag-id <id>', 'Tag ID (repeatable or comma-separated; see `pm tag list`); not with --tag', collectTagList, [])
     .option('--fp-id <id>', 'Function point ID to link (AI self-built tasks in a window-loop run; sent as functionPointId)')
     .option('--rp-id <id>', 'Rule point ID to link (sent as rulePointId)')
-    .option('--run-id <id>', 'Automation run ID (X-Automation-Run-Id; with --step-id; default: the step `agent listen` is working on)')
+    .option('--run-id <id>', 'Automation run ID (X-Automation-Run-Id; with --step-id; sent as given). Default: the step `agent listen` holds, only when its run is a window-loop long run')
     .option('--step-id <id>', 'Automation step ID (X-Automation-Step-Id; with --run-id)')
-    .option('--no-run-context', 'Do not send the run context, even when `agent listen` holds a step')
+    .option('--no-run-context', 'Do not look up or send the run context, even when `agent listen` holds a step')
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
@@ -280,7 +280,7 @@ export function registerTaskCommands(pmCommand: Command) {
         if (options.parentTaskId) body.parentTaskId = parseInt(options.parentTaskId);
         if (options.estimatedHours) body.estimatedHours = parseFloat(options.estimatedHours);
 
-        const headers = runContextHeaders(options);
+        const headers = await runContextHeaders(options);
         const task = headers
           ? await apiClient.post('/progress/tasks', body, { headers })
           : await apiClient.post('/progress/tasks', body);
