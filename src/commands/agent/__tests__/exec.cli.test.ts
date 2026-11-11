@@ -9,12 +9,13 @@ const started = { taskId: 2857, subStatus: 'agent_executing', display: '杨健 �
 // the exact body seen on dev: HTTP 200 + code 409
 const held = { code: 409, msg: '任务 2857 正由 杨健 · aaaaaaaaaa 执行中', success: false, data: { holder: { display: '杨健 · aaaaaaaaaa', startedAt: 1794306888213 } } };
 
-const savedSession = process.env.G7B_SESSION_ID;
+// Claude Code itself exports CLAUDE_CODE_SESSION_ID, so both variables are isolated for every test
+const ENV_KEYS = ['G7B_SESSION_ID', 'CLAUDE_CODE_SESSION_ID'] as const;
+const saved = ENV_KEYS.map((k) => process.env[k]);
 const setSession = (v: string) => void (process.env.G7B_SESSION_ID = v);
-beforeEach(() => void delete process.env.G7B_SESSION_ID);
+beforeEach(() => ENV_KEYS.forEach((k) => delete process.env[k]));
 afterEach(() => {
-  if (savedSession === undefined) delete process.env.G7B_SESSION_ID;
-  else process.env.G7B_SESSION_ID = savedSession;
+  ENV_KEYS.forEach((k, i) => (saved[i] === undefined ? delete process.env[k] : (process.env[k] = saved[i])));
   vi.restoreAllMocks();
 });
 
@@ -24,6 +25,14 @@ describe('resolveSessionId', () => {
     expect(resolveSessionId(undefined, { G7B_SESSION_ID: 'env' })).toBe('env');
     expect(resolveSessionId('  ', {})).toBeUndefined();
     expect(resolveSessionId(undefined, { G7B_SESSION_ID: '' })).toBeUndefined();
+  });
+  it('order: --session > G7B_SESSION_ID > CLAUDE_CODE_SESSION_ID', () => {
+    const both = { G7B_SESSION_ID: 'g7b', CLAUDE_CODE_SESSION_ID: 'claude' };
+    expect(resolveSessionId('opt', both)).toBe('opt');
+    expect(resolveSessionId(undefined, both)).toBe('g7b');
+    expect(resolveSessionId(undefined, { CLAUDE_CODE_SESSION_ID: 'claude' })).toBe('claude');
+    expect(resolveSessionId(undefined, { G7B_SESSION_ID: ' ', CLAUDE_CODE_SESSION_ID: 'claude' })).toBe('claude');
+    expect(resolveSessionId(undefined, {})).toBeUndefined();
   });
   it('rejects a shape the backend would answer 1001 to', () => {
     expect(() => resolveSessionId('a b', {})).toThrow(InputError);
@@ -67,6 +76,12 @@ describe('good7ob agent start', () => {
     expect(r.exitCode).toBe(1);
     expect(noHttpCalls(r)).toBe(true);
     expect(r.stderr).toContain('G7B_SESSION_ID');
+  });
+
+  it('falls back to CLAUDE_CODE_SESSION_ID as the third level', async () => {
+    process.env.CLAUDE_CODE_SESSION_ID = SID;
+    const r = await runCli(registerAgentCommands, ['agent', 'start', '2857'], ok(started));
+    expect(r.http.post).toHaveBeenCalledWith('/progress/tasks/2857/agent-exec/start', { sessionId: SID });
   });
 
   it('rejects a bad task id without a request', async () => {
