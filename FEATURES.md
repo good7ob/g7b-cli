@@ -1657,6 +1657,40 @@ good7ob habit workflow add --name 每日开工 --scene daily --step 看待办 --
 
 ---
 
+## decision — 个人决策记录
+
+API 端点：`/api/v1/me/decisions`（prd-0127 FP-19，`rp-user-habit-0161~0177`；契约 api-0189）。只操作本人数据（接口不接收用户 ID）；状态流转与乐观锁由后端保证。决策原文只打印到终端，不写日志文件。时间按 JST 显示，`list --from/--to` 的 `yyyy-MM-dd` 按日本时间 0 点（也可直接给毫秒），区间为 `[from, to)`。
+
+| 命令 | 说明 |
+|------|------|
+| `decision upload <文件> [--dry-run]` | 上传抽取脚本（`tools/decision-miner/mine_structured.py`）产出的 JSONL，见下 |
+| `decision list [--source --review --domain --from --to --page --page-size]` | 默认不隐藏已排除；`--domain none` 为未分类；`--page-size` ≤100 |
+| `decision get <id>` | 详情 |
+| `decision update <id> [--rationale] [--domain]` | 先 GET 取当前 `version` 再 PUT；`--domain ""` 清除领域；领域九类：`product_scope architecture database deploy_release process_workflow quality_test security_compliance billing_pricing other` |
+| `decision confirm\|exclude\|restore <id>` | 先 GET 取 `version`，再 POST `/{id}/review` |
+| `decision delete <id...>` / `--batch <batchId>` | 软删（保留 1 年）；id 与 `--batch` 二选一，一次最多 500 个 id |
+| `decision purge <id...>` / `--batch <batchId> --yes` | 永久删除，不可恢复，也不会再被重新导入；**没有 `--yes` 一律拒绝** |
+
+**upload 规则**
+- 字段映射：`id`→`sourceKey`=`claude:`+id，`session`→`sessionRef`，`ts`→`occurredAt`（`Date.parse` 毫秒），`situation.user_said/assistant_said`→`situationUser/situationAssistant`，`options[]` 补 `recommended`（label 含 `（推荐）` / `(recommended)`），`choice`→`choiceText`，`choiceType`=`multi`（`multi` 为真）/`custom`（`custom` 为真）/`option`，`chose_recommended`→`isRecommendedChosen`（`custom` 时强制 false），`note`（空串为 null）→`rationale`；`sourceKind` 固定 `structured`、`client` 固定 `claude_code`，不传 `productId` / `taskId`。**`project` 字段丢弃，不上传**（含本机用户名路径）。
+- 坏行（非法 JSON、缺 `id` / `question` / `choice` / `ts` / `options`）跳过，汇总里列出文件行号；空行忽略。
+- 客户端脱敏（`redact.ts`）：发送前对 `situation*`、`question`、`options[].label/description`、`choiceText`、`rationale` 再应用 R1～R7（AWS key、`sk-` key、Bearer、`password/passwd/secret/token` 值、JWT、`/Users/<名>/` 等主目录、`-Users-<名>-` 短横线编码路径），`sourceKey` 不脱敏。R7 已知限制：用户名本身含短横线时后半段会留下。
+- 分块：按序列化后请求体 UTF-8 字节数每块 ≤4 MB，整次命令只生成一个 `batchId`（汇总里打印，撤销整批用 `--batch`）；单条自己就超限的在本地拒绝、不发送。某块失败即停，不重试：汇总里标出已发送 / 失败 / 未发送的块，退出码 1；同一文件重传是幂等的（按 `sourceKey` 跳过）。
+- `--dry-run`：只解析、映射、脱敏、分块并打印汇总，不发任何请求。
+
+### 错误码
+
+| code | 提示 |
+|------|------|
+| 1001 | 参数不合法 |
+| 1002 | 决策不存在或不属于你 |
+| 1007 | 当前状态不支持该操作 |
+| 1009 | 版本冲突，请重新读取后重试 |
+| 1017 | 单次上传数据量超限，请分批上传 |
+| 2000 | 暂无权限（AI 员工身份不能使用） |
+
+---
+
 ## 输出格式
 
 所有列表命令均支持多种输出格式：

@@ -326,6 +326,22 @@ good7ob habit workflow edit <id> [--name ..] [--step ..] [--from-file ..] [--ver
 
 See `FEATURES.md` (habit) for the file format, error codes and rules.
 
+### `decision`
+
+My personal decision records (prd-0127 FP-19; endpoints `/api/v1/me/decisions`, api-0189). Acts as the logged-in user only. `upload` reads the JSONL produced by the decision-miner script, redacts it locally again (R1~R7), splits it into <=4 MB requests that share one `batchId`, and never uploads the `project` field. `--json` prints the raw `data` (`upload` prints the summary object).
+
+```bash
+good7ob decision upload <file.jsonl> [--dry-run]       # --dry-run: parse/redact/chunk only, no request
+good7ob decision list [--source structured|implicit|platform_question] [--review unreviewed|confirmed|corrected|excluded] [--domain <d>|none] [--from yyyy-MM-dd|ms] [--to ..] [--page n] [--page-size n]
+good7ob decision get <id>
+good7ob decision update <id> [--rationale <text>] [--domain <d>]   # --domain "" clears it
+good7ob decision confirm <id> | exclude <id> | restore <id>
+good7ob decision delete <id...> | --batch <batchId>    # soft delete, kept 1 year
+good7ob decision purge <id...> | --batch <batchId> --yes   # irreversible; refused without --yes
+```
+
+See `FEATURES.md` (decision) for the field mapping, chunking and error codes.
+
 ### `agent`
 
 Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine (`~/.good7ob/agent-state.json`): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.
