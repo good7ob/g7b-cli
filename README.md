@@ -328,11 +328,11 @@ See `FEATURES.md` (habit) for the file format, error codes and rules.
 
 ### `decision`
 
-My personal decision records (prd-0127 FP-19; endpoints `/api/v1/me/decisions`, api-0189). Acts as the logged-in user only. `upload` reads the JSONL produced by the decision-miner script, redacts it locally again (R1~R7), splits it into <=4 MB requests that share one `batchId`, and never uploads the `project` field. `--json` prints the raw `data` (`upload` prints the summary object).
+My personal decision records (prd-0127 FP-19; endpoints `/api/v1/me/decisions`, api-0189). Acts as the logged-in user only. `upload` reads the JSONL produced by the decision-miner scripts (click-style `structured` rows and `implicit` rows extracted from free text, which may be mixed in one file; the `source` field decides, missing means `structured`), redacts it locally again (R1~R9), splits it into <=4 MB requests that share one `batchId`, and never uploads the `project` field. `list` / `get` show the implicit decisions' `confidence`. `--json` prints the raw `data` (`upload` prints the summary object).
 
 ```bash
 good7ob decision upload <file.jsonl> [--dry-run]       # --dry-run: parse/redact/chunk only, no request
-good7ob decision list [--source structured|implicit|platform_question] [--review unreviewed|confirmed|corrected|excluded] [--domain <d>|none] [--from yyyy-MM-dd|ms] [--to ..] [--page n] [--page-size n]
+good7ob decision list [--source structured|implicit|platform_question] [--review unreviewed|confirmed|corrected|excluded] [--domain <d>|none] [--from yyyy-MM-dd|ms] [--to ..] [--max-confidence 0-100] [--page n] [--page-size n]
 good7ob decision get <id>
 good7ob decision update <id> [--rationale <text>] [--domain <d>]   # --domain "" clears it
 good7ob decision confirm <id> | exclude <id> | restore <id>

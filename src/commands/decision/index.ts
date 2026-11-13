@@ -63,7 +63,7 @@ export function registerDecisionCommands(program: Command) {
   const decision = program.command('decision').description('个人决策记录（子命令: upload list get update confirm exclude restore delete purge）');
 
   decision.command('upload <file>')
-    .description('上传抽取脚本产出的 JSONL（先在本机脱敏，按 4 MB 分块，整次共用一个批次号）')
+    .description('上传抽取脚本产出的 JSONL（点选与隐式决策可混合；先在本机脱敏，按 4 MB 分块，整次共用一个批次号）')
     .option('--dry-run', '只解析、脱敏、分块并汇总，不发任何请求')
     .option('--json', '输出 JSON')
     .action((file: string, o) => run('上传决策失败', async () => {
@@ -79,6 +79,7 @@ export function registerDecisionCommands(program: Command) {
     .option('--domain <d>', `${DOMAINS.join(' | ')} | none（未分类）`)
     .option('--from <t>', '起（含）：yyyy-MM-dd（日本时间 0 点）或毫秒')
     .option('--to <t>', '止（不含）：同上')
+    .option('--max-confidence <n>', '只看把握度 ≤ n 的隐式决策（0～100 整数；点选类没有把握度，不会返回）')
     .option('--page <n>', '页码，默认 1')
     .option('--page-size <n>', '每页条数，默认 20，最大 100')
     .option('--json', '输出 JSON')

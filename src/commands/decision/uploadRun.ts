@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import apiClient from '../../services/ApiClient';
 import { InputError, describeError } from '../../utils/cliHelpers';
 import { DECISION_ERROR_CODES } from './input';
-import { Chunk, ChunkResult, Chunked, chunkEntries, parseJsonl } from './upload';
+import { Chunk, ChunkResult, Chunked, RowKind, chunkEntries, scanJsonl } from './upload';
 
 /** decision upload 的执行：分块顺序发送、共用一个 batchId、汇总结果；某块失败即停（不重试，如实报告）。 */
 
@@ -11,11 +11,18 @@ const UPLOAD_TIMEOUT_MS = 120_000;
 
 export interface ChunkReport { index: number; items: number; bytes: number; status: 'sent' | 'failed' | 'unsent' | 'planned'; error?: string }
 export interface RejectedReport { line: number | null; sourceKey?: string; code?: number; field?: string; message?: string }
+export interface KindCounts {
+  structured: { valid: number; bad: number };
+  implicit: { valid: number; bad: number };
+  /** 不是 JSON / 不是对象 / source 无法识别的坏行 */
+  unknown: { bad: number };
+}
 export interface UploadSummary {
   file: string;
   batchId: string;
   dryRun: boolean;
   validRows: number;
+  byKind: KindCounts;
   badLines: { line: number; reason: string }[];
   oversized: { line: number; bytes: number }[];
   chunks: ChunkReport[];
@@ -46,12 +53,21 @@ async function sendChunk(batchId: string, chunk: Chunk): Promise<ChunkResult> {
 const plan = (c: Chunked): ChunkReport[] =>
   c.chunks.map((ch, i) => ({ index: i + 1, items: ch.entries.length, bytes: ch.bytes, status: 'planned' as const }));
 
+function countKinds(valid: RowKind[], bad: RowKind[]): KindCounts {
+  const n = (list: RowKind[], k: RowKind) => list.filter((x) => x === k).length;
+  return {
+    structured: { valid: n(valid, 'structured'), bad: n(bad, 'structured') },
+    implicit: { valid: n(valid, 'implicit'), bad: n(bad, 'implicit') },
+    unknown: { bad: n(bad, 'unknown') },
+  };
+}
+
 export async function runUpload(file: string, dryRun: boolean, limit?: number): Promise<UploadSummary> {
-  const { entries, bad } = parseJsonl(readDecisionFile(file));
+  const { entries, bad, badKinds } = scanJsonl(readDecisionFile(file));
   const batchId = randomUUID();
   const chunked = chunkEntries(entries, batchId, limit);
   const base: UploadSummary = {
-    file, batchId, dryRun, validRows: entries.length, badLines: bad, oversized: chunked.oversized,
+    file, batchId, dryRun, validRows: entries.length, byKind: countKinds(entries.map((e) => e.item.sourceKind), badKinds), badLines: bad, oversized: chunked.oversized,
     chunks: plan(chunked), added: 0, skipped: 0, rejected: [],
   };
   if (dryRun) return base;
@@ -84,6 +100,7 @@ export function renderUploadSummary(s: UploadSummary): string {
     `${s.dryRun ? '[dry-run，未发送任何请求] ' : ''}文件 ${s.file}`,
     `批次号 ${s.batchId}（之后撤销/清除整批用 --batch）`,
     `有效 ${s.validRows} 条，坏行 ${s.badLines.length}，本地拒绝（单条超大）${s.oversized.length}，分 ${s.chunks.length} 块`,
+    `  点选：有效 ${s.byKind.structured.valid}，坏行 ${s.byKind.structured.bad}；隐式：有效 ${s.byKind.implicit.valid}，坏行 ${s.byKind.implicit.bad}；无法识别 ${s.byKind.unknown.bad}`,
     ...s.chunks.map((c) => `  块 ${c.index}：${c.items} 条 ${c.bytes} 字节 ${STATUS_TEXT[c.status]}${c.error ? `：${c.error}` : ''}`),
   ];
   if (!s.dryRun) lines.push(`结果：新增 ${s.added}，跳过 ${s.skipped}，服务端拒绝 ${s.rejected.length}`);
