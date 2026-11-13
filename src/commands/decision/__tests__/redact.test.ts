@@ -44,3 +44,48 @@ describe('redact (api-0189 §1 R1~R7)', () => {
     expect(redact('首发范围按哪个来起草？')).toBe('首发范围按哪个来起草？');
   });
 });
+
+describe('redact R8 / R9 (api-0189 1.1.0)', () => {
+  // 令牌形态运行时拼接，避免源码里出现完整字面量
+  const ghp = 'ghp_' + 'a1B2c3D4e5F6g7H8i9J0' + 'k1L2m3N4';
+  it('R8 GitHub tokens', () => {
+    expect(redact(`use ${ghp} now`)).toBe('use [GITHUB_TOKEN] now');
+    for (const p of ['gho_', 'ghu_', 'ghs_', 'ghr_']) expect(redact(p + 'x'.repeat(24))).toBe('[GITHUB_TOKEN]');
+    expect(redact('github_pat_' + 'A1b2C3d4_E5f6G7h8i9J0k1')).toBe('[GITHUB_TOKEN]');
+    expect(redact('ghp_short')).toBe('ghp_short');
+    expect(redact('xghp_' + 'a'.repeat(24))).toBe('xghp_' + 'a'.repeat(24));
+  });
+  it('R9 long mixed-case alphanumeric strings with a digit', () => {
+    const secret = 'Ab1' + 'cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1w';
+    expect(secret.length).toBeGreaterThanOrEqual(32);
+    expect(redact(`key ${secret} end`)).toBe('key [SECRET] end');
+    expect(redact('Ab1' + 'x'.repeat(28))).toBe('Ab1' + 'x'.repeat(28)); // 31 位
+    expect(redact('Ab1' + 'x'.repeat(29))).toBe('[SECRET]'); // 32 位
+  });
+  it('R9 needs upper, lower and digit; neighbours must not be alphanumeric', () => {
+    expect(redact('a'.repeat(40))).toBe('a'.repeat(40));
+    expect(redact('A'.repeat(20) + 'a'.repeat(20))).toBe('A'.repeat(20) + 'a'.repeat(20)); // 无数字
+    expect(redact('Ab' + '1'.repeat(40) + '-tail')).toBe('[SECRET]-tail');
+    expect(redact('Ab1' + 'x'.repeat(30) + '_z')).toBe('[SECRET]_z');
+  });
+  it('R9 does not touch a lowercase hex commit SHA', () => {
+    const sha = '3f786850e387550fdab836ed7e6dc881de23001b';
+    expect(sha).toHaveLength(40);
+    expect(redact(`commit ${sha}`)).toBe(`commit ${sha}`);
+  });
+  it('R9 stays linear on a 200k mixed alphanumeric string', () => {
+    const big = 'Ab1'.repeat(66_000) + 'x';
+    const t = Date.now();
+    expect(redact(big)).toBe('[SECRET]');
+    expect(Date.now() - t).toBeLessThan(1000);
+    const near = 'Ab'.repeat(100_000); // 无数字：不命中，同样要快
+    const t2 = Date.now();
+    expect(redact(near)).toBe(near);
+    expect(Date.now() - t2).toBeLessThan(1000);
+  });
+  it('R8/R9 are idempotent and run after R1~R7', () => {
+    const once = redact(`${ghp} Ab1${'x'.repeat(30)} password=x`);
+    expect(once).toBe('[GITHUB_TOKEN] [SECRET] password=[REDACTED]');
+    expect(redact(once)).toBe(once);
+  });
+});

@@ -33,7 +33,7 @@ export function parseTime(raw: string, label: string): number {
 }
 
 export interface ListOpts {
-  source?: string; review?: string; domain?: string; from?: string; to?: string; page?: string; pageSize?: string;
+  source?: string; review?: string; domain?: string; from?: string; to?: string; maxConfidence?: string; page?: string; pageSize?: string;
 }
 
 export function buildListParams(o: ListOpts): Record<string, string | number> {
@@ -46,6 +46,7 @@ export function buildListParams(o: ListOpts): Record<string, string | number> {
     domain: o.domain ? requireOneOf(lower(o.domain), [...DOMAINS, 'none'], '--domain') : undefined,
     from,
     to,
+    maxConfidence: o.maxConfidence === undefined ? undefined : parseIntInRange(o.maxConfidence, '--max-confidence', 0, 100),
     page: o.page === undefined ? undefined : parseIntInRange(o.page, '--page', 1, 1_000_000),
     pageSize: o.pageSize === undefined ? undefined : parseIntInRange(o.pageSize, '--page-size', 1, 100),
   });

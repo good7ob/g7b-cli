@@ -1663,20 +1663,22 @@ API 端点：`/api/v1/me/decisions`（prd-0127 FP-19，`rp-user-habit-0161~0177`
 
 | 命令 | 说明 |
 |------|------|
-| `decision upload <文件> [--dry-run]` | 上传抽取脚本（`tools/decision-miner/mine_structured.py`）产出的 JSONL，见下 |
-| `decision list [--source --review --domain --from --to --page --page-size]` | 默认不隐藏已排除；`--domain none` 为未分类；`--page-size` ≤100 |
-| `decision get <id>` | 详情 |
+| `decision upload <文件> [--dry-run]` | 上传抽取脚本（`tools/decision-miner/mine_structured.py` 点选类、隐式抽取脚本）产出的 JSONL，点选与隐式可混在同一文件，见下 |
+| `decision list [--source --review --domain --from --to --max-confidence --page --page-size]` | 默认不隐藏已排除；`--domain none` 为未分类；`--page-size` ≤100；`--max-confidence <0～100 整数>` 只看把握度不高于该值的隐式决策（点选类没有把握度，传了就不会返回），非法值本地报错、不发请求；表格与 `--json` 都带 `confidence`（点选类显示 `-`） |
+| `decision get <id>` | 详情；显示 `confidence`，隐式决策的 `situationUser` 标为「本人原回复」（点选类仍是「用户原话」） |
 | `decision update <id> [--rationale] [--domain]` | 先 GET 取当前 `version` 再 PUT；`--domain ""` 清除领域；领域九类：`product_scope architecture database deploy_release process_workflow quality_test security_compliance billing_pricing other` |
 | `decision confirm\|exclude\|restore <id>` | 先 GET 取 `version`，再 POST `/{id}/review` |
 | `decision delete <id...>` / `--batch <batchId>` | 软删（保留 1 年）；id 与 `--batch` 二选一，一次最多 500 个 id |
 | `decision purge <id...>` / `--batch <batchId> --yes` | 永久删除，不可恢复，也不会再被重新导入；**没有 `--yes` 一律拒绝** |
 
 **upload 规则**
+- 每行按 `source` 分类：`structured`（或缺省）按下一条映射；`implicit` 按「隐式映射」；其他值算坏行。同一次命令一个 `batchId`，两类可混合。
+- 隐式映射：`source_key`→`sourceKey`，`session` 前 64 字符→`sessionRef`，`ts`→`occurredAt`（**必填**），`question`，`reply`→`situationUser`（本人原回复），`situation_assistant`→`situationAssistant`，`options[]`（可空，每项补 `recommended:false`），`choice`→`choiceText`，`choice_type`→`choiceType`（`option|multi|custom|free_text`），`confidence`（0～100 整数），`domain`，`rationale`（可空）；`sourceKind` 固定 `implicit`、`client` 固定 `claude_code`、`isRecommendedChosen` 固定 false。`ts` 缺失/不可解析、`choice_type` 缺失/非法、`confidence` 缺失/非整数/越界、缺 `source_key` / `question` / `choice` 的行算坏行，不上传。
 - 字段映射：`id`→`sourceKey`=`claude:`+id，`session`→`sessionRef`，`ts`→`occurredAt`（`Date.parse` 毫秒），`situation.user_said/assistant_said`→`situationUser/situationAssistant`，`options[]` 补 `recommended`（label 含 `（推荐）` / `(recommended)`），`choice`→`choiceText`，`choiceType`=`multi`（`multi` 为真）/`custom`（`custom` 为真）/`option`，`chose_recommended`→`isRecommendedChosen`（`custom` 时强制 false），`note`（空串为 null）→`rationale`；`sourceKind` 固定 `structured`、`client` 固定 `claude_code`，不传 `productId` / `taskId`。**`project` 字段丢弃，不上传**（含本机用户名路径）。
 - 坏行（非法 JSON、缺 `id` / `question` / `choice` / `ts` / `options`）跳过，汇总里列出文件行号；空行忽略。
-- 客户端脱敏（`redact.ts`）：发送前对 `situation*`、`question`、`options[].label/description`、`choiceText`、`rationale` 再应用 R1～R7（AWS key、`sk-` key、Bearer、`password/passwd/secret/token` 值、JWT、`/Users/<名>/` 等主目录、`-Users-<名>-` 短横线编码路径），`sourceKey` 不脱敏。R7 已知限制：用户名本身含短横线时后半段会留下。
+- 客户端脱敏（`redact.ts`）：发送前对 `situation*`、`question`、`options[].label/description`、`choiceText`、`rationale` 再应用 R1～R9（AWS key、`sk-` key、Bearer、`password/passwd/secret/token` 值、JWT、`/Users/<名>/` 等主目录、`-Users-<名>-` 短横线编码路径、R8 GitHub 令牌 `ghp_…` / `github_pat_…`→`[GITHUB_TOKEN]`、R9 连续 32 位以上且同时含大小写与数字的字母数字串→`[SECRET]`），`sourceKey` 不脱敏。隐式决策的 `reply` / `situation_assistant` / `options` / `choice` / `rationale` 同样脱敏。R7 已知限制：用户名本身含短横线时后半段会留下；R9 是启发式，会误伤长标识符、漏掉含 `-` `_` 的密钥，全小写十六进制（如提交 SHA）不会命中。
 - 分块：按序列化后请求体 UTF-8 字节数每块 ≤4 MB，整次命令只生成一个 `batchId`（汇总里打印，撤销整批用 `--batch`）；单条自己就超限的在本地拒绝、不发送。某块失败即停，不重试：汇总里标出已发送 / 失败 / 未发送的块，退出码 1；同一文件重传是幂等的（按 `sourceKey` 跳过）。
-- `--dry-run`：只解析、映射、脱敏、分块并打印汇总，不发任何请求。
+- `--dry-run`：只解析、映射、脱敏、分块并打印汇总（含点选 / 隐式各自的有效条数与坏行数、无法识别的行数），不发任何请求。
 
 ### 错误码
 
