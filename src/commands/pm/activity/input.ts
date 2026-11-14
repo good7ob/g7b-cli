@@ -23,9 +23,9 @@ export const MAX_SUMMARY = 500;
 
 export const ACTIVITY_ERROR_CODES: ErrorCodeMap = {
   1000: '缺少必填参数',
-  1001: '参数值不合法（动态类型 / actorType 未知、sinceId / limit 越界、summary 超长、url 不是 https）',
-  1002: '任务 / 项目不存在，或不属于你所在的组织',
-  2000: '无权限：该 AI 员工的能力范围不含 task_read / comment，或任务在其产品范围之外',
+  1001: '参数值不合法（动态类型 / actorType 未知、sinceId / limit 越界、summary 超长、url 不是 https；删除时动态不是手动 NOTE / REPORT_UPLOADED）',
+  1002: '任务 / 项目 / 动态不存在，或不属于你所在的组织',
+  2000: '无权限：该 AI 员工的能力范围不含 task_read / comment，或任务在其产品范围之外；删除时这条动态不是你本人写的',
 };
 
 export interface ListFlags {
@@ -73,6 +73,10 @@ export function buildListTarget(o: ListFlags): ListTarget {
     params.actorType = requireOneOf(o.actor.trim().toUpperCase(), ACTOR_TYPES, '--actor');
   }
   return { url, params };
+}
+
+export function buildDeleteTarget(activityId: string | undefined, o: { task?: string }): { taskId: number; id: number } {
+  return { id: parseId(activityId, '动态号'), taskId: parseId(o.task, '--task') };
 }
 
 export interface PostFlags { task?: string; summary?: string; type?: string; url?: string }

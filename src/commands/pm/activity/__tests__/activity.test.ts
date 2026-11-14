@@ -123,3 +123,35 @@ describe('pm activity post', () => {
     expect(r.stderr).toContain('无权限');
   });
 });
+
+describe('pm activity delete', () => {
+  it('DELETEs /progress/tasks/{task}/activities/{id} and confirms', async () => {
+    const r = await activity(['delete', '13492', '--task', '7'], ok({ ...ITEM, id: 13492, type: 'NOTE', summary: 'x' }));
+    expect(r.http.delete).toHaveBeenCalledWith('/progress/tasks/7/activities/13492', undefined);
+    expect(r.stdout).toContain('✓ 动态已删除: #13492 NOTE 任务 #7');
+    expect(r.exitCode).toBeUndefined();
+  });
+
+  it('prints the removed activity with --json', async () => {
+    const r = await activity(['delete', '101', '--task', '7', '--json'], ok(ITEM));
+    expect(JSON.parse(r.stdout)).toEqual(ITEM);
+  });
+
+  it.each([
+    ['missing id', ['delete', '--task', '7'], '动态号'],
+    ['non-numeric id', ['delete', 'x', '--task', '7'], '动态号'],
+    ['missing --task', ['delete', '101'], '--task'],
+    ['non-numeric --task', ['delete', '101', '--task', 'x'], '--task'],
+  ])('rejects %s before calling the API', (_n, args, needle) => expectRejected(args, needle));
+
+  it.each([
+    [1002, '不存在'],
+    [1001, '不合法'],
+    [2000, '无权限'],
+  ])('maps business error %i', async (code, text) => {
+    const r = await activity(['delete', '101', '--task', '7'], bizError(code, 'server says no'));
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain(text);
+    expect(r.stderr).toContain('server says no');
+  });
+});
