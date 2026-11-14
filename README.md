@@ -480,6 +480,12 @@ good7ob pm task create --project-id 123 --name "Scheduled task" --planned-end-da
 # View planned dates
 good7ob pm task get 456
 
+# Sub-task numbers (g7b #3274): a sub-task has no org-level task number; it is shown as "<parent task number>-<sequence>",
+# e.g. 1600-3. get / update / delete take that form too, looked up in the organization of --project (or --org,
+# or the current project). A bare number is still the internal id.
+good7ob pm task get 1600-3 --project 4
+good7ob pm task update 1600-3 --project 4 --status completed   # names the task on stderr before writing
+
 # Task tags (idea #245): names are matched exactly; missing ones are created as your tag
 good7ob pm task create --project-id 123 --name "Tagged task" --tag backend --tag 想法#245
 good7ob pm task update 456 --add-tag urgent --remove-tag later   # keeps the other tags
