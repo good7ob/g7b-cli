@@ -541,9 +541,9 @@ API 端点前缀：`/progress/tasks`
 | 命令 | 说明 |
 |------|------|
 | `pm task list <project-id>` | 列出项目任务，支持状态/优先级/标签过滤 |
-| `pm task get <id>` | 查看任务详情（含执行者类型、阻塞原因等） |
+| `pm task get <id>` | 查看任务详情（含任务号、执行者类型、阻塞原因等）；`<id>` 也可写子任务号 `1600-3`（配 `--project` / `--org`，缺省用当前项目） |
 | `pm task create` | 创建任务（project-id 和 name 必填） |
-| `pm task update <id>` | 更新任务 |
+| `pm task update <id>` | 更新任务；`<id>` 同样可写 `1600-3`，先打印换号结果（任务名与项目）再写入 |
 | `pm task submit-acceptance <id>` | 提交验收：进行中 → 完成待验收，在产品「成果验证」中由人通过 / 退回 |
 | `pm task move <ids...>` | 把一个或多个任务移到另一个项目（带前置校验） |
 | `pm task delete <id>` | 删除任务（需 `-f` 确认） |

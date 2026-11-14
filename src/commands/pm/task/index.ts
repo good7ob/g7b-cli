@@ -8,6 +8,7 @@ import { registerTimeCommands } from './time';
 import { describeSpawnContextError, linkFields, renderSpawnResult, runContextHeaders } from './spawn';
 import { describeTemplateReject, printWarnings, templateFields } from './templateReject';
 import { prdOption, registerRequirementCommands, resolveSources, upsertSources } from './requirement';
+import { describeResolved, resolveTaskRef } from './ref';
 import { fmtDate, fmtDateTime, InputError, parseDate, parseId } from '../../../utils/cliHelpers';
 import {
   checkUpdateTagOptions,
@@ -20,6 +21,13 @@ import {
   normalizeTagNames,
   updateTagFields,
 } from './tagInput';
+
+/** `--org` / `--project` only say where a display number like 1600-3 is looked up (api-0190 §7.1). */
+function refScopeOptions(cmd: Command): Command {
+  return cmd
+    .option('--org <orgId>', '任务号 1600-3 写法的查询范围：组织（与 --project 二选一）')
+    .option('--project <projectId>', '任务号 1600-3 写法的查询范围：项目（与 --org 二选一，缺省用当前项目）');
+}
 
 function plannedDates(options: { plannedStartDate?: string; plannedEndDate?: string }): Record<string, string> {
   const dates: Record<string, string> = {};
@@ -186,13 +194,14 @@ export function registerTaskCommands(pmCommand: Command) {
       }
     });
 
-  taskCommand
+  refScopeOptions(taskCommand
     .command('get <id>')
-    .description('Get task details')
-    .option('--json', 'Output as JSON')
-    .action(async (id, options) => {
+    .description('Get task details (<id> is the internal id, or a sub-task number like 1600-3 with --org/--project)')
+    .option('--json', 'Output as JSON'))
+    .action(async (ref, options) => {
       try {
-        const task = await apiClient.get(`/progress/tasks/${id}`);
+        const resolved = await resolveTaskRef(ref, options);
+        const task = resolved.task ?? (await apiClient.get(`/progress/tasks/${resolved.id}`));
         if (options.json) {
           console.log(JSON.stringify(task, null, 2));
           return;
@@ -200,6 +209,7 @@ export function registerTaskCommands(pmCommand: Command) {
         console.log('\n任务详情');
         console.log('─'.repeat(50));
         console.log(`ID:         ${task.id}`);
+        if (task.displayNo) console.log(`任务号:     ${task.displayNo}（${task.displayNoKind ?? '-'}）`);
         console.log(`名称:       ${task.name}`);
         console.log(`状态:       ${task.status}`);
         console.log(`优先级:     ${task.priority || '-'}`);
@@ -317,9 +327,9 @@ export function registerTaskCommands(pmCommand: Command) {
   createCommand.on('option:template', () => { templateSeen.template = true; });
   createCommand.on('option:no-template', () => { templateSeen.noTemplate = true; });
 
-  taskCommand
+  refScopeOptions(taskCommand
     .command('update <id>')
-    .description('Update a task')
+    .description('Update a task (<id> is the internal id, or a sub-task number like 1600-3 with --org/--project)')
     .option('--name <name>', 'Task name')
     .option('--description <desc>', 'Task description')
     .option(...prdOption)
@@ -347,12 +357,17 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--tag-id <id>', 'Replace ALL tags with these tag IDs (repeatable or comma-separated)', collectTagList, [])
     .option('--add-tag <name>', 'Add a tag, keeping the others (repeatable or comma-separated; created if missing)', collectTagList, [])
     .option('--remove-tag <name>', 'Remove a tag, keeping the others (repeatable or comma-separated)', collectTagList, [])
-    .option('--clear-tags', 'Remove all tags from the task')
-    .action(async (id, options) => {
+    .option('--clear-tags', 'Remove all tags from the task'))
+    .action(async (ref, options) => {
       try {
         checkUpdateTagOptions(options);
         const body: any = { ...plannedDates(options), ...executorFields(options), ...skipAcceptanceFields(options) };
-        let current: any;
+        // a display number is turned into the internal id first, and the task is named before anything is written
+        const resolved = await resolveTaskRef(ref, options);
+        const id = resolved.id;
+        const resolvedNote = describeResolved(ref, resolved);
+        if (resolvedNote) console.error(resolvedNote);
+        let current: any = resolved.task;
         const currentTask = async () => (current ??= await apiClient.get(`/progress/tasks/${id}`));
         if (options.name) body.name = options.name;
         if (options.description) body.description = options.description;
@@ -543,12 +558,16 @@ export function registerTaskCommands(pmCommand: Command) {
       }
     });
 
-  taskCommand
+  refScopeOptions(taskCommand
     .command('delete <id>')
-    .description('Delete a task')
-    .option('-f, --force', 'Skip confirmation prompt')
-    .action(async (id, options) => {
+    .description('Delete a task (<id> is the internal id, or a sub-task number like 1600-3 with --org/--project)')
+    .option('-f, --force', 'Skip confirmation prompt'))
+    .action(async (ref, options) => {
       try {
+        const resolved = await resolveTaskRef(ref, options);
+        const id = resolved.id;
+        const resolvedNote = describeResolved(ref, resolved);
+        if (resolvedNote) console.error(resolvedNote);
         if (!options.force) {
           console.log(`⚠ 即将删除任务 ${id}，使用 -f/--force 确认删除`);
           process.exit(0);
