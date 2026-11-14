@@ -281,6 +281,8 @@ good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login      
 good7ob template use 8 --org 3 --product 9 --var title=Login --out ./api.md            # document templates: body to a file
 good7ob template package use 5 --org 3 --product 9 --var project_name=Shop --item 4:owner=Zhang --item-opt 4:module=56
 good7ob template instances --product 9 && good7ob template upgrade 31 --preview        # instances are never modified automatically
+good7ob template setting get --scope project --id 12 --org 3        # effective template + mode per type (org-enforced rows are read-only)
+good7ob template setting set --scope org --id 3 --type TASK --template 5 --mode enforce   # clear: `template setting clear ...`
 good7ob template admin reviews                        # platform admins only (see GOOD7OB_API_KEY below)
 good7ob template admin reject 9 --reason "missing description"
 ```

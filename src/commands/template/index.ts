@@ -11,6 +11,7 @@ import { registerPackageCommands } from './packageCommands';
 import { TemplateCard, TemplateDetail, renderTemplateDetail, renderTemplateList } from './render';
 import { renderCategories, renderTags } from './renderMisc';
 import { registerReviewCommands } from './reviewCommands';
+import { registerSettingCommands } from './settingCommands';
 import { registerUpgradeCommands } from './upgradeCommands';
 import { registerUseCommands } from './useCommands';
 import { registerVersionCommands, withPayloadFlags } from './versionCommands';
@@ -212,5 +213,6 @@ export function registerTemplateCommands(program: Command) {
   registerInstallCommands(tpl);
   registerUseCommands(tpl);
   registerUpgradeCommands(tpl);
+  registerSettingCommands(tpl);
   registerAdminCommands(tpl);
 }

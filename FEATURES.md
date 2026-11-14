@@ -1352,6 +1352,18 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 
 T2 错误码含义：`1000` 缺 `--org` / `--product` / TASK 缺 `--module`；`1001` 变量缺失 / 未知 / 类型不符、目标模块或用例目录不属于该产品、渲染结果不合法或超 2 MB、超出数量上限；`1002` 模板 / 版本 / 包 / 实例不存在或不可见，**或产品不存在 / 不属于该组织**（不区分二者）；`1003` 非免费；`1006` RELEASE 版本号重复；`1007` 未发布 / 已下架 / 已归档、缺必需依赖（可加 `--with-deps`）、包条目不满足版本约束、该类型暂无实例化处理器；`2000` 不是目标组织的活跃成员。
 
+### 生效模板与模式设置
+
+API 端点：`/templates/settings`（prd-0091 FP-23）。每个范围（组织 / 项目 / 产品 / 个人 / AI 员工）按类型设置「生效模板」，组织、项目、产品层另有模式 `enforce`（强制）/ `recommend`（推荐），个人与 AI 员工没有模式。下面三条命令共用：`--scope org|project|product|user|ai-employee`、`--id <范围对象 id>`（user 不用；org 可只写 `--org`）、`--org <组织 id>`（project / product / ai-employee 必填）。类型 `--type` 为 TASK|PRD|UI|API|DB|ARCH|OTHER|TEST|RELEASE（不区分大小写）；项目只有 TASK，产品没有 TASK。
+
+| 命令 | 说明 |
+|------|------|
+| `template setting get --scope <s> [--id <id>] [--org <orgId>] [--type T]` | 各类型的本层设置、模式，以及当前**最终生效**结果（生效层：组织强制 / 项目·产品强制 / 项目·产品推荐 / 个人 / 组织推荐 / 未设置；模板、版本、模式）。组织已强制该类型时标「组织已强制，只读」并列出组织所选模板；本层设置失效（模板下架等）标「已失效，视为没设」；被跳过的强制层也会列出。`--json` 原样输出 |
+| `template setting set --scope <s> ... --type T --template <id> [--mode enforce\|recommend]` | 设置或替换；不带 `--mode` 时沿用已有模式，新设置默认 recommend；个人与 AI 员工带 `--mode` 会在本地被拒 |
+| `template setting clear --scope <s> ... --type T` | 清除（幂等） |
+
+写权限：组织、项目、产品、AI 员工仅组织 owner/admin；个人仅本人；读权限为组织成员 / 本人。错误码提示：`2000` 没有权限（需组织 owner/admin）；`1007` 组织已强制，项目 / 产品不能改；`1001` 类型 / 范围 / 模板不符（原样带上后端消息）；`1002` 对象不存在或不属于该组织。个人产品、个人项目（无组织）不支持设置。
+
 ### 管理端审核（平台管理员）
 
 | 命令 | 说明 |
