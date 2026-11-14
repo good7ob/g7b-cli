@@ -67,6 +67,18 @@ describe('runRound', () => {
     expect((r as any).task.nodePrompt).toBe('do it');
   });
 
+  it('claim sends the configured model next to runnerId; unset or blank omits it', async () => {
+    const run = async (extra: object) => {
+      const { api, deps } = setup({ get: async () => [{ id: 11 }], post: async () => ({ id: 11, status: 'in_progress' }) });
+      await runRound({ ...deps, ...extra });
+      return api.post.mock.calls[0][0];
+    };
+    expect(await run({ runnerId: 7, model: 'claude-sonnet-4-5' })).toBe('/progress/tasks/11/claim?runnerId=7&model=claude-sonnet-4-5');
+    expect(await run({ model: 'gpt 5/x' })).toBe('/progress/tasks/11/claim?model=gpt+5%2Fx');
+    expect(await run({ runnerId: 7 })).toBe('/progress/tasks/11/claim?runnerId=7');
+    expect(await run({ runnerId: 7, model: '  ' })).toBe('/progress/tasks/11/claim?runnerId=7');
+  });
+
   it('409 ASSIGNED_TO_OTHER is skipped, never fought over; nothing else -> assigned_elsewhere', async () => {
     const other = () => Object.assign(new Error('ASSIGNED_TO_OTHER: 任务 1 已分配给同一员工的另一台 Runner #3'), { code: 409 });
     const { store, api, deps } = setup({

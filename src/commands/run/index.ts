@@ -364,7 +364,7 @@ export function registerRunCommands(program: Command) {
     artifacts
       .command('add')
       .description('Attach an artifact reference to the step (idempotent)')
-      .requiredOption('--type <type>', 'PR | REVIEW_REPORT | TEST_RUN | EXTERNAL（以及 DELIVERABLE_PACKAGE / GATE_RESULT / ACCEPTANCE_RECORD / RELEASE / DEPLOY_RECORD）')
+      .requiredOption('--type <type>', 'PR | REVIEW_REPORT | TEST_RUN | EXTERNAL（以及 TEST_CASE / SCREENSHOT / BUG / REPORT / PRD / DESIGN / DOC / DELIVERABLE_PACKAGE / GATE_RESULT / ACCEPTANCE_RECORD / RELEASE / DEPLOY_RECORD）')
       .requiredOption('--ref <id|url>', '对象 id 或链接')
       .option('--title <text>', '标题')
   ).action((o) =>

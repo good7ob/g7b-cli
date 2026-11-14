@@ -116,6 +116,28 @@ describe('good7ob agent listen --once', () => {
     expect(r.stdout).toContain('slots=2 只用于向调度器申报容量');
   });
 
+  it('--model beats env beats agent.model; the effective model is claimed and shown', async () => {
+    configService.set('agent', { forward: { command: 'true' }, model: 'cfg-model' });
+    const handler = (m: string, url: string) =>
+      m === 'post' && url === '/api/v1/me/runners' ? ok({ id: 12, hostKey: 'mbp' }) : m === 'get' ? ok([{ id: 11 }]) : ok({ id: 11, status: 'in_progress' });
+    const claimUrl = (r: Awaited<ReturnType<typeof runCli>>) => r.http.post.mock.calls.map((c) => String(c[0])).find((u) => u.includes('/claim'));
+    try {
+      const a = await runCli(registerAgentCommands, ['agent', 'listen', '--once', '--model', 'flag-model'], handler);
+      expect(claimUrl(a)).toBe('/progress/tasks/11/claim?runnerId=12&model=flag-model');
+      expect(a.stdout).toContain('模型 flag-model');
+      process.env.GOOD7OB_RUNNER_MODEL = 'env-model';
+      new AgentStateStore(path.join(tmpHome, '.good7ob')).write({ status: 'idle' } as any);
+      const b = await runCli(registerAgentCommands, ['agent', 'next'], handler);
+      expect(claimUrl(b)).toBe('/progress/tasks/11/claim?runnerId=12&model=env-model');
+      delete process.env.GOOD7OB_RUNNER_MODEL;
+      new AgentStateStore(path.join(tmpHome, '.good7ob')).write({ status: 'idle' } as any);
+      const c = await runCli(registerAgentCommands, ['agent', 'next'], handler);
+      expect(claimUrl(c)).toBe('/progress/tasks/11/claim?runnerId=12&model=cfg-model');
+    } finally {
+      delete process.env.GOOD7OB_RUNNER_MODEL;
+    }
+  });
+
   it('config supplies the defaults (agent.envTags) when no flag is given', async () => {
     const r = await runCli(registerAgentCommands, ['agent', 'listen', '--once'], (m, url) =>
       m === 'post' && url === '/api/v1/me/runners' ? ok({ id: 3 }) : ok([])
