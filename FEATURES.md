@@ -576,6 +576,10 @@ API 端点前缀：`/progress/tasks`
 | `--fp-id` / `--rp-id` | 功能点 / 规则点 ID，放请求体 `functionPointId` / `rulePointId`（AI 自建任务的关联；人类调用后端不处理） |
 | `--run-id` / `--step-id` | 自动化运行 / 步骤 ID，放请求头 `X-Automation-Run-Id` / `X-Automation-Step-Id`（不在请求体）；必须同时给，原样发送（由后端校验，不查询）；都不给时读本机 `agent listen` 状态文件里当前步骤，并先 `GET /api/v1/orgs/{orgId}/runs/{runId}`（组织取步骤所属组织，其次 `GOOD7OB_ORG_ID` / `config set org-id` / Key 的唯一组织），响应 `loop` 非空（窗口长运行）才带头；`loop` 为空（普通运行）、没有占用、查询失败（stderr 一行警告，不影响创建）都不带头 |
 | `--no-run-context` | 不查询也不带运行上下文，即使 `agent listen` 正占用着一个步骤 |
+| `--template <id>` | 另选任务模板（请求体 `templateId`）；默认沿用生效模板；被组织/项目/产品强制的范围会拒绝 |
+| `--no-template` | 不套模板（请求体 `noTemplate`）；与 `--template` 互斥，本地先校验；强制范围同样拒绝 |
+
+**模板强制（prd-0091）：** 后端答 1001 且消息含「已强制」时，输出「创建被拒：<组织|项目|产品>已强制使用模板」，把「；」分隔的不符项拆成多行并给出改法（标题过长 → 缩短到 N 字内；含类名/路径/字段名 → 放进描述；格式不符 → 用「[范围] 动作 + 对象」，范围词与动作词见任务命名规范），退出码 1；其他 1001 输出不变。推荐模式命中时响应带 `warnings`，创建成功行之后逐条打印「提示：…」（退出码 0；`--json` 原样保留在输出里）。
 
 **AI 员工自建任务（窗口长 Run，prd-0187）：** 用 AI 员工 Key 调用时服务端强制执行者为该员工（不需要 `--ai-employee` / `--executor-type`），
 并按自动化的自建限额过守卫。响应 `data.spawnResult` 决定输出，三种结果退出码均为 0：

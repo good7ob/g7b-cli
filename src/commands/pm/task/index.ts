@@ -6,6 +6,7 @@ import { planMove } from './movePlan';
 import { registerDepCommands } from './dep';
 import { registerTimeCommands } from './time';
 import { describeSpawnContextError, linkFields, renderSpawnResult, runContextHeaders } from './spawn';
+import { describeTemplateReject, printWarnings, templateFields } from './templateReject';
 import { prdOption, registerRequirementCommands, resolveSources, upsertSources } from './requirement';
 import { fmtDate, fmtDateTime, InputError, parseDate, parseId } from '../../../utils/cliHelpers';
 import {
@@ -235,7 +236,9 @@ export function registerTaskCommands(pmCommand: Command) {
       }
     });
 
-  taskCommand
+  // commander cannot tell `--template 9 --no-template` apart from either alone: record which flags appeared
+  const templateSeen = { template: false, noTemplate: false };
+  const createCommand = taskCommand
     .command('create')
     .description('Create a new task')
     .option('--project-id <id>', 'Project ID (default: current project)')
@@ -260,10 +263,13 @@ export function registerTaskCommands(pmCommand: Command) {
     .option('--run-id <id>', 'Automation run ID (X-Automation-Run-Id; with --step-id; sent as given). Default: the step `agent listen` holds, only when its run is a window-loop long run')
     .option('--step-id <id>', 'Automation step ID (X-Automation-Step-Id; with --run-id)')
     .option('--no-run-context', 'Do not look up or send the run context, even when `agent listen` holds a step')
+    .option('--template <id>', 'Use another task template than the effective one (sent as templateId; refused where a template is enforced)')
+    .option('--no-template', 'Create without a template (sent as noTemplate; refused where a template is enforced; not with --template)')
     .option('--json', 'Output result as JSON')
     .action(async (options) => {
       try {
         const body: any = {
+          ...templateFields(options, templateSeen),
           ...createTagFields(options),
           ...linkFields(options),
           projectId: currentProjectId(options.projectId),
@@ -291,16 +297,25 @@ export function registerTaskCommands(pmCommand: Command) {
         const spawned = renderSpawnResult(task, options.name);
         if (spawned) {
           console.log(spawned);
+          printWarnings(task);
           return;
         }
         const tagNames = currentTagNames(task);
         console.log(`✓ 任务已创建: [${task?.id || ''}] ${options.name}${tagNames.length ? `（标签: ${tagNames.join(', ')}）` : ''}`);
+        printWarnings(task);
       } catch (error) {
-        const spawnError = describeSpawnContextError(error);
-        console.error('✗ 创建任务失败:', spawnError ?? (error instanceof Error ? error.message : String(error)));
+        const rejected = describeTemplateReject(error);
+        if (rejected) {
+          console.error(`✗ ${rejected}`);
+        } else {
+          const spawnError = describeSpawnContextError(error);
+          console.error('✗ 创建任务失败:', spawnError ?? (error instanceof Error ? error.message : String(error)));
+        }
         process.exit(1);
       }
     });
+  createCommand.on('option:template', () => { templateSeen.template = true; });
+  createCommand.on('option:no-template', () => { templateSeen.noTemplate = true; });
 
   taskCommand
     .command('update <id>')
