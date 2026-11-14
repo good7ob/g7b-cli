@@ -1412,7 +1412,7 @@ GOOD7OB_API_KEY=<管理员 token> good7ob template admin reject 9 --reason "缺�
 
 ## pm activity — 任务 / 项目动态
 
-API 端点：`GET /progress/tasks/{id}/activities`、`GET /progress/projects/{id}/activities`、`POST /progress/tasks/{id}/activities`（prd-0092 FP-6，`api-0092`）。动态是 append-only：没有删除 / 编辑接口，写错的 NOTE 只能再写一条 NOTE 说明。
+API 端点：`GET /progress/tasks/{id}/activities`、`GET /progress/projects/{id}/activities`、`POST /progress/tasks/{id}/activities`、`DELETE /progress/tasks/{id}/activities/{activityId}`（prd-0092 FP-6，`api-0092`，删除见 `rp-pm-activity-0047`）。动态基本是 append-only：没有编辑接口，系统自动产生的动态不能删；只有自己手动写的 NOTE / REPORT_UPLOADED 可以用 `delete` 物理删除（写错的内容也可以再写一条 NOTE 说明）。
 
 | 命令 | 说明 |
 |------|------|
@@ -1420,6 +1420,7 @@ API 端点：`GET /progress/tasks/{id}/activities`、`GET /progress/projects/{id
 | `pm activity ... --since <id> [--limit n]` | **游标模式**：只取 `id > since` 的动态（`--since 0` 从头开始），`--limit` 1–200（默认 50）；不能与 `--page/--page-size` 同用，`--limit` 也只在游标模式有效 |
 | `pm activity --project <id> [--type a,b] [--actor USER\|AGENT\|SYSTEM]` | 只支持 `--project` 的过滤：`--type` 逗号分隔的动态类型（不区分大小写，CLI 转大写去重后作 `types` 发送）；`--actor` 来源类型 |
 | `pm activity post --task <id> --summary <text> [--type NOTE\|REPORT_UPLOADED] [--url <https-url>]` | 写一条手动动态：`--summary` 必填 ≤500 字符；`--type` 默认 `NOTE`；`--url` 必须 `https://` 开头，存入 `metadata.url` |
+| `pm activity delete <动态号> --task <任务号> [--json]` | 删除自己写的手动 NOTE / REPORT_UPLOADED（物理删除，不可恢复）；`<动态号>` 与 `--task` 都必填且是正整数；系统自动动态、别人或 AI 员工写的动态 → `2000` / `1001`；动态不在该任务下按不存在处理（`1002`）；输出被删动态的摘要，`--json` 输出其完整内容 |
 
 文本输出为表格（ID、时间、来源、渠道、类型、任务、摘要）+ 表尾 `nextSinceId=… hasMore=…`（下一次 `--since` 直接用 `nextSinceId`）；来源列显示 `actorName`，没有名字时显示 `actorType:actorId`。摘要 / 来源 / 任务名等用户文本经 `stripControl` 剥离控制字符；`--json` 原样输出响应（`{items, nextSinceId, hasMore}` / 新建的 ActivityVo）。
 业务错误码：`1000` 缺参、`1001` 参数不合法（类型 / actorType 未知、sinceId / limit 越界、summary 超长、url 非 https）、`1002` 任务 / 项目不存在或不属于你所在的组织、`2000` 无权限（AI 员工能力范围不含 `task_read` / `comment`，或任务在其产品范围之外）、`999/401` 未登录。所有参数在调用 API 前于 CLI 端校验，错误不发请求。
@@ -1431,6 +1432,7 @@ good7ob pm activity --task 7 -p 2 --page-size 50
 good7ob pm activity --project 1 --since 120 --json
 good7ob pm activity post --task 7 --summary "已联调完成，等待验收"
 good7ob pm activity post --task 7 --type REPORT_UPLOADED --summary "测试报告" --url https://files.example.com/r.pdf
+good7ob pm activity delete 13492 --task 7
 ```
 
 ---

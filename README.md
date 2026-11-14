@@ -143,6 +143,7 @@ good7ob pm health --help
 good7ob pm activity --project 1 --since 0 --limit 100     # activity feed, cursor mode (footer gives nextSinceId)
 good7ob pm activity --task 7                              # page mode
 good7ob pm activity post --task 7 --summary "done, please review"
+good7ob pm activity delete 13492 --task 7     # remove a manual note you posted
 ```
 
 Project management commands for projects, tasks, workflows, reports, tags, product health and the task / project activity feed.

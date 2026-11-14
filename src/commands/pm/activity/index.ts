@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import apiClient from '../../../services/ApiClient';
 import { emit, guarded } from '../../../utils/cliHelpers';
-import { ACTIVITY_ERROR_CODES, ACTOR_TYPES, MAX_LIMIT, MAX_PAGE_SIZE, MAX_SUMMARY, POST_TYPES, buildListTarget, buildPostBody } from './input';
+import { ACTIVITY_ERROR_CODES, ACTOR_TYPES, MAX_LIMIT, MAX_PAGE_SIZE, MAX_SUMMARY, POST_TYPES, buildDeleteTarget, buildListTarget, buildPostBody } from './input';
 import { Activity, ActivityPage, renderActivityList } from './render';
 
 /**
@@ -14,7 +14,7 @@ import { Activity, ActivityPage, renderActivityList } from './render';
 export function registerActivityCommands(pmCommand: Command) {
   const activity = pmCommand
     .command('activity')
-    .description('Task / project activity feed (newest first); subcommand: post')
+    .description('Task / project activity feed (newest first); subcommands: post, delete')
     .allowExcessArguments(false)
     .option('--project <id>', 'Project activities (mutually exclusive with --task)')
     .option('--task <id>', 'Task activities (mutually exclusive with --project)')
@@ -47,5 +47,18 @@ export function registerActivityCommands(pmCommand: Command) {
         const { taskId, body } = buildPostBody(o);
         const created: Activity = await apiClient.post(`/progress/tasks/${taskId}/activities`, body);
         emit(o.json, created, () => `✓ 动态已写入: #${created?.id ?? '-'} ${body.type} 任务 #${taskId} — ${body.summary}`);
+      }));
+
+  activity
+    .command('delete [activityId]')
+    .description('Delete a manual NOTE / REPORT_UPLOADED activity you posted yourself (system-generated or other people\'s activities cannot be deleted)')
+    .option('--task <id>', 'Task id the activity belongs to (required)')
+    .option('--json', 'Output the removed activity as JSON')
+    .action((activityId: string | undefined, _o, cmd: Command) =>
+      guarded('删除动态失败', ACTIVITY_ERROR_CODES, async () => {
+        const o = cmd.optsWithGlobals();
+        const { taskId, id } = buildDeleteTarget(activityId, o);
+        const removed: Activity = await apiClient.delete(`/progress/tasks/${taskId}/activities/${id}`);
+        emit(o.json, removed, () => `✓ 动态已删除: #${id} ${removed?.type ?? '-'} 任务 #${taskId} — ${removed?.summary ?? ''}`);
       }));
 }
