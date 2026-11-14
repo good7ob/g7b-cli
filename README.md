@@ -281,6 +281,8 @@ good7ob template use 4 --org 3 --product 9 --module 55 --var feature=Login      
 good7ob template use 8 --org 3 --product 9 --var title=Login --out ./api.md            # document templates: body to a file
 good7ob template package use 5 --org 3 --product 9 --var project_name=Shop --item 4:owner=Zhang --item-opt 4:module=56
 good7ob template instances --product 9 && good7ob template upgrade 31 --preview        # instances are never modified automatically
+good7ob template setting get --scope project --id 12 --org 3        # effective template + mode per type (org-enforced rows are read-only)
+good7ob template setting set --scope org --id 3 --type TASK --template 5 --mode enforce   # clear: `template setting clear ...`
 good7ob template admin reviews                        # platform admins only (see GOOD7OB_API_KEY below)
 good7ob template admin reject 9 --reason "missing description"
 ```
@@ -497,6 +499,12 @@ good7ob pm task list 123 --tag urgent
 # else from the step `agent listen` holds, only when that run is a window-loop long run (looked up via GET /runs/{id}; lookup failure = warning, no headers; --no-run-context to skip); --fp-id/--rp-id link a function / rule point.
 # Output: 已创建任务 #N | 已存在任务 #N（去重） | 已提交草案 #D（原因：…）, all exit 0; 409 SPAWN_CONTEXT_INVALID exits 1
 good7ob pm task create --project-id 123 --name "Add tests" --fp-id 12 --rp-id 34 --run-id 7 --step-id 31
+
+# Task templates (prd-0091): default = the effective template; --template <id> picks another, --no-template skips (mutually exclusive).
+# Where a template is enforced (org / project / product) a mismatch exits 1 with 创建被拒：…已强制使用模板 and one line per item with a fix;
+# recommend-mode hits print 提示：… after the success line (exit 0; --json keeps `warnings`).
+good7ob pm task create --project-id 123 --name "[CLI] 新增 导出命令" --template 9
+good7ob pm task create --project-id 123 --name "临时记录" --no-template
 ```
 
 Task planned dates use `YYYY-MM-DD` (Asia/Tokyo), with day precision. Invalid dates

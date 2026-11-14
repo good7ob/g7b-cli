@@ -576,6 +576,10 @@ API 端点前缀：`/progress/tasks`
 | `--fp-id` / `--rp-id` | 功能点 / 规则点 ID，放请求体 `functionPointId` / `rulePointId`（AI 自建任务的关联；人类调用后端不处理） |
 | `--run-id` / `--step-id` | 自动化运行 / 步骤 ID，放请求头 `X-Automation-Run-Id` / `X-Automation-Step-Id`（不在请求体）；必须同时给，原样发送（由后端校验，不查询）；都不给时读本机 `agent listen` 状态文件里当前步骤，并先 `GET /api/v1/orgs/{orgId}/runs/{runId}`（组织取步骤所属组织，其次 `GOOD7OB_ORG_ID` / `config set org-id` / Key 的唯一组织），响应 `loop` 非空（窗口长运行）才带头；`loop` 为空（普通运行）、没有占用、查询失败（stderr 一行警告，不影响创建）都不带头 |
 | `--no-run-context` | 不查询也不带运行上下文，即使 `agent listen` 正占用着一个步骤 |
+| `--template <id>` | 另选任务模板（请求体 `templateId`）；默认沿用生效模板；被组织/项目/产品强制的范围会拒绝 |
+| `--no-template` | 不套模板（请求体 `noTemplate`）；与 `--template` 互斥，本地先校验；强制范围同样拒绝 |
+
+**模板强制（prd-0091）：** 后端答 1001 且消息含「已强制」时，输出「创建被拒：<组织|项目|产品>已强制使用模板」，把「；」分隔的不符项拆成多行并给出改法（标题过长 → 缩短到 N 字内；含类名/路径/字段名 → 放进描述；格式不符 → 用「[范围] 动作 + 对象」，范围词与动作词见任务命名规范），退出码 1；其他 1001 输出不变。推荐模式命中时响应带 `warnings`，创建成功行之后逐条打印「提示：…」（退出码 0；`--json` 原样保留在输出里）。
 
 **AI 员工自建任务（窗口长 Run，prd-0187）：** 用 AI 员工 Key 调用时服务端强制执行者为该员工（不需要 `--ai-employee` / `--executor-type`），
 并按自动化的自建限额过守卫。响应 `data.spawnResult` 决定输出，三种结果退出码均为 0：
@@ -1351,6 +1355,18 @@ API 端点前缀：`/templates`（管理端 `/admin/templates`），设计见 `d
 **超时与重试：** 实例化是事务性的，但**不是幂等的**（重复调用会再建一份）。客户端超时（120 秒）或网关 502 / 503 / 504 时提示「服务端可能已执行，请先用 `template instances` 核对，勿盲目重试」。业务错误（HTTP 200 + 非 200 `code`）不带此提示。
 
 T2 错误码含义：`1000` 缺 `--org` / `--product` / TASK 缺 `--module`；`1001` 变量缺失 / 未知 / 类型不符、目标模块或用例目录不属于该产品、渲染结果不合法或超 2 MB、超出数量上限；`1002` 模板 / 版本 / 包 / 实例不存在或不可见，**或产品不存在 / 不属于该组织**（不区分二者）；`1003` 非免费；`1006` RELEASE 版本号重复；`1007` 未发布 / 已下架 / 已归档、缺必需依赖（可加 `--with-deps`）、包条目不满足版本约束、该类型暂无实例化处理器；`2000` 不是目标组织的活跃成员。
+
+### 生效模板与模式设置
+
+API 端点：`/templates/settings`（prd-0091 FP-23）。每个范围（组织 / 项目 / 产品 / 个人 / AI 员工）按类型设置「生效模板」，组织、项目、产品层另有模式 `enforce`（强制）/ `recommend`（推荐），个人与 AI 员工没有模式。下面三条命令共用：`--scope org|project|product|user|ai-employee`、`--id <范围对象 id>`（user 不用；org 可只写 `--org`）、`--org <组织 id>`（project / product / ai-employee 必填）。类型 `--type` 为 TASK|PRD|UI|API|DB|ARCH|OTHER|TEST|RELEASE（不区分大小写）；项目只有 TASK，产品没有 TASK。
+
+| 命令 | 说明 |
+|------|------|
+| `template setting get --scope <s> [--id <id>] [--org <orgId>] [--type T]` | 各类型的本层设置、模式，以及当前**最终生效**结果（生效层：组织强制 / 项目·产品强制 / 项目·产品推荐 / 个人 / 组织推荐 / 未设置；模板、版本、模式）。组织已强制该类型时标「组织已强制，只读」并列出组织所选模板；本层设置失效（模板下架等）标「已失效，视为没设」；被跳过的强制层也会列出。`--json` 原样输出 |
+| `template setting set --scope <s> ... --type T --template <id> [--mode enforce\|recommend]` | 设置或替换；不带 `--mode` 时沿用已有模式，新设置默认 recommend；个人与 AI 员工带 `--mode` 会在本地被拒 |
+| `template setting clear --scope <s> ... --type T` | 清除（幂等） |
+
+写权限：组织、项目、产品、AI 员工仅组织 owner/admin；个人仅本人；读权限为组织成员 / 本人。错误码提示：`2000` 没有权限（需组织 owner/admin）；`1007` 组织已强制，项目 / 产品不能改；`1001` 类型 / 范围 / 模板不符（原样带上后端消息）；`1002` 对象不存在或不属于该组织。个人产品、个人项目（无组织）不支持设置。
 
 ### 管理端审核（平台管理员）
 
