@@ -69,8 +69,17 @@ function loadConfig(): AgentConfig {
   return resolveAgentConfig(configService.get('agent'));
 }
 
-function deps(cfg: AgentConfig, store: AgentStateStore, log: (m: string) => void, runnerId?: number): RoundDeps {
-  return { api: apiClient, store, cfg, log, runnerId };
+/** Model the runner reports on claim: `--model`, then env GOOD7OB_RUNNER_MODEL, then `agent.model`; none = not reported. */
+export function resolveModel(flag: string | undefined, cfg: AgentConfig, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  for (const v of [flag, env.GOOD7OB_RUNNER_MODEL, cfg.model]) {
+    const m = v?.trim();
+    if (m) return m;
+  }
+  return undefined;
+}
+
+function deps(cfg: AgentConfig, store: AgentStateStore, log: (m: string) => void, runnerId?: number, model?: string): RoundDeps {
+  return { api: apiClient, store, cfg, log, runnerId, model };
 }
 
 function describeSlot(state: AgentState, nowMs = Date.now()): string {
@@ -158,6 +167,7 @@ export function registerAgentCommands(program: Command) {
     .option('--env <tags>', 'Runner env tags, comma separated subset of dev,test,prod (default: agent.envTags or none)')
     .option('--agent-kind <code>', 'Agent kind, e.g. CLAUDE_CODE / CODEX (default: agent.agentKind or CLAUDE_CODE)')
     .option('--host-id <id>', 'Host identity the runner is registered under (default: agent.hostId or the hostname)')
+    .option('--model <id>', 'Model id reported when claiming a task, checked by the backend model policy (default: env GOOD7OB_RUNNER_MODEL, then agent.model; none = not reported)')
     .action(async (opts) => {
       let cfg: AgentConfig;
       let runnerOpts: RunnerOptions;
@@ -226,8 +236,9 @@ export function registerAgentCommands(program: Command) {
       });
 
       // 3. poll → claim (assigned first) → forward
-      const d = deps(cfg, store, log, reg.runnerId);
-      log(`开始监听 AI 任务队列（间隔 ${cfg.intervalSeconds}s，转交: ${url ? `webhook ${url}` : 'command'}${cfg.projectId ? `，项目 ${cfg.projectId}` : ''}，runnerId ${reg.runnerId}）`);
+      const model = resolveModel(opts.model, cfg);
+      const d = deps(cfg, store, log, reg.runnerId, model);
+      log(`开始监听 AI 任务队列（间隔 ${cfg.intervalSeconds}s，转交: ${url ? `webhook ${url}` : 'command'}${cfg.projectId ? `，项目 ${cfg.projectId}` : ''}，runnerId ${reg.runnerId}，模型 ${model ?? '未上报'}）`);
       let lastKind = '';
       while (!stopping) {
         try {
@@ -265,6 +276,7 @@ export function registerAgentCommands(program: Command) {
   agent
     .command('next')
     .description(`Claim the next task for the calling agent (exit ${EXIT_BUSY}: slot busy, ${EXIT_EMPTY}: queue empty, ${EXIT_ASSIGNED_ELSEWHERE}: only tasks assigned to other runners)`)
+    .option('--model <id>', 'Model id reported on claim (default: env GOOD7OB_RUNNER_MODEL, then agent.model; none = not reported)')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
       let r;
@@ -272,7 +284,8 @@ export function registerAgentCommands(program: Command) {
       try {
         const store = new AgentStateStore();
         runner = store.readRunner();
-        r = await runRound(deps(loadConfig(), store, (m) => console.error(m), runner?.runnerId));
+        const cfg = loadConfig();
+        r = await runRound(deps(cfg, store, (m) => console.error(m), runner?.runnerId, resolveModel(opts.model, cfg)));
       } catch (e) {
         fail('领取任务失败', e);
       }
@@ -406,6 +419,7 @@ export function registerAgentCommands(program: Command) {
         console.log(`  envTags:         ${cfg.envTags?.length ? cfg.envTags.join(',') : '(无)'}`);
         console.log(`  agentKind:       ${cfg.agentKind ?? '(默认 CLAUDE_CODE)'}`);
         console.log(`  hostId:          ${cfg.hostId ?? '(默认 hostname)'}`);
+        console.log(`  model:           ${resolveModel(undefined, cfg) ?? '(未设置，领取时不上报)'}`);
         console.log(`  forward.url:     ${url || '(not set)'}`);
         console.log(`  forward.secret:  ${secret ? '(set)' : '(not set)'}`);
         console.log(`  forward.command: ${command || '(not set)'}`);

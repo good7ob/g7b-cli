@@ -16,12 +16,14 @@ export interface AgentConfig {
   envTags?: string[];
   agentKind?: string;
   hostId?: string;
+  /** Model id this runner reports on claim (backend model policy); `--model` / GOOD7OB_RUNNER_MODEL override. */
+  model?: string;
 }
 
 export const AGENT_DEFAULTS = { intervalSeconds: 15, expectedMinutes: 60, graceMinutes: 30 };
 
 const NUMERIC_KEYS = ['intervalSeconds', 'expectedMinutes', 'graceMinutes', 'projectId'] as const;
-const RUNNER_KEYS = ['slots', 'envTags', 'agentKind', 'hostId'] as const;
+const RUNNER_KEYS = ['slots', 'envTags', 'agentKind', 'hostId', 'model'] as const;
 const FORWARD_KEYS = ['url', 'secret', 'command'] as const;
 export const AGENT_KEYS = [...NUMERIC_KEYS, ...RUNNER_KEYS, ...FORWARD_KEYS.map((k) => `forward.${k}`)];
 
@@ -45,6 +47,7 @@ export function resolveAgentConfig(raw: any = {}): AgentConfig {
     envTags: raw?.envTags != null && raw.envTags !== '' ? parseEnvTags(Array.isArray(raw.envTags) ? raw.envTags.join(',') : String(raw.envTags), 'agent.envTags') : undefined,
     agentKind: raw?.agentKind ? normalizeAgentKind(String(raw.agentKind), 'agent.agentKind') : undefined,
     hostId: raw?.hostId ? String(raw.hostId) : undefined,
+    model: raw?.model && String(raw.model).trim() ? String(raw.model).trim() : undefined,
   };
 }
 
@@ -78,7 +81,7 @@ export function withAgentValue(raw: any, key: string, value: string): any {
   else if (key === 'slots') parsed = parseSlots(value, 'agent.slots');
   else if (key === 'envTags') parsed = parseEnvTags(value, 'agent.envTags');
   else if (key === 'agentKind') parsed = normalizeAgentKind(value, 'agent.agentKind');
-  else if (key === 'hostId') parsed = value.trim();
+  else if (key === 'hostId' || key === 'model') parsed = value.trim() || undefined;
   else parsed = positive(value, `agent.${key}`);
   const next = { ...base, [key]: parsed };
   resolveAgentConfig(next);

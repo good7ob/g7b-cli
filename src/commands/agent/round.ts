@@ -20,6 +20,8 @@ export interface RoundDeps {
   cfg: AgentConfig;
   /** Registered runner (prd-0136): sent as `?runnerId=` so assigned items come first and claims are checked. */
   runnerId?: number;
+  /** Model id the runner will use, sent as `&model=` on claim (backend model policy); omitted when unset. */
+  model?: string;
   now?: () => number;
   log?: (msg: string) => void;
 }
@@ -41,8 +43,13 @@ export function releaseTask(api: Api, taskId: number, reason: string): Promise<a
   return api.post(`/progress/tasks/${taskId}/release`, { reason });
 }
 
-export function claimPath(taskId: number, runnerId?: number): string {
-  return `/progress/tasks/${taskId}/claim${runnerId != null ? `?runnerId=${runnerId}` : ''}`;
+export function claimPath(taskId: number, runnerId?: number, model?: string): string {
+  const q = new URLSearchParams();
+  if (runnerId != null) q.set('runnerId', String(runnerId));
+  const m = model?.trim();
+  if (m) q.set('model', m);
+  const qs = q.toString();
+  return `/progress/tasks/${taskId}/claim${qs ? `?${qs}` : ''}`;
 }
 
 export function toForwardTask(state: BusyState): ForwardTask {
@@ -108,7 +115,7 @@ export async function reconcile(deps: RoundDeps): Promise<AgentState> {
  * against the assignment, a 409 `ASSIGNED_TO_OTHER` means it is another runner's and is skipped, never fought over.
  */
 async function claimNext(deps: RoundDeps): Promise<{ task: any | null; refused: number[] }> {
-  const { api, cfg, runnerId } = deps;
+  const { api, cfg, runnerId, model } = deps;
   const log = deps.log ?? (() => undefined);
   const params: Record<string, any> = {};
   if (cfg.projectId) params.projectId = cfg.projectId;
@@ -117,7 +124,7 @@ async function claimNext(deps: RoundDeps): Promise<{ task: any | null; refused: 
   const refused: number[] = [];
   for (const item of queue) {
     try {
-      const claimed = await api.post(claimPath(item.id, runnerId));
+      const claimed = await api.post(claimPath(item.id, runnerId, model));
       // The claim answer is the bare task; keep the queue item's assignment / node brief next to it.
       return { task: { ...item, ...(claimed || {}) }, refused };
     } catch (e) {

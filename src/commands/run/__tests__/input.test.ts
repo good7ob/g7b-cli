@@ -196,6 +196,8 @@ describe('parseToolCallsJsonl', () => {
 describe('artifacts', () => {
   it('PR → PULL_REQUEST, numeric ref → id, URL → url', () => {
     expect(artifactItem('PR', 'https://github.com/o/r/pull/42', 'feat x')).toEqual({ type: 'PULL_REQUEST', url: 'https://github.com/o/r/pull/42', title: 'feat x' });
+    for (const alias of ['PR', 'pr', 'pull_request', 'pull-request']) expect(artifactItem(alias, '42').type).toBe('PULL_REQUEST');
+    for (const t of ['TEST_CASE', 'TEST_RUN', 'SCREENSHOT', 'BUG', 'REPORT']) expect(artifactItem(t.toLowerCase(), '1')).toEqual({ type: t, id: 1 });
     expect(artifactItem('test_run', '7')).toEqual({ type: 'TEST_RUN', id: 7 });
     expect(artifactItem('review-report', '12')).toEqual({ type: 'REVIEW_REPORT', id: 12 });
     expect(parseArtifactSpec('EXTERNAL:https://ci.example.com/b/1')).toEqual({ type: 'EXTERNAL', url: 'https://ci.example.com/b/1' });

@@ -281,7 +281,7 @@ export function batches<T>(items: T[], size = TOOL_CALLS_PER_CALL): T[][] {
 // ── artifacts (closed set, backend `AutoRunStepArtifact.TYPES`; 2727 otherwise) ──
 
 export const ARTIFACT_TYPES = [
-  'PULL_REQUEST', 'REVIEW_REPORT', 'TEST_RUN', 'EXTERNAL', 'DELIVERABLE_PACKAGE', 'GATE_RESULT', 'ACCEPTANCE_RECORD', 'RELEASE', 'DEPLOY_RECORD',
+  'PULL_REQUEST', 'REVIEW_REPORT', 'TEST_CASE', 'TEST_RUN', 'SCREENSHOT', 'BUG', 'REPORT', 'EXTERNAL', 'DELIVERABLE_PACKAGE', 'GATE_RESULT', 'ACCEPTANCE_RECORD', 'RELEASE', 'DEPLOY_RECORD',
 ] as const;
 const ARTIFACT_ALIASES: Record<string, string> = { PR: 'PULL_REQUEST' };
 
