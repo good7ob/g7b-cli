@@ -282,6 +282,8 @@ export function batches<T>(items: T[], size = TOOL_CALLS_PER_CALL): T[][] {
 
 export const ARTIFACT_TYPES = [
   'PULL_REQUEST', 'REVIEW_REPORT', 'TEST_CASE', 'TEST_RUN', 'SCREENSHOT', 'BUG', 'REPORT', 'EXTERNAL', 'DELIVERABLE_PACKAGE', 'GATE_RESULT', 'ACCEPTANCE_RECORD', 'RELEASE', 'DEPLOY_RECORD',
+  // design deliverables: in the backend set since V350 (check constraint caught up in V463)
+  'PRD', 'DESIGN', 'DOC',
 ] as const;
 const ARTIFACT_ALIASES: Record<string, string> = { PR: 'PULL_REQUEST' };
 

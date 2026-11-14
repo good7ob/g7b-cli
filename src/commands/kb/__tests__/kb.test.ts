@@ -1,8 +1,20 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerKbCommands } from '../index';
 import { runCli } from '../../../utils/__tests__/cliHarness';
 
 afterEach(() => vi.restoreAllMocks());
+
+// These commands resolve the org from --org-id / GOOD7OB_ORG_ID / config. Pin it so the tests do not depend on
+// the org id in the developer's own ~/.good7ob/config.json (they failed on a machine whose config has none).
+let savedOrgEnv: string | undefined;
+beforeEach(() => {
+  savedOrgEnv = process.env.GOOD7OB_ORG_ID;
+  process.env.GOOD7OB_ORG_ID = '1';
+});
+afterEach(() => {
+  if (savedOrgEnv === undefined) delete process.env.GOOD7OB_ORG_ID;
+  else process.env.GOOD7OB_ORG_ID = savedOrgEnv;
+});
 
 // kb endpoints return bare bodies; /forge/prd/* is enveloped
 const raw = (body: unknown) => body as never;

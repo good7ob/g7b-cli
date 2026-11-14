@@ -201,7 +201,8 @@ describe('artifacts', () => {
     expect(artifactItem('test_run', '7')).toEqual({ type: 'TEST_RUN', id: 7 });
     expect(artifactItem('review-report', '12')).toEqual({ type: 'REVIEW_REPORT', id: 12 });
     expect(parseArtifactSpec('EXTERNAL:https://ci.example.com/b/1')).toEqual({ type: 'EXTERNAL', url: 'https://ci.example.com/b/1' });
-    expect(() => artifactItem('DOC', '1')).toThrow(/--type 取值无效/);
+    for (const t of ['PRD', 'DESIGN', 'DOC']) expect(artifactItem(t.toLowerCase(), '3')).toEqual({ type: t, id: 3 });
+    expect(() => artifactItem('WIKI', '1')).toThrow(/--type 取值无效/);
     expect(() => artifactItem('PR', 'not-a-url')).toThrow(/--ref/);
     expect(() => parseArtifactSpec('TEST_RUN')).toThrow(/<type>:<id\|url>/);
   });

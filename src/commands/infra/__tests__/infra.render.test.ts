@@ -11,11 +11,23 @@
  *    not be parsed by anything downstream.
  */
 
-import { describe, expect, it, afterEach, vi } from 'vitest';
+import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
 import { registerInfraCommands } from '../index';
 import { ok, runCli } from '../../../utils/__tests__/cliHarness';
 
 afterEach(() => vi.restoreAllMocks());
+
+// These commands resolve the org from --org-id / GOOD7OB_ORG_ID / config. Pin it so the tests do not depend on
+// the org id in the developer's own ~/.good7ob/config.json (they failed on a machine whose config has none).
+let savedOrgEnv: string | undefined;
+beforeEach(() => {
+  savedOrgEnv = process.env.GOOD7OB_ORG_ID;
+  process.env.GOOD7OB_ORG_ID = '1';
+});
+afterEach(() => {
+  if (savedOrgEnv === undefined) delete process.env.GOOD7OB_ORG_ID;
+  else process.env.GOOD7OB_ORG_ID = savedOrgEnv;
+});
 
 /** A page of results where `total` exceeds `pageSize`, which is what triggered bug 2. */
 const page = (records: unknown[]) => ok({ records, total: 539, pageNo: 1, pageSize: 20 });
