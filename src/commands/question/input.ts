@@ -47,6 +47,47 @@ export function parseOption(raw: string): OptionInput {
 interface CreateFlags {
   title?: string; type?: string; source?: string; description?: string; option?: string[];
   product?: string; project?: string; task?: string; assignee?: string; needsApproval?: boolean;
+  assigneeEmployee?: string; decisionKey?: string;
+}
+
+/** Run-link flags of `question create`; commander maps `--no-run-link` to `runLink: false`. */
+export interface RunLinkFlags { runId?: string; stepId?: string; runLink?: boolean }
+
+const MAX_DECISION_KEY = 120;
+
+/**
+ * `--assignee-employee <id|self>`: the AI employee that confirms the question. `self` = env GOOD7OB_EMPLOYEE_ID,
+ * which `g7b-runner` (or the operator) sets for the key in use; the CLI cannot tell its own employee id otherwise.
+ */
+export function parseAssigneeEmployee(raw: string, env: NodeJS.ProcessEnv = process.env): number {
+  if (raw.trim().toLowerCase() === 'self') {
+    const own = env.GOOD7OB_EMPLOYEE_ID;
+    if (!own) throw new InputError('--assignee-employee self 需要环境变量 GOOD7OB_EMPLOYEE_ID（当前 Key 对应的 AI 员工 ID）');
+    return parseId(own, 'GOOD7OB_EMPLOYEE_ID');
+  }
+  return parseId(raw, '--assignee-employee');
+}
+
+/**
+ * Which run / step the question is linked to (QuestionCreateDto runId / stepId, g7b #3344): the flags as given (the
+ * backend validates them; a step alone names its run), else the step the local `agent listen` slot holds, else none.
+ * `--no-run-link` turns the default off and cannot be combined with the flags.
+ */
+export function questionRunLink(
+  o: RunLinkFlags,
+  heldStep: () => { runId: number; stepId: number } | undefined
+): { runId?: number; stepId?: number } {
+  const given = o.runId !== undefined || o.stepId !== undefined;
+  if (given && o.runLink === false) throw new InputError('--no-run-link 不能与 --run-id / --step-id 同时使用');
+  if (given) {
+    const out: { runId?: number; stepId?: number } = {};
+    if (o.runId !== undefined) out.runId = parseId(o.runId, '--run-id');
+    if (o.stepId !== undefined) out.stepId = parseId(o.stepId, '--step-id');
+    return out;
+  }
+  if (o.runLink === false) return {};
+  const step = heldStep();
+  return step ? { runId: step.runId, stepId: step.stepId } : {};
 }
 
 export function buildCreateBody(o: CreateFlags): Record<string, unknown> {
@@ -69,6 +110,8 @@ export function buildCreateBody(o: CreateFlags): Record<string, unknown> {
   if (o.task !== undefined) body.taskId = parseId(o.task, '--task');
   if (o.assignee !== undefined) body.assigneeId = parseId(o.assignee, '--assignee');
   if (o.needsApproval) body.needsApproval = true;
+  if (o.assigneeEmployee !== undefined) body.assigneeEmployeeId = parseAssigneeEmployee(o.assigneeEmployee);
+  if (o.decisionKey !== undefined) body.decisionKey = requireText(o.decisionKey, MAX_DECISION_KEY, '--decision-key');
   return body;
 }
 

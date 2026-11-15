@@ -2,8 +2,10 @@ import { Command } from 'commander';
 import apiClient from '../../services/ApiClient';
 import { collect, emit, fail, parseId } from '../../utils/cliHelpers';
 import {
-  QUESTION_ERROR_CODES, SOURCES, STATUSES, TYPES, buildAnswerBody, buildCreateBody, buildListParams,
+  QUESTION_ERROR_CODES, SOURCES, STATUSES, TYPES, buildAnswerBody, buildCreateBody, buildListParams, questionRunLink,
 } from './input';
+import { AgentStateStore } from '../agent/state';
+import { currentStep } from '../pm/task/spawn';
 import {
   AnswerResult, Question, renderAmendOutcome, renderAnswerOutcome, renderQuestionDetail, renderQuestionList,
 } from './render';
@@ -17,6 +19,8 @@ import {
  */
 
 const BASE = '/forge/questions';
+/** The run step the local `agent listen` slot holds (undefined when idle or unreadable). */
+const heldStep = () => currentStep(() => new AgentStateStore().read());
 const oneOf = (values: readonly string[]) => values.join('|');
 
 export function registerQuestionCommands(program: Command) {
@@ -37,11 +41,18 @@ export function registerQuestionCommands(program: Command) {
     .option('--task <id>', 'Task id (assignee defaults to the task responsible when --assignee is omitted)')
     .option('--assignee <id>', 'User id who should answer')
     .option('--needs-approval', 'Require an approval after it is answered')
+    .option('--assignee-employee <id|self>', 'AI employee that confirms it (self = env GOOD7OB_EMPLOYEE_ID); its answer is recorded as an AI decision')
+    .option('--run-id <id>', 'Automation run the question belongs to (default: the step `agent listen` holds)')
+    .option('--step-id <id>', 'Run step the question belongs to (a step alone names its run)')
+    .option('--no-run-link', 'Do not link the question to the run step the local agent holds')
+    .option('--decision-key <key>', 'Key that recognises the same decision across forked runs (≤ 120 chars)')
     .option('--json', 'Output as JSON')
     .action(async (o) => {
       try {
-        const created: Question = await apiClient.post(BASE, buildCreateBody(o));
-        emit(o.json, created, () => `✓ Question 已创建: #${created?.id ?? '-'} [${created?.status ?? '-'}] ${created?.title ?? ''}`);
+        const body = { ...buildCreateBody(o), ...questionRunLink(o, heldStep) };
+        const created: Question = await apiClient.post(BASE, body);
+        const link = body.runId ? `（运行 #${body.runId}${body.stepId ? ` 步骤 #${body.stepId}` : ''}）` : '';
+        emit(o.json, created, () => `✓ Question 已创建: #${created?.id ?? '-'} [${created?.status ?? '-'}] ${created?.title ?? ''}${link}`);
       } catch (error) {
         fail('创建 Question 失败', error, QUESTION_ERROR_CODES);
       }

@@ -2,6 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { registerQuestionCommands } from '../index';
 import { bizError, noHttpCalls, ok, runCli } from '../../../utils/__tests__/cliHarness';
 
+// the local agent slot: idle unless a test says otherwise (never read the real ~/.good7ob state file)
+const slot = { state: { status: 'idle' } as Record<string, unknown> };
+(globalThis as Record<string, unknown>).__questionTestSlot = slot;
+vi.mock('../../agent/state', () => ({
+  AgentStateStore: class {
+    read() {
+      return ((globalThis as Record<string, unknown>).__questionTestSlot as { state: unknown }).state;
+    }
+  },
+}));
+
 const Q = {
   id: 7, title: '用哪个方案?', questionType: 'choice', status: 'open', source: 'dev', needsApproval: false,
   options: [{ key: 'a', label: '方案A' }, { key: 'b', label: '方案B', description: '更快' }],
@@ -41,6 +52,45 @@ describe('question create', () => {
     await expectRejected([...base, '--type', 'choice', '--option', 'a=A', '--option', 'a=B'], '不能重复');
     await expectRejected([...base, '--type', 'nope'], '--type');
     await expectRejected(['create', '--title', 'x', '--type', 'text', '--source', 'zzz'], '--source');
+  });
+
+  describe('run link and AI confirmer (g7b #3344)', () => {
+    const choice = [...base, '--type', 'choice', '--option', 'a=A', '--option', 'b=B'];
+    afterEach(() => { slot.state = { status: 'idle' }; delete process.env.GOOD7OB_EMPLOYEE_ID; });
+
+    it('links to the step the local agent holds by default', async () => {
+      slot.state = { status: 'busy', taskId: 9, runId: 243, stepId: 135, orgId: 58 };
+      const r = await question(choice);
+      expect(r.http.post.mock.calls[0][1]).toMatchObject({ runId: 243, stepId: 135 });
+      expect(r.stdout).toContain('运行 #243 步骤 #135');
+    });
+
+    it('sends --run-id / --step-id as given, and --no-run-link sends none', async () => {
+      slot.state = { status: 'busy', taskId: 9, runId: 243, stepId: 135 };
+      let r = await question([...choice, '--step-id', '7']);
+      expect(r.http.post.mock.calls[0][1]).toMatchObject({ stepId: 7 });
+      expect(r.http.post.mock.calls[0][1]).not.toHaveProperty('runId');
+      r = await question([...choice, '--no-run-link']);
+      expect(r.http.post.mock.calls[0][1]).not.toHaveProperty('runId');
+      expect(r.http.post.mock.calls[0][1]).not.toHaveProperty('stepId');
+      await expectRejected([...choice, '--no-run-link', '--run-id', '1'], '--no-run-link');
+    });
+
+    it('an idle slot links nothing', async () => {
+      const r = await question(choice);
+      expect(r.http.post.mock.calls[0][1]).not.toHaveProperty('runId');
+    });
+
+    it('--assignee-employee takes an id or self (GOOD7OB_EMPLOYEE_ID), plus --decision-key', async () => {
+      let r = await question([...choice, '--assignee-employee', '40', '--decision-key', 'first-node-rule']);
+      expect(r.http.post.mock.calls[0][1]).toMatchObject({ assigneeEmployeeId: 40, decisionKey: 'first-node-rule' });
+      process.env.GOOD7OB_EMPLOYEE_ID = '40';
+      r = await question([...choice, '--assignee-employee', 'self']);
+      expect(r.http.post.mock.calls[0][1]).toMatchObject({ assigneeEmployeeId: 40 });
+      delete process.env.GOOD7OB_EMPLOYEE_ID;
+      await expectRejected([...choice, '--assignee-employee', 'self'], 'GOOD7OB_EMPLOYEE_ID');
+      await expectRejected([...choice, '--decision-key', 'x'.repeat(121)], '--decision-key');
+    });
   });
 
   it('maps business errors', async () => {
