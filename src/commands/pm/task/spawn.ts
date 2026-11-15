@@ -35,7 +35,7 @@ export interface SlotStep { runId: number; stepId: number; orgId?: number | null
 const reason = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** The step `agent listen` is working on right now, or undefined (idle / not a run step / unreadable file). */
-function currentStep(readSlot: () => AgentState): SlotStep | undefined {
+export function currentStep(readSlot: () => AgentState): SlotStep | undefined {
   try {
     const s = readSlot();
     if (s.status === 'idle' || s.runId == null || s.stepId == null) return undefined;
