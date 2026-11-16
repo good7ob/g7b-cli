@@ -42,6 +42,7 @@ import {
   toRegistration,
 } from './runner';
 import { AgentState, AgentStateStore, IDLE, RunnerRegistration } from './state';
+import { registerUsageCommands } from './usageCommand';
 
 const EXIT_BUSY = 3;
 const EXIT_EMPTY = 4;
@@ -460,6 +461,8 @@ export function registerAgentCommands(program: Command) {
         fail('重置失败', e);
       }
     });
+
+  registerUsageCommands(agent);
 
   return agent;
 }
