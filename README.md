@@ -371,6 +371,18 @@ good7ob agent reset [--release] [--keep-runner] # slot back to idle; forgets the
 
 Runner flags default to `agent.slots` (1), `agent.envTags` (none; subset of `dev,test,prod`), `agent.agentKind` (`CLAUDE_CODE`), `agent.hostId` (the hostname; the backend `runnerKey`). `--model <id>` (also on `agent next`) is the model this runner will use: flag, then env `GOOD7OB_RUNNER_MODEL`, then `agent.model`; it is sent as `&model=<id>` on `POST /progress/tasks/{id}/claim` so the backend model policy can check it (unset = param omitted, and a policy that requires a model rejects the claim). `agent status` and the listen start line show the effective model. An assigned item is claimed with `?runnerId=`; a `409 ASSIGNED_TO_OTHER` (another runner's assignment) is skipped, never fought over, and `400 JOB_MISMATCH` (employee lacks the node's job) likewise. The claimed task's run context (`assignmentId / runId / stepId / nodeCode` and the node prompt / expected output / exit checklist) is printed and sent to the webhook as `assignment_id / run_id / step_id / node_code`. When the heartbeat answers `stopStepIds`, the matching local step is marked stopped (the backend already released it, so the CLI never releases it again). `--slots` above 1 is announced to the scheduler as capacity; the local executor still runs one task at a time.
 
+Token usage upload (Claude Code): a `Stop` hook sums the session transcript and reports it to the task in the local work slot as a `hook_trace` effort (idempotent per session + task, so every turn just overwrites the cumulative value; only messages since the task was claimed are counted).
+
+```bash
+good7ob agent install-hook [--project] [--cli good7ob-dev]   # add `<cli> agent report-usage --hook` to ~/.claude/settings.json (or ./.claude/settings.json); a dev install passes its own command name
+good7ob agent report-usage [--task <id>] [--dry-run]   # manual fallback when the hook did not fire / failed
+good7ob agent report-usage --transcript <file.jsonl> --task <id> --since <time>   # replay a specific session
+```
+
+Which task gets the tokens, in order: `--task`; the task in the local work slot (`agent next/listen`); the task remembered for this session (covers the last turn after `agent done`); the single task `trace.sh` recorded for the session in `.claude/trace/<session>.summary.json` (`refs.tasks`, the `/gjob-exc-task <id>` flow). If trace shows several tasks the hook logs it and skips — pass `--task`. Tokens are reported only here (efforts); don't also pass `--tokens` to `good7ob log save`, or the same usage is counted twice.
+
+The hook never fails the agent; failures are appended to `usage-hook/hook.log` in the install's data dir (`~/.good7ob`, or `~/.good7ob-<name>` for a dev install) — check it, then run the fallback command. Sub-agent (sidechain) transcripts are separate files and are not included.
+
 Other settings: `agent.intervalSeconds` (15), `agent.expectedMinutes` (60), `agent.graceMinutes` (30), `agent.projectId`.
 
 ### `run`
