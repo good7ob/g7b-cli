@@ -6,7 +6,7 @@
 import { extractRecords } from '../../utils/extractRecords';
 import { AgentConfig } from './config';
 import { ForwardTask } from './forward';
-import { isAssignedToOther, isJobMismatch } from './runner';
+import { isAssignedToOther, isJobMismatch, isKeyRejected } from './runner';
 import { AgentState, AgentStateStore, BusyState, IDLE, RemoteStatus, advance, busyState } from './state';
 
 export interface Api {
@@ -78,6 +78,7 @@ export async function reconcile(deps: RoundDeps): Promise<AgentState> {
   try {
     remote = (await api.get(`/progress/tasks/${state.taskId}`))?.status ?? 'unknown';
   } catch (e) {
+    if (isKeyRejected(e)) throw e; // a revoked key is not a transient lookup failure: let listen stop
     log(`查询任务 #${state.taskId} 状态失败（本地状态不变）: ${msgOf(e)}`);
   }
 
@@ -128,6 +129,7 @@ async function claimNext(deps: RoundDeps): Promise<{ task: any | null; refused: 
       // The claim answer is the bare task; keep the queue item's assignment / node brief next to it.
       return { task: { ...item, ...(claimed || {}) }, refused };
     } catch (e) {
+      if (isKeyRejected(e)) throw e;
       if (isConflict(e) && isAssignedToOther(e)) {
         refused.push(item.id);
         log(`任务 #${item.id} 已分配给其他 Runner，跳过: ${msgOf(e)}`);

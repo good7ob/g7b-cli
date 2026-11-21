@@ -347,7 +347,7 @@ See `FEATURES.md` (decision) for the field mapping, chunking and error codes.
 
 ### `agent`
 
-Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine (`~/.good7ob/agent-state.json`): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.
+Lets the machine a local agent (Hermes / Claude Code / Codex) runs on pull good7ob AI tasks. One work slot per machine and profile (`~/.good7ob/agent-state.json`, see [profiles](#profiles-and-enrollment---profile-agent-enroll)): no new claim while a task is busy; past `estimatedHours` (or `agent.expectedMinutes`) it is `timeout`, and past that plus `agent.graceMinutes` it is released back to the queue. A task the agent moved out of `in_progress` (plan submitted, question asked, done) frees the slot without a release.
 
 `agent listen` also registers the machine as a **Runner** of the AI employee behind the key (prd-0136, idea #189): `POST /api/v1/me/runners` on start (idempotent on employee + host id), the runner heartbeat every 30 s (`POST /api/v1/me/heartbeat` with `runnerId / runnerKey`, renews the runner's leases), `GET /progress/agent-tasks?runnerId=` so items the scheduler assigned to this runner come first, and `DELETE /api/v1/me/heartbeat?runnerKey=&runnerId=` on Ctrl-C so unclaimed leases go back to the pool. A human key is refused (`仅 AI 员工 Key 可注册 Runner`) and nothing is registered; a network / 5xx failure is retried, never fatal.
 
@@ -384,6 +384,26 @@ Which task gets the tokens, in order: `--task`; the task in the local work slot 
 The hook never fails the agent; failures are appended to `usage-hook/hook.log` in the install's data dir (`~/.good7ob`, or `~/.good7ob-<name>` for a dev install) — check it, then run the fallback command. Sub-agent (sidechain) transcripts are separate files and are not included.
 
 Other settings: `agent.intervalSeconds` (15), `agent.expectedMinutes` (60), `agent.graceMinutes` (30), `agent.projectId`.
+
+#### Profiles and enrollment (`--profile`, `agent enroll`)
+
+A **profile** is a separate identity on one machine: its own key, API address, work slot, heartbeat entries, `runner.log`, `runs/`, cache, sync and worktree state, all under `~/.good7ob-profiles/<name>/`. Select it with the global `--profile <name>` (before the command) or env `GOOD7OB_PROFILE`; child processes (the heartbeat loop, the forward command and every `good7ob` it runs) inherit it. Without a profile nothing changes: `~/.good7ob` (`~/.good7ob-<flavor>` for a dev clone, e.g. `~/.good7ob-net`). Each profile has its own work slot, so `agent listen` of two profiles can run side by side, one per AI employee. A profile's own key wins over `GOOD7OB_API_KEY`; its API address is the one stored by `agent enroll` (else the install's default).
+
+```bash
+# Redeem a one-time enrollment token (g7e_…, from the admin console or "run on my computer"; valid 24 h, single use)
+good7ob agent enroll g7e_… [--profile <name>] [--api-url https://api.good7ob.com] [--agent-kind CLAUDE_CODE] [--no-forward] [--json]
+#   → POST /api/v1/runner-enrollments/redeem (no login); writes apiUrl + the employee key + agent.hostId into the profile
+#     and the org model keys into <profile>/env (mode 600). Prints employee, org, profile and the next command — never a key.
+#   profile name: --profile, else the global --profile / GOOD7OB_PROFILE, else the answer's (org<orgId>-emp<employeeId>)
+
+good7ob --profile org115-emp41 agent listen     # loads <profile>/env into the forward command (ANTHROPIC_API_KEY …); logs also go to <profile>/runner.log
+good7ob --profile org115-emp41 agent status
+```
+
+- **Host id**: one per machine data root (`~/.good7ob-profiles/host-id`, `<hostname>-<8 hex>`), created before the first redeem and copied to the profile's `agent.hostId`, so `agent listen` registers the runner under the same id. A retry after a lost answer sends the same id: the backend allows one re-redeem from the same host within 15 minutes (it issues a new key and revokes the previous one). A failed redeem always reads `接入令牌无效或已过期，请重新生成`; HTTP 429 = more than 10 tries a minute.
+- **Default forward command**: when the agent kind is `CLAUDE_CODE` (default), the profile has no `agent.forward.command` / `agent.forward.url` yet and `--no-forward` is not given, enroll writes one, so `agent listen` works right away: `cd <profile>/work && claude -p "<prompt>" --allowedTools "Bash(good7ob *)" "Bash(git *)" "Bash(gh *)" "Bash(npm *)" "Bash(npx *)" Read Edit Write Glob Grep > <profile>/runs/task-{taskId}.log 2>&1`. The prompt: read `good7ob pm task get {taskId} --json` and do what the task and run step ask; work in the repo the task / project dev info names, on a new branch, PR titled `g7b #{taskId}`; unattended — record trade-offs with `good7ob question create` / `question answer` and decide; run `good7ob agent done {taskId}` once at the end. HOME is not changed (Claude's login stays in the real HOME); the `good7ob` calls inside stay on the profile via `GOOD7OB_PROFILE`. Without `claude` on PATH the command is still written and enroll reminds you to install Claude Code. Change it with `good7ob --profile <name> config set agent.forward.command '…'`.
+- **Re-enrolling** an existing profile overwrites its key; entries of `<profile>/env` that the answer does not carry (e.g. a token `setup` stored) are kept.
+- **Key revoked / rotated**: when the backend answers 401 (registering, heartbeat, polling or claiming), `agent listen` stops claiming, prints and logs `这台设备的 Key 已失效，请重新接入` and exits **6**, so a service manager can tell it apart from other failures (1). Generate a new token and enroll again.
 
 ### `run`
 

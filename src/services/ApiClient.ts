@@ -54,9 +54,11 @@ export class ApiClient {
 
   constructor() {
     // The URL is the install's own (prod for a release, dev-env.json for a dev clone, see flavor.ts), never configurable.
-    // GOOD7OB_API_KEY still overrides the key (CI, one-off admin tokens).
+    // GOOD7OB_API_KEY still overrides the key (CI, one-off admin tokens) — except over a profile's own key: a profile
+    // is an explicit identity, and its agent's children inherit the shell's GOOD7OB_API_KEY too (g7b #3632).
     this.baseURL = configService.get('apiUrl');
-    this.apiKey = process.env.GOOD7OB_API_KEY || configService.get('apiKey') || '';
+    const profileKey = configService.profileName() ? configService.get('apiKey') : '';
+    this.apiKey = profileKey || process.env.GOOD7OB_API_KEY || configService.get('apiKey') || '';
 
     this.instance = axios.create({
       baseURL: this.baseURL,

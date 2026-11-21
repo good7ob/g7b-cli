@@ -8,6 +8,7 @@ import {
   HeartbeatRunner,
   heartbeatPayload,
   isFatalAuth,
+  isKeyRejected,
   offlinePath,
   parseEnvTags,
   parseSlots,
@@ -27,6 +28,8 @@ export interface BeatOutcome {
   message?: string;
   /** prd-0136 n4 §5.2: steps the backend wants this runner to stop (already released server-side). */
   stopStepIds: number[];
+  /** The key was rejected with 401 (revoked / rotated), as opposed to another fatal answer. */
+  keyRejected?: boolean;
 }
 
 /**
@@ -40,7 +43,7 @@ export async function sendBeat(runner?: HeartbeatRunner): Promise<BeatOutcome> {
     return { result: 'ok', stopStepIds: stopStepIdsOf(data) };
   } catch (e) {
     const message = msgOf(e);
-    return { result: isFatalAuth(e) ? 'fatal' : 'retry', message, stopStepIds: [] };
+    return { result: isFatalAuth(e) ? 'fatal' : 'retry', message, stopStepIds: [], ...(isKeyRejected(e) ? { keyRejected: true } : {}) };
   }
 }
 

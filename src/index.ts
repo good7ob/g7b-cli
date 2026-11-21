@@ -5,6 +5,8 @@
  * Official command-line interface for the good7ob platform
  */
 
+// must stay the first import: the global --profile has to be known before any module reads the config
+import './services/profileBoot';
 import { Command } from 'commander';
 import { registerInfraCommands } from './commands/infra';
 import { registerPmCommands } from './commands/pm';
@@ -57,7 +59,9 @@ const program = new Command();
 program
   .name('good7ob')
   .description('good7ob - Project management and cloud resource management CLI')
-  .version(CLI_VERSION);
+  .version(CLI_VERSION)
+  // read from argv by services/profileBoot before the commands load; declared here for --help and the parser
+  .option('--profile <name>', 'Use the configuration profile ~/.good7ob-profiles/<name> (env GOOD7OB_PROFILE): its own key, API address, work slot and logs');
 
 // Register command groups
 registerInfraCommands(program);

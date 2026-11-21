@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { RUNNER_LOG, activeProfile, profileDir } from './profile';
 
 export const PROD_API_URL = 'https://api.good7ob.com';
 export const PROD = 'prod';
@@ -43,9 +44,20 @@ export function loadFlavor(root: string = path.resolve(__dirname, '..', '..')): 
   return { name: raw.name, apiUrl: raw.apiUrl.replace(/\/+$/, '') };
 }
 
-/** Resolved on every call so a changed HOME is honoured (tests). */
-export function dataDir(flavor: Flavor = currentFlavor, home: string = os.homedir()): string {
+/**
+ * The root every local file lives under (config, agent-state, heartbeat/, runner.log, runs/, cache/, sync/,
+ * worktree-state, usage-hook/): `~/.good7ob-profiles/<name>` with a profile (`--profile` / GOOD7OB_PROFILE, see
+ * profile.ts), otherwise the install's own `~/.good7ob` (`~/.good7ob-<flavor>` for a dev clone).
+ * Resolved on every call so a changed HOME / profile is honoured (tests). `profile: null` = ignore the profile.
+ */
+export function dataDir(flavor: Flavor = currentFlavor, home: string = os.homedir(), profile: string | null = activeProfile() ?? null): string {
+  if (profile) return profileDir(profile, home);
   return path.join(home, flavor.name === PROD ? '.good7ob' : `.good7ob-${flavor.name}`);
+}
+
+/** Where `agent listen` with a profile appends its log lines. */
+export function runnerLogFile(): string {
+  return path.join(dataDir(), RUNNER_LOG);
 }
 
 function readCurrent(): Flavor {
