@@ -48,6 +48,7 @@ import {
   resolveRunnerOptions,
   toRegistration,
 } from './runner';
+import { updateListenStatus } from './listenStatus';
 import { AgentState, AgentStateStore, IDLE, RunnerRegistration } from './state';
 import { registerUsageCommands } from './usageCommand';
 
@@ -193,13 +194,17 @@ export function registerAgentCommands(program: Command) {
       }
       // g7b #3632: with a profile, the forward command gets the profile's env file (model keys) and every log line
       // also goes to <profile>/runner.log. Without one nothing changes.
+      // g7b #3633: plus GOOD7OB_MCP_KEY (the profile's own key), which the MCP entry `setup` writes refers to as
+      // ${GOOD7OB_MCP_KEY}, so no MCP config file ever holds the key and a re-enrolled key reaches it at once.
       const profile = activeProfile();
       let childEnv: Record<string, string> | undefined;
       try {
-        childEnv = profile ? readEnvFile(dataDir()) : undefined;
+        const profileKey = profile ? String(configService.get('apiKey') ?? '') : '';
+        childEnv = profile ? { ...readEnvFile(dataDir()), ...(profileKey ? { GOOD7OB_MCP_KEY: profileKey } : {}) } : undefined;
       } catch (e) {
         fail('读取配置档 env 文件失败', e);
       }
+      const statusDir = dataDir();
       const logFile = profile ? runnerLogFile() : undefined;
       const toLogFile = (line: string) => {
         if (!logFile) return;
@@ -243,6 +248,7 @@ export function registerAgentCommands(program: Command) {
         if (keyInvalid) return;
         keyInvalid = true;
         exitCode = EXIT_KEY_INVALID;
+        updateListenStatus(statusDir, { keyInvalidAt: new Date().toISOString() });
         logError(KEY_INVALID_MESSAGE);
         stop('停止领取任务');
       };
@@ -255,10 +261,12 @@ export function registerAgentCommands(program: Command) {
         sleep,
         stopping: () => stopping,
       }, () => {
+        updateListenStatus(statusDir, { keyInvalidAt: new Date().toISOString() });
         logError(KEY_INVALID_MESSAGE);
         process.exit(EXIT_KEY_INVALID);
       });
       if (!reg) return;
+      updateListenStatus(statusDir, { pid: process.pid, runnerId: reg.runnerId, keyInvalidAt: undefined });
       log(`Runner 已注册: #${reg.runnerId} ${reg.hostLabel}（hostId ${reg.runnerKey}，slots ${reg.slots}，env ${reg.envTags.join(',') || '无'}，${reg.agentKind}）`);
       if (reg.slots > 1) log(`提示: 本机仍按单工作槽执行，slots=${reg.slots} 只用于向调度器申报容量`);
 
@@ -275,6 +283,7 @@ export function registerAgentCommands(program: Command) {
       const beat = async () => {
         const r = await sendBeat(hbRunner);
         beatKeyRejected = !!r.keyRejected;
+        if (r.result === 'ok') updateListenStatus(statusDir, { lastBeatAt: new Date().toISOString() });
         if (r.result === 'retry' && r.message !== lastBeatFailure) log(`心跳失败，继续重试: ${r.message}`);
         lastBeatFailure = r.result === 'retry' ? r.message ?? '' : '';
         if (r.stopStepIds.length) await handleStopSteps(r.stopStepIds, store, log);

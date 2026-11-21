@@ -12,7 +12,7 @@
  */
 
 import axios from 'axios';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -52,6 +52,8 @@ export interface Redeemed {
   profile?: string;
   key: string;
   modelKeys: ModelKey[];
+  /** A hosted token generated with "the machine brings its own model login": no model key comes with it. */
+  hostProvidesModel: boolean;
 }
 
 export interface RedeemBody {
@@ -125,7 +127,16 @@ export function toRedeemed(data: any): Redeemed {
     profile: typeof data?.profile === 'string' && data.profile.trim() ? data.profile.trim() : undefined,
     key,
     modelKeys: Array.isArray(data?.modelKeys) ? data.modelKeys : [],
+    hostProvidesModel: data?.hostProvidesModel === true,
   };
+}
+
+/**
+ * Short fingerprint of an enrollment token, kept in the profile (`enrollment.tokenSha256`) so `good7ob setup` run
+ * again with the same token reuses the profile instead of redeeming twice (design 7.7-2). Not reversible.
+ */
+export function tokenFingerprint(token: string): string {
+  return createHash('sha256').update(token.trim()).digest('hex').slice(0, 32);
 }
 
 export async function redeem(apiUrl: string, body: RedeemBody, http: RedeemHttp = defaultHttp): Promise<Redeemed> {
@@ -194,7 +205,12 @@ export interface EnrollResult {
   agentKind: string;
   /** The default command was written but `claude` is not on PATH. */
   claudeMissing: boolean;
+  /** The machine must sign in to its AI tool itself (see Redeemed.hostProvidesModel). */
+  hostProvidesModel: boolean;
 }
+
+/** Printed when the answer says the machine brings its own model login. */
+export const HOST_PROVIDES_MODEL = '本机需自备模型凭证：平台不下发模型 Key，请确保本机的 AI 工具已登录';
 
 /** `claude` install hint printed when the default command is written without Claude Code on PATH. */
 export const CLAUDE_MISSING = '未找到 claude 命令，请先安装 Claude Code（curl -fsSL https://claude.ai/install.sh | bash）并登录';
@@ -233,21 +249,44 @@ export const DEFAULT_PROMPT = [
 ].join('');
 
 const ALLOWED_TOOLS = '"Bash(good7ob *)" "Bash(git *)" "Bash(gh *)" "Bash(npm *)" "Bash(npx *)" Read Edit Write Glob Grep';
+/** Same whitelist for Gemini CLI: shell prefixes it may run unasked; edits through auto_edit, never yolo (design 8). */
+const GEMINI_ALLOWED_TOOLS = ['good7ob', 'git', 'gh', 'npm', 'npx'].map((c) => `"run_shell_command(${c})"`).join(' ');
+
+/** AI tools `good7ob setup` knows, in detection order (design 7.4). */
+export type AiTool = 'claude' | 'gemini' | 'codex';
+export const AI_TOOLS: readonly AiTool[] = ['claude', 'gemini', 'codex'];
+/** `agentKind` reported for each tool (agent_type.code). */
+export const AGENT_KIND_OF: Record<AiTool, string> = { claude: DEFAULT_AGENT_KIND, gemini: 'GEMINI_CLI', codex: 'CODEX' };
 
 /**
- * `cd <profile>/work && claude -p "<prompt>" --allowedTools … > <profile>/runs/task-{taskId}.log 2>&1`.
- * HOME is left alone (Claude's login lives in the real HOME); the `good7ob` calls inside stay on the profile
+ * The tool call of each forward template; `dir` is the profile directory. Codex runs in its workspace-write sandbox
+ * with network on (API calls, git) and the profile directory writable (the `good7ob` work slot lives there).
+ */
+const INVOCATION: Record<AiTool, (dir: string) => string> = {
+  claude: () => `claude -p "${DEFAULT_PROMPT}" --allowedTools ${ALLOWED_TOOLS}`,
+  gemini: () => `gemini -p "${DEFAULT_PROMPT}" --approval-mode auto_edit --allowed-tools ${GEMINI_ALLOWED_TOOLS}`,
+  codex: (dir) =>
+    `codex exec --skip-git-repo-check --sandbox workspace-write --add-dir '${dir}' -c sandbox_workspace_write.network_access=true "${DEFAULT_PROMPT}"`,
+};
+
+/**
+ * `cd <profile>/work && <tool call> > <profile>/runs/task-{taskId}.log 2>&1`, one structure for every tool.
+ * HOME is left alone (the tool's login lives in the real HOME); the `good7ob` calls inside stay on the profile
  * through the inherited GOOD7OB_PROFILE. Throws for a profile path the single-quoted shell words cannot carry.
  */
-export function defaultForwardCommand(dir: string): string {
+export function forwardCommandFor(tool: AiTool, dir: string): string {
   if (/['{}\r\n]/.test(dir)) throw new Error(`配置档路径含引号、花括号或换行，无法写入默认转发命令: ${dir}`);
   const work = path.join(dir, 'work');
   const runs = path.join(dir, 'runs');
   const command =
-    `mkdir -p '${work}' '${runs}' && cd '${work}' && ` +
-    `claude -p "${DEFAULT_PROMPT}" --allowedTools ${ALLOWED_TOOLS} > '${path.join(runs, 'task-{taskId}.log')}' 2>&1`;
+    `mkdir -p '${work}' '${runs}' && cd '${work}' && ` + `${INVOCATION[tool](dir)} > '${path.join(runs, 'task-{taskId}.log')}' 2>&1`;
   validateCommandTemplate(command);
   return command;
+}
+
+/** The Claude Code forward command `agent enroll` writes by default. */
+export function defaultForwardCommand(dir: string): string {
+  return forwardCommandFor('claude', dir);
 }
 
 export async function enroll(o: EnrollOptions): Promise<EnrollResult> {
@@ -264,6 +303,7 @@ export async function enroll(o: EnrollOptions): Promise<EnrollResult> {
 
   try {
     return save(r, {
+      token,
       explicit,
       existing,
       home,
@@ -292,6 +332,7 @@ export function profileOf(r: Redeemed): string {
 function save(
   r: Redeemed,
   c: {
+    token: string;
     explicit?: string;
     existing?: ConfigService;
     home: string;
@@ -336,6 +377,8 @@ function save(
       hostId,
       hostName: os.hostname(),
       enrolledAt: new Date().toISOString(),
+      tokenSha256: tokenFingerprint(c.token),
+      hostProvidesModel: r.hostProvidesModel,
     },
   });
   // ConfigService.saveConfig only warns on a failed write: read it back so a lost key is never reported as success
@@ -359,6 +402,7 @@ function save(
     forwardSkipped,
     agentKind: kind,
     claudeMissing: forwardDefaulted && !onPath('claude', c.pathEnv),
+    hostProvidesModel: r.hostProvidesModel,
   };
 }
 
@@ -371,6 +415,7 @@ export function describeEnroll(r: EnrollResult): string {
   ];
   if (r.modelKeyEnvs.length) lines.push(`  模型 Key: 已写入 ${path.join(r.profileDir, 'env')}（${r.modelKeyEnvs.join(', ')}，不显示）`);
   if (r.skippedModelKeys.length) lines.push(`  ! 无法识别的模型 Key 已跳过: ${r.skippedModelKeys.join(', ')}`);
+  if (r.hostProvidesModel) lines.push(`  ! ${HOST_PROVIDES_MODEL}`);
   if (r.forwardDefaulted) {
     lines.push(`  已配置默认的 Claude Code 转发命令（可用 good7ob --profile ${r.profile} config set agent.forward.command 修改）`);
     if (r.claudeMissing) lines.push(`  ! ${CLAUDE_MISSING}`);

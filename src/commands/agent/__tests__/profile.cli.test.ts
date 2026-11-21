@@ -10,6 +10,7 @@ import { ConfigService } from '../../../services/ConfigService';
 import { dataDir } from '../../../services/flavor';
 import { PROFILE_ENV, writeEnvFile } from '../../../services/profile';
 import { AgentStateStore } from '../state';
+import { readListenStatus } from '../listenStatus';
 import { runRound } from '../round';
 import { KEY_INVALID_MESSAGE } from '../runner';
 import { CLAUDE_MISSING, DEFAULT_PROMPT, INVALID_TOKEN, REDEEM_PATH, describeEnroll, enroll } from '../enroll';
@@ -148,6 +149,30 @@ describe('agent listen with a profile', () => {
     expect(fs.readFileSync(path.join(profileRoot('org115-emp41'), 'runner.log'), 'utf-8')).not.toContain(MODEL_KEY);
   });
 
+  it('gives the forward command GOOD7OB_MCP_KEY (the MCP entry refers to it) and records the heartbeat for setup / service status', async () => {
+    process.env[PROFILE_ENV] = 'mcp1';
+    const out = path.join(tmpHome, 'mcp-env.txt');
+    configService.set('apiKey', EMPLOYEE_KEY);
+    configService.set('agent', { forward: { command: `printf '%s' "$GOOD7OB_MCP_KEY" > '${out}'` } });
+    try {
+      const r = await runCli(registerAgentCommands, ['agent', 'listen', '--once'], (m, url) => {
+        if (m === 'post' && url === '/api/v1/me/runners') return ok({ id: 5 });
+        if (m === 'post' && url === '/api/v1/me/heartbeat') return ok({});
+        if (m === 'get') return ok([{ id: 9 }]);
+        return ok({ id: 9, status: 'in_progress' });
+      });
+      expect(r.exitCode).toBeUndefined();
+      expect(fs.readFileSync(out, 'utf-8')).toBe(EMPLOYEE_KEY);
+      expect(r.stdout + r.stderr).not.toContain(EMPLOYEE_KEY);
+      const st = readListenStatus(profileRoot('mcp1'));
+      expect(st.runnerId).toBe(5);
+      expect(Date.parse(st.lastBeatAt as string)).toBeGreaterThan(Date.now() - 60_000);
+      expect(st.keyInvalidAt).toBeUndefined();
+    } finally {
+      configService.set('apiKey', '');
+    }
+  });
+
   const unauthorized = httpError(401, { code: 401, msg: '未授权' });
 
   it('uses the contract wording verbatim', () => {
@@ -166,6 +191,8 @@ describe('agent listen with a profile', () => {
     expect(r.exitCode).toBe(EXIT_KEY_INVALID);
     expect(r.stderr).toContain(KEY_INVALID_MESSAGE);
     expect(fs.readFileSync(path.join(profileRoot('p401'), 'runner.log'), 'utf-8')).toContain(KEY_INVALID_MESSAGE);
+    // `service status` and `setup` read this mark
+    expect(readListenStatus(profileRoot('p401')).keyInvalidAt).toBeTruthy();
     // nothing was claimed after the 401
     expect(new AgentStateStore(profileRoot('p401')).read()).toEqual({ status: 'idle' });
   });
@@ -192,6 +219,16 @@ describe('agent listen with a profile', () => {
 
 describe('good7ob agent enroll', () => {
   const secretsIn = (text: string) => [TOKEN, EMPLOYEE_KEY, MODEL_KEY].filter((s) => text.includes(s));
+
+  it('hostProvidesModel=true: says the machine brings its own model login; the profile keeps it and the token fingerprint, never the token', async () => {
+    vi.spyOn(axios, 'post').mockResolvedValue(httpOk(answer({ modelKeys: [], hostProvidesModel: true })) as never);
+    const r = await runCli(registerAgentCommands, ['agent', 'enroll', TOKEN, '--api-url', 'https://api-dev.good7ob.net']);
+    expect(r.exitCode).toBeUndefined();
+    expect(r.stdout).toContain('本机需自备模型凭证');
+    const raw = fs.readFileSync(path.join(profileRoot('org115-emp41'), 'config.json'), 'utf-8');
+    expect(JSON.parse(raw).enrollment).toMatchObject({ hostProvidesModel: true, tokenSha256: expect.stringMatching(/^[0-9a-f]{32}$/) });
+    expect(raw).not.toContain(TOKEN);
+  });
 
   it('redeems, writes key + apiUrl + hostId into the profile from the answer, model keys into env (600), never prints a key', async () => {
     const post = vi.spyOn(axios, 'post').mockResolvedValue(httpOk(answer()) as never);
