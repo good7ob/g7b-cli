@@ -391,17 +391,17 @@ A **profile** is a separate identity on one machine: its own key, API address, w
 
 ```bash
 # Redeem a one-time enrollment token (g7e_…, from the admin console or "run on my computer"; valid 24 h, single use)
-good7ob agent enroll g7e_… [--profile <name>] [--api-url https://api.good7ob.com] [--agent-kind CLAUDE_CODE] [--json]
+good7ob agent enroll g7e_… [--profile <name>] [--api-url https://api.good7ob.com] [--agent-kind CLAUDE_CODE] [--no-forward] [--json]
 #   → POST /api/v1/runner-enrollments/redeem (no login); writes apiUrl + the employee key + agent.hostId into the profile
 #     and the org model keys into <profile>/env (mode 600). Prints employee, org, profile and the next command — never a key.
 #   profile name: --profile, else the global --profile / GOOD7OB_PROFILE, else the answer's (org<orgId>-emp<employeeId>)
 
-good7ob --profile org115-emp41 config set agent.forward.command 'claude -p "处理 good7ob 任务 {taskId}"'
 good7ob --profile org115-emp41 agent listen     # loads <profile>/env into the forward command (ANTHROPIC_API_KEY …); logs also go to <profile>/runner.log
 good7ob --profile org115-emp41 agent status
 ```
 
 - **Host id**: one per machine data root (`~/.good7ob-profiles/host-id`, `<hostname>-<8 hex>`), created before the first redeem and copied to the profile's `agent.hostId`, so `agent listen` registers the runner under the same id. A retry after a lost answer sends the same id: the backend allows one re-redeem from the same host within 15 minutes (it issues a new key and revokes the previous one). A failed redeem always reads `接入令牌无效或已过期，请重新生成`; HTTP 429 = more than 10 tries a minute.
+- **Default forward command**: when the agent kind is `CLAUDE_CODE` (default), the profile has no `agent.forward.command` / `agent.forward.url` yet and `--no-forward` is not given, enroll writes one, so `agent listen` works right away: `cd <profile>/work && claude -p "<prompt>" --allowedTools "Bash(good7ob *)" "Bash(git *)" "Bash(gh *)" "Bash(npm *)" "Bash(npx *)" Read Edit Write Glob Grep > <profile>/runs/task-{taskId}.log 2>&1`. The prompt: read `good7ob pm task get {taskId} --json` and do what the task and run step ask; work in the repo the task / project dev info names, on a new branch, PR titled `g7b #{taskId}`; unattended — record trade-offs with `good7ob question create` / `question answer` and decide; run `good7ob agent done {taskId}` once at the end. HOME is not changed (Claude's login stays in the real HOME); the `good7ob` calls inside stay on the profile via `GOOD7OB_PROFILE`. Without `claude` on PATH the command is still written and enroll reminds you to install Claude Code. Change it with `good7ob --profile <name> config set agent.forward.command '…'`.
 - **Re-enrolling** an existing profile overwrites its key; entries of `<profile>/env` that the answer does not carry (e.g. a token `setup` stored) are kept.
 - **Key revoked / rotated**: when the backend answers 401 (registering, heartbeat, polling or claiming), `agent listen` stops claiming, prints and logs `这台设备的 Key 已失效，请重新接入` and exits **6**, so a service manager can tell it apart from other failures (1). Generate a new token and enroll again.
 

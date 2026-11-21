@@ -21,6 +21,7 @@ import { currentFlavor } from '../../services/flavor';
 import { PROFILES_DIR, activeProfile, normalizeProfile, profileDir, writeEnvFile } from '../../services/profile';
 import { USER_AGENT } from '../../services/version';
 import { InputError } from '../../utils/cliHelpers';
+import { validateCommandTemplate } from './forward';
 import { DEFAULT_AGENT_KIND, normalizeAgentKind, normalizeHostId } from './runner';
 
 export const REDEEM_PATH = '/api/v1/runner-enrollments/redeem';
@@ -165,8 +166,12 @@ export interface EnrollOptions {
   profile?: string;
   apiUrl?: string;
   agentKind?: string;
+  /** false = never write the default forward command (`--no-forward`). */
+  forward?: boolean;
   home?: string;
   http?: RedeemHttp;
+  /** PATH searched for `claude` (default: process.env.PATH). */
+  pathEnv?: string;
 }
 
 export interface EnrollResult {
@@ -182,6 +187,67 @@ export interface EnrollResult {
   modelKeyEnvs: string[];
   skippedModelKeys: string[];
   forwardConfigured: boolean;
+  /** This enroll wrote the default Claude Code forward command. */
+  forwardDefaulted: boolean;
+  /** Why no default was written although nothing is configured (non-Claude agent kind, unusable path); else undefined. */
+  forwardSkipped?: string;
+  agentKind: string;
+  /** The default command was written but `claude` is not on PATH. */
+  claudeMissing: boolean;
+}
+
+/** `claude` install hint printed when the default command is written without Claude Code on PATH. */
+export const CLAUDE_MISSING = '未找到 claude 命令，请先安装 Claude Code（curl -fsSL https://claude.ai/install.sh | bash）并登录';
+
+/** Whether an executable named `cmd` is on `pathEnv`. */
+export function onPath(cmd: string, pathEnv = process.env.PATH ?? ''): boolean {
+  const exts = process.platform === 'win32' ? ['', '.exe', '.cmd', '.bat'] : [''];
+  return pathEnv
+    .split(path.delimiter)
+    .filter(Boolean)
+    .some((dir) =>
+      exts.some((ext) => {
+        try {
+          fs.accessSync(path.join(dir, cmd + ext), fs.constants.X_OK);
+          return fs.statSync(path.join(dir, cmd + ext)).isFile();
+        } catch {
+          return false;
+        }
+      })
+    );
+}
+
+/**
+ * Prompt of the default forward command: the generic version of the self-hosted runner prompt (read the task,
+ * report steps, decide alone and record it, one `agent done`). Double-quoted in the shell line, so it uses no `"`,
+ * `$`, backquote or backslash, and only the {taskId} placeholder.
+ * The PR title carries {taskId}, the internal id: the platform links PRs by `g7b #<internal id>`, a taskNo mislinks.
+ */
+export const DEFAULT_PROMPT = [
+  '你是 good7ob AI 员工（执行设备），执行平台任务 {taskId}，当前目录是配置档的 work 目录。',
+  '先运行 good7ob pm task get {taskId} --json，读任务说明、验收条件和当前运行步骤的要求，然后按要求完成。',
+  '【仓库】以任务或项目开发信息里写的仓库为准，克隆到当前目录下，在新分支上修改，提交 PR，PR 标题以 g7b #{taskId} 开头。',
+  '【进度】每完成一小步用 good7ob run 相关命令上报；PR、文档、测试运行等成果按要求上报。',
+  "【自主决定】这是无人值守运行，不要停下来等人：需要在几个方案里取舍时，先用 good7ob question create --type choice --source ai --title '<要决定什么>' --option a=<方案A> --option b=<方案B> --description '<背景、各方案代价、推荐理由>' --assignee-employee self --task {taskId} 记录，再用 good7ob question answer <问题ID> --option <你选的> --text '<理由>' 自己确认，然后继续；纯实现细节不用记。",
+  '【结束】完成后只运行一次 good7ob agent done {taskId}。',
+].join('');
+
+const ALLOWED_TOOLS = '"Bash(good7ob *)" "Bash(git *)" "Bash(gh *)" "Bash(npm *)" "Bash(npx *)" Read Edit Write Glob Grep';
+
+/**
+ * `cd <profile>/work && claude -p "<prompt>" --allowedTools … > <profile>/runs/task-{taskId}.log 2>&1`.
+ * HOME is left alone (Claude's login lives in the real HOME); the `good7ob` calls inside stay on the profile
+ * through the inherited GOOD7OB_PROFILE. Throws for a profile path the single-quoted shell words cannot carry.
+ */
+export function defaultForwardCommand(dir: string): string {
+  if (/['{}\r\n]/.test(dir)) throw new Error(`配置档路径含引号、花括号或换行，无法写入默认转发命令: ${dir}`);
+  const work = path.join(dir, 'work');
+  const runs = path.join(dir, 'runs');
+  const command =
+    `mkdir -p '${work}' '${runs}' && cd '${work}' && ` +
+    `claude -p "${DEFAULT_PROMPT}" --allowedTools ${ALLOWED_TOOLS} > '${path.join(runs, 'task-{taskId}.log')}' 2>&1`;
+  validateCommandTemplate(command);
+  return command;
 }
 
 export async function enroll(o: EnrollOptions): Promise<EnrollResult> {
@@ -197,7 +263,16 @@ export async function enroll(o: EnrollOptions): Promise<EnrollResult> {
   const r = await redeem(apiUrl, { token, hostId, hostName: os.hostname(), agentKind }, o.http);
 
   try {
-    return save(r, { explicit, existing, home, apiUrl, hostId, agentKind: o.agentKind ? agentKind : undefined });
+    return save(r, {
+      explicit,
+      existing,
+      home,
+      apiUrl,
+      hostId,
+      agentKind: o.agentKind ? agentKind : undefined,
+      forward: o.forward !== false,
+      pathEnv: o.pathEnv,
+    });
   } catch (e) {
     // the token is spent: say how to get a key again (same host id, within 15 minutes, contract 2.4)
     throw new Error(`兑换成功但写入配置档失败: ${e instanceof Error ? e.message : String(e)}。15 分钟内在本机重跑同一条命令可以重新兑换`);
@@ -216,12 +291,39 @@ export function profileOf(r: Redeemed): string {
 
 function save(
   r: Redeemed,
-  c: { explicit?: string; existing?: ConfigService; home: string; apiUrl: string; hostId: string; agentKind?: string }
+  c: {
+    explicit?: string;
+    existing?: ConfigService;
+    home: string;
+    apiUrl: string;
+    hostId: string;
+    agentKind?: string;
+    forward: boolean;
+    pathEnv?: string;
+  }
 ): EnrollResult {
   const { home, apiUrl, hostId, agentKind } = c;
   const profile = c.explicit ?? profileOf(r);
   const target = c.existing ?? new ConfigService({ profile, homeDir: home });
-  const agent = { ...(target.get('agent') ?? {}), hostId, ...(agentKind ? { agentKind } : {}) };
+  const dir = profileDir(profile, home);
+  const agent: Record<string, any> = { ...(target.get('agent') ?? {}), hostId, ...(agentKind ? { agentKind } : {}) };
+  const kind: string = agent.agentKind ?? DEFAULT_AGENT_KIND;
+  // operators enroll + listen until setup / the image exist (B3 / B6): give a Claude Code profile a working forward
+  const hadForward = !!(agent.forward?.url || agent.forward?.command);
+  let forwardDefaulted = false;
+  let forwardSkipped: string | undefined;
+  if (!hadForward && c.forward) {
+    if (kind !== DEFAULT_AGENT_KIND) {
+      forwardSkipped = `agentKind 为 ${kind}，只有 ${DEFAULT_AGENT_KIND} 会自动配置转发命令`;
+    } else {
+      try {
+        agent.forward = { ...(agent.forward ?? {}), command: defaultForwardCommand(dir) };
+        forwardDefaulted = true;
+      } catch (e) {
+        forwardSkipped = e instanceof Error ? e.message : String(e);
+      }
+    }
+  }
   target.update({
     apiUrl,
     apiKey: r.key,
@@ -238,7 +340,6 @@ function save(
   });
   // ConfigService.saveConfig only warns on a failed write: read it back so a lost key is never reported as success
   if (new ConfigService({ profile, homeDir: home }).get('apiKey') !== r.key) throw new Error(`${target.directory()}/config.json 未写入`);
-  const dir = profileDir(profile, home);
   const { values, skipped } = modelKeyEnv(r.modelKeys);
   if (Object.keys(values).length) writeEnvFile(dir, values);
   const forward = agent.forward ?? {};
@@ -254,6 +355,10 @@ function save(
     modelKeyEnvs: Object.keys(values),
     skippedModelKeys: skipped,
     forwardConfigured: !!(forward.url || forward.command),
+    forwardDefaulted,
+    forwardSkipped,
+    agentKind: kind,
+    claudeMissing: forwardDefaulted && !onPath('claude', c.pathEnv),
   };
 }
 
@@ -266,8 +371,12 @@ export function describeEnroll(r: EnrollResult): string {
   ];
   if (r.modelKeyEnvs.length) lines.push(`  模型 Key: 已写入 ${path.join(r.profileDir, 'env')}（${r.modelKeyEnvs.join(', ')}，不显示）`);
   if (r.skippedModelKeys.length) lines.push(`  ! 无法识别的模型 Key 已跳过: ${r.skippedModelKeys.join(', ')}`);
-  if (!r.forwardConfigured) {
-    lines.push(`  ! 还没有配置转交方式，先运行: good7ob --profile ${r.profile} config set agent.forward.command '<命令模板>'`);
+  if (r.forwardDefaulted) {
+    lines.push(`  已配置默认的 Claude Code 转发命令（可用 good7ob --profile ${r.profile} config set agent.forward.command 修改）`);
+    if (r.claudeMissing) lines.push(`  ! ${CLAUDE_MISSING}`);
+  } else if (!r.forwardConfigured) {
+    // --no-forward, a non-Claude agent kind or an unusable path: say why and how
+    lines.push(`  ! 未配置转发命令${r.forwardSkipped ? `（${r.forwardSkipped}）` : ''}，listen 前先运行: good7ob --profile ${r.profile} config set agent.forward.command '<命令模板>'`);
   }
   lines.push(`下一步: good7ob --profile ${r.profile} agent listen`);
   return lines.join('\n');

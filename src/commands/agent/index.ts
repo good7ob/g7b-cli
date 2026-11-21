@@ -340,11 +340,12 @@ export function registerAgentCommands(program: Command) {
     .option('--profile <name>', 'Profile to write (default: the global --profile / GOOD7OB_PROFILE, else the name in the answer, e.g. org115-emp41)')
     .option('--api-url <url>', 'API address to redeem at and store in the profile (default: the profile\'s, else this install\'s)')
     .option('--agent-kind <code>', 'Agent kind sent with the redeem and stored as agent.agentKind (default: CLAUDE_CODE)')
+    .option('--no-forward', 'Do not write the default Claude Code forward command (written only for agentKind CLAUDE_CODE when the profile has no forward yet)')
     .option('--json', 'Output as JSON (no key in it)')
     .action(async (token, opts) => {
       let r: EnrollResult;
       try {
-        r = await enroll({ token, profile: opts.profile, apiUrl: opts.apiUrl, agentKind: opts.agentKind });
+        r = await enroll({ token, profile: opts.profile, apiUrl: opts.apiUrl, agentKind: opts.agentKind, forward: opts.forward });
       } catch (e) {
         return fail('接入失败', e);
       }

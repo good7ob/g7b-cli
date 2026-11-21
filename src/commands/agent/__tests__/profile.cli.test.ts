@@ -12,7 +12,8 @@ import { PROFILE_ENV, writeEnvFile } from '../../../services/profile';
 import { AgentStateStore } from '../state';
 import { runRound } from '../round';
 import { KEY_INVALID_MESSAGE } from '../runner';
-import { INVALID_TOKEN, REDEEM_PATH, enroll } from '../enroll';
+import { CLAUDE_MISSING, DEFAULT_PROMPT, INVALID_TOKEN, REDEEM_PATH, describeEnroll, enroll } from '../enroll';
+import { forwardCommand, validateCommandTemplate } from '../forward';
 
 // Same isolation as agent.cli.test.ts: os.homedir() is mocked so nothing touches the real ~/.good7ob*.
 vi.mock('os', async () => {
@@ -295,5 +296,88 @@ describe('good7ob agent enroll', () => {
       http: async () => httpOk({ orgId: 7, orgName: 'o', employeeId: 8, employeeName: 'e', key: EMPLOYEE_KEY, modelKeys: [{ provider: 'anthropic', key: MODEL_KEY }, { provider: 'mystery', key: 'x' }] }),
     });
     expect(r).toMatchObject({ aiEmployeeId: 8, aiEmployeeName: 'e', modelKeyEnvs: ['ANTHROPIC_API_KEY'], skippedModelKeys: ['mystery'] });
+  });
+});
+
+describe('agent enroll: default Claude Code forward command', () => {
+  const fakeBin = () => {
+    const bin = path.join(tmpHome, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    // records what the forward command hands to claude: cwd, HOME, profile, the prompt
+    fs.writeFileSync(path.join(bin, 'claude'), '#!/bin/sh\nprintf "%s|%s|%s|%s" "$PWD" "$HOME" "$GOOD7OB_PROFILE" "$2"\n', { mode: 0o755 });
+    return bin;
+  };
+  const savedAgent = (profile = 'org115-emp41') => new ConfigService({ profile, homeDir: tmpHome }).get('agent') ?? {};
+
+  it('writes the default command when the profile has no forward; it passes validateCommandTemplate and only uses {taskId}', async () => {
+    const r = await enroll({ token: TOKEN, apiUrl: 'https://x.test', pathEnv: fakeBin(), http: async () => httpOk(answer()) });
+    expect(r).toMatchObject({ forwardDefaulted: true, forwardConfigured: true, claudeMissing: false, agentKind: 'CLAUDE_CODE' });
+    const command: string = savedAgent().forward.command;
+    expect(() => validateCommandTemplate(command)).not.toThrow();
+    expect(Array.from(command.matchAll(/\{([^{}]*)\}/g)).map((m) => m[1])).toEqual(expect.arrayContaining(['taskId']));
+    expect(Array.from(command.matchAll(/\{([^{}]*)\}/g)).every((m) => m[1] === 'taskId' || m[1] === 'taskNo')).toBe(true);
+    expect(command).toContain(`cd '${path.join(profileRoot('org115-emp41'), 'work')}'`);
+    expect(command).toContain(`> '${path.join(profileRoot('org115-emp41'), 'runs', 'task-{taskId}.log')}' 2>&1`);
+    expect(command).toContain('--allowedTools "Bash(good7ob *)" "Bash(git *)" "Bash(gh *)" "Bash(npm *)" "Bash(npx *)" Read Edit Write Glob Grep');
+    for (const part of ['good7ob pm task get {taskId} --json', 'g7b #{taskId}', 'good7ob question create', 'good7ob question answer', '只运行一次 good7ob agent done {taskId}']) {
+      expect(DEFAULT_PROMPT).toContain(part);
+    }
+    expect(describeEnroll(r)).toContain('已配置默认的 Claude Code 转发命令（可用 good7ob --profile org115-emp41 config set agent.forward.command 修改）');
+    expect(describeEnroll(r)).not.toContain('未配置转发命令');
+  });
+
+  it('the default command runs claude in <profile>/work with the real HOME and the same profile, logging to runs/', async () => {
+    const bin = fakeBin();
+    await enroll({ token: TOKEN, apiUrl: 'https://x.test', pathEnv: bin, http: async () => httpOk(answer()) });
+    process.env[PROFILE_ENV] = 'org115-emp41';
+    const task = { id: 9, taskNo: 'T9', name: 'n', projectId: null, claimedAtMs: Date.now() };
+    await forwardCommand(savedAgent().forward.command, task, 5000, { PATH: `${bin}${path.delimiter}${process.env.PATH}` });
+    const log = fs.readFileSync(path.join(profileRoot('org115-emp41'), 'runs', 'task-9.log'), 'utf-8');
+    const [cwd, home, profile, prompt] = log.split('|');
+    expect(fs.realpathSync(cwd)).toBe(fs.realpathSync(path.join(profileRoot('org115-emp41'), 'work')));
+    expect(home).toBe(process.env.HOME);
+    expect(profile).toBe('org115-emp41');
+    expect(prompt).toContain('good7ob pm task get 9 --json');
+    expect(prompt).toContain('good7ob agent done 9');
+  });
+
+  it('warns when claude is not on PATH, but still writes the command', async () => {
+    const r = await enroll({ token: TOKEN, apiUrl: 'https://x.test', pathEnv: path.join(tmpHome, 'empty'), http: async () => httpOk(answer()) });
+    expect(r).toMatchObject({ forwardDefaulted: true, claudeMissing: true });
+    expect(savedAgent().forward.command).toContain('claude -p');
+    expect(describeEnroll(r)).toContain(CLAUDE_MISSING);
+    expect(CLAUDE_MISSING).toBe('未找到 claude 命令，请先安装 Claude Code（curl -fsSL https://claude.ai/install.sh | bash）并登录');
+  });
+
+  it('keeps an existing forward (command or url)', async () => {
+    new ConfigService({ profile: 'p-cmd', homeDir: tmpHome }).set('agent', { forward: { command: 'my-agent {taskId}' } });
+    new ConfigService({ profile: 'p-url', homeDir: tmpHome }).set('agent', { forward: { url: 'http://127.0.0.1:1/hook', secret: 's' } });
+    const a = await enroll({ token: TOKEN, profile: 'p-cmd', apiUrl: 'https://x.test', pathEnv: fakeBin(), http: async () => httpOk(answer()) });
+    const b = await enroll({ token: TOKEN, profile: 'p-url', apiUrl: 'https://x.test', pathEnv: fakeBin(), http: async () => httpOk(answer()) });
+    expect(a.forwardDefaulted).toBe(false);
+    expect(b.forwardDefaulted).toBe(false);
+    expect(savedAgent('p-cmd').forward).toEqual({ command: 'my-agent {taskId}' });
+    expect(savedAgent('p-url').forward).toEqual({ url: 'http://127.0.0.1:1/hook', secret: 's' });
+    expect(describeEnroll(a)).not.toContain('转发命令（');
+    expect(describeEnroll(a)).not.toContain('未配置转发命令');
+  });
+
+  it('--no-forward writes nothing and says how to configure it', async () => {
+    vi.spyOn(axios, 'post').mockResolvedValue(httpOk(answer()) as never);
+    const r = await runCli(registerAgentCommands, ['agent', 'enroll', TOKEN, '--no-forward']);
+    expect(r.exitCode).toBeUndefined();
+    expect(savedAgent().forward).toBeUndefined();
+    expect(r.stdout).toContain('未配置转发命令');
+    expect(r.stdout).not.toContain('已配置默认的 Claude Code 转发命令');
+  });
+
+  it('a non-CLAUDE_CODE agent kind gets no default, with a hint', async () => {
+    vi.spyOn(axios, 'post').mockResolvedValue(httpOk(answer()) as never);
+    const r = await runCli(registerAgentCommands, ['agent', 'enroll', TOKEN, '--agent-kind', 'codex']);
+    expect(r.exitCode).toBeUndefined();
+    expect(savedAgent()).toMatchObject({ agentKind: 'CODEX' });
+    expect(savedAgent().forward).toBeUndefined();
+    expect(r.stdout).toContain('agentKind 为 CODEX，只有 CLAUDE_CODE 会自动配置转发命令');
+    expect(r.stdout).toContain('config set agent.forward.command');
   });
 });
