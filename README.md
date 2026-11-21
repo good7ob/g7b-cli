@@ -405,6 +405,39 @@ good7ob --profile org115-emp41 agent status
 - **Re-enrolling** an existing profile overwrites its key; entries of `<profile>/env` that the answer does not carry (e.g. a token `setup` stored) are kept.
 - **Key revoked / rotated**: when the backend answers 401 (registering, heartbeat, polling or claiming), `agent listen` stops claiming, prints and logs `这台设备的 Key 已失效，请重新接入` and exits **6**, so a service manager can tell it apart from other failures (1). Generate a new token and enroll again.
 
+#### One-command runner setup (`setup`) and the background service (`service`)
+
+`good7ob setup <token>` takes a machine from nothing to an online runner (design: runner onboarding 4.2 / 7.4). The "run on my computer" install script calls it after installing Node and this CLI; operators run it on hosting machines.
+
+```bash
+good7ob setup g7e_… [--api-url https://api.good7ob.com] [--profile <name>] [--yes] [--agent claude|gemini|codex] [--no-mcp] [--no-service]
+```
+
+1. **AI tool**: the first of `claude` → `gemini` → `codex` that answers `--version` (PATH and `~/.local/bin`), or the one `--agent` names. None: asks, then runs the official installer `curl -fsSL https://claude.ai/install.sh | bash` (Windows: `irm https://claude.ai/install.ps1 | iex`); `--yes` installs without asking. Gemini CLI / Codex are never installed, only used when present.
+2. **Enrollment**: the same code as `agent enroll` (profile name from the answer unless `--profile`). Running setup again with the same token reuses the profile it filled (`enrollment.tokenSha256`, a fingerprint, never the token) instead of redeeming twice; a new token redeems again (re-enrolling after the key was revoked). A hosted token generated with "the machine brings its own model login" (`hostProvidesModel`) prints `本机需自备模型凭证`.
+3. **Login check**: a test prompt that must answer `GOOD7OB_SETUP_OK` (`claude -p` / `gemini -p` / `codex exec`), with the profile's env file visible. Not logged in: Claude Code — log in with `claude` (browser), or paste a `claude setup-token` token / an `ANTHROPIC_API_KEY` (stored in `<profile>/env`, never echoed); Gemini / Codex — log in yourself. Enter retries, `q` quits; `--yes` fails instead of waiting.
+4. **Forward command**: Claude Code keeps the default `agent enroll` wrote; Gemini CLI (`gemini -p … --approval-mode auto_edit --allowed-tools "run_shell_command(good7ob)" …`) and Codex (`codex exec --sandbox workspace-write --add-dir <profile> …`) get the same structure (`cd <profile>/work`, log to `<profile>/runs/task-{taskId}.log`) and the same prompt. A webhook or a hand-written command is kept.
+5. **MCP**: `npx add-mcp@2.6.1 <api>/mcp --name good7ob -a claude-code|gemini-cli -y --header "Authorization: Bearer ${GOOD7OB_MCP_KEY}"` in `<profile>/work` (project scope, one entry per profile). No file holds the key: `agent listen` sets `GOOD7OB_MCP_KEY` from the profile's key for the forward command. Skipped for Codex (its config cannot expand variables in headers) and with `--no-mcp`; a failure only warns.
+6. **Service**: first the test prompt again **in the service's environment** (its PATH and HOME plus `<profile>/env`, nothing from your shell). If Claude's login is not visible there (e.g. the macOS keychain), a `CLAUDE_CODE_OAUTH_TOKEN` / `ANTHROPIC_API_KEY` of your shell is copied into `<profile>/env`, else setup asks you to run `claude setup-token` and paste the token. Then `service install`, a wait of at most 60 s for the first accepted heartbeat, and `已上线` with the status / stop / uninstall commands. `--no-service` stops before this step (run `good7ob --profile <name> agent listen` yourself, e.g. in a container).
+
+```bash
+good7ob service install   [--profile <name>] [--dry-run]   # write + start; --dry-run prints the files and commands only
+good7ob service status    [--profile <name>] [--lines 10] [--json]
+good7ob service uninstall [--profile <name>] [--dry-run]   # stop + remove; the profile and its key stay
+```
+
+| OS | Definition | Restart | Key rejected (listen exit 6) |
+|---|---|---|---|
+| macOS | `~/Library/LaunchAgents/com.good7ob.runner.<profile>.plist` → `<profile>/service/run.sh` | `KeepAlive.SuccessfulExit=false`, 30 s throttle | the wrapper exits 0, launchd leaves it stopped |
+| Linux | `~/.config/systemd/user/good7ob-runner-<profile>.service` | `Restart=on-failure`, 30 s | `RestartPreventExitStatus=6` |
+| Windows (trial) | scheduled task `good7ob-runner-<profile>` at logon → `<profile>\service\run.cmd` | the script loops, 30 s apart | the script stops |
+
+- The service runs `node <this install>/dist/index.js --profile <name> agent listen` with the real `HOME`, `GOOD7OB_PROFILE` and a fixed `PATH`: node's dir, the dirs of `claude` / `gemini` / `codex` / `git` / `gh` found at install time, `~/.local/bin`, then the system dirs. Secrets are not in these files; listen reads `<profile>/env` itself. Output goes to `<profile>/service.log`. Reinstall after moving node (e.g. an nvm version change).
+- Linux: `loginctl enable-linger $USER` keeps a user service running while you are logged out.
+- `status` shows whether it runs (pid / last exit code), the last accepted heartbeat (`<profile>/listen-status.json`, written by listen), `这台设备的 Key 已失效，请重新接入` once listen got a 401, and the last log lines. After re-enrolling (`good7ob setup <new token>`) the service is reinstalled and the mark cleared.
+
+Releases: pushing a tag `v<semver>` runs `.github/workflows/release.yml`, which builds, tests and attaches `good7ob-cli.tgz` (+ `.sha256`) to the GitHub release; install with `npm i -g https://github.com/good7ob/g7b-cli/releases/latest/download/good7ob-cli.tgz`. Not published to npm.
+
 ### `run`
 
 Automation runs and their steps (prd-0137, idea #188; backend `/api/v1/orgs/{orgId}/runs`). **Runner reports** need the AI employee key that holds the step; `--run / --step` default to the busy local slot (`~/.good7ob/agent-state.json`, written by `agent listen / next` when a scheduler-assigned item was claimed), and the org to the slot's org, `GOOD7OB_ORG_ID`, `config set org-id` or the key's only org.
