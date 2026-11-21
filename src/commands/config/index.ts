@@ -111,6 +111,7 @@ export function registerConfigCommands(program: Command) {
       const config = configService.getAll();
       console.log('Current configuration:');
       console.log(`  environment: ${configService.activeEnvironment()}`);
+      if (configService.profileName()) console.log(`  profile: ${configService.profileName()} (${configService.directory()})`);
       console.log(`  apiUrl: ${formatValue('apiUrl', config.apiUrl)}`);
       console.log(`  apiKey: ${formatValue('apiKey', config.apiKey)}`);
       console.log(`  userId: ${formatValue('userId', config.userId)}`);

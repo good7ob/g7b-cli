@@ -155,6 +155,16 @@ export function isFatalAuth(e: unknown): boolean {
   return [401, 403, 404].includes(status as number) || [401, 403, 404, 2718].includes(code as number) || message.includes(NOT_EMPLOYEE_HINT);
 }
 
+/** Printed and logged by `agent listen` when the key is rejected (design runner-onboarding 7.7-5, contract §4). */
+export const KEY_INVALID_MESSAGE = '这台设备的 Key 已失效，请重新接入';
+
+/** HTTP 401 / business code 401: the key itself is revoked or rotated (not a human key, not a missing endpoint). */
+export function isKeyRejected(e: unknown): boolean {
+  const status = (e as { status?: number } | null)?.status;
+  const code = (e as { code?: number } | null)?.code;
+  return status === 401 || code === 401;
+}
+
 /** prd-0136 rp-auto-sched-0042: `409 ASSIGNED_TO_OTHER` (backend) / `2716` (design doc). */
 export function isAssignedToOther(e: unknown): boolean {
   const code = (e as { code?: number }).code;

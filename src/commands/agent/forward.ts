@@ -80,11 +80,14 @@ export async function forwardWebhook(url: string, secret: string, task: ForwardT
   if (status < 200 || status >= 300) throw new Error(`webhook 返回 HTTP ${status}`);
 }
 
-/** Starts the command detached; failure = spawn error or non-zero exit within `watchMs`. */
-export function forwardCommand(template: string, task: ForwardTask, watchMs = 2000): Promise<void> {
+/**
+ * Starts the command detached; failure = spawn error or non-zero exit within `watchMs`.
+ * `env` = extra variables for the child on top of this process's (a profile's env file: model keys).
+ */
+export function forwardCommand(template: string, task: ForwardTask, watchMs = 2000, env?: Record<string, string>): Promise<void> {
   const command = renderCommand(template, task);
   return new Promise((resolve, reject) => {
-    const child = spawn(command, { shell: true, detached: true, stdio: 'ignore' });
+    const child = spawn(command, { shell: true, detached: true, stdio: 'ignore', env: env ? { ...process.env, ...env } : process.env });
     const timer = setTimeout(() => {
       child.removeAllListeners();
       child.unref();

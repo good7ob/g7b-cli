@@ -7,8 +7,12 @@
  */
 
 import { Command } from 'commander';
+import * as fs from 'fs';
+import * as path from 'path';
 import apiClient from '../../services/ApiClient';
 import configService from '../../services/ConfigService';
+import { dataDir, runnerLogFile } from '../../services/flavor';
+import { activeProfile, readEnvFile } from '../../services/profile';
 import { InputError, collect, parseId } from '../../utils/cliHelpers';
 import { describeRunError, doneBody, stepLost } from '../run/input';
 import { describeFinish, finishStep, resolveOrg } from '../run/steps';
@@ -28,15 +32,18 @@ import {
   resolveSessionId,
   startBody,
 } from './exec';
+import { EnrollResult, describeEnroll, enroll } from './enroll';
 import { ForwardTask, forwardCommand, forwardWebhook } from './forward';
 import { RoundDeps, releaseTask, runRound } from './round';
 import {
   HeartbeatRunner,
+  KEY_INVALID_MESSAGE,
   REGISTER_PATH,
   RunnerOptions,
   describeAssignment,
   describeRunner,
   isFatalAuth,
+  isKeyRejected,
   registerPayload,
   resolveRunnerOptions,
   toRegistration,
@@ -48,6 +55,8 @@ const EXIT_BUSY = 3;
 const EXIT_EMPTY = 4;
 /** Queue had items, but every one of them is assigned to another runner / employee (409 ASSIGNED_TO_OTHER). */
 const EXIT_ASSIGNED_ELSEWHERE = 5;
+/** listen: the key was rejected (401). Distinct so a service manager can stop restarting (design 7.7-5). */
+export const EXIT_KEY_INVALID = 6;
 
 const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const stamp = (msg: string) => `[${new Date().toISOString()}] ${msg}`;
@@ -124,7 +133,8 @@ async function registerRunner(
   opts: RunnerOptions,
   store: AgentStateStore,
   log: (m: string) => void,
-  retry: { once: boolean; intervalMs: number; sleep: (ms: number) => Promise<void>; stopping: () => boolean }
+  retry: { once: boolean; intervalMs: number; sleep: (ms: number) => Promise<void>; stopping: () => boolean },
+  onKeyRejected: () => never
 ): Promise<RunnerRegistration | null> {
   for (;;) {
     try {
@@ -133,6 +143,7 @@ async function registerRunner(
       await store.withLock(async () => store.writeRunner(reg));
       return reg;
     } catch (e) {
+      if (isKeyRejected(e)) onKeyRejected();
       if (isFatalAuth(e)) fail('注册 Runner 失败（需要 AI 员工 Key）', e);
       if (e instanceof InputError) fail('注册 Runner 失败', e);
       if (retry.once) fail('注册 Runner 失败', e);
@@ -180,11 +191,39 @@ export function registerAgentCommands(program: Command) {
       } catch (e) {
         fail('agent 配置无效', e);
       }
+      // g7b #3632: with a profile, the forward command gets the profile's env file (model keys) and every log line
+      // also goes to <profile>/runner.log. Without one nothing changes.
+      const profile = activeProfile();
+      let childEnv: Record<string, string> | undefined;
+      try {
+        childEnv = profile ? readEnvFile(dataDir()) : undefined;
+      } catch (e) {
+        fail('读取配置档 env 文件失败', e);
+      }
+      const logFile = profile ? runnerLogFile() : undefined;
+      const toLogFile = (line: string) => {
+        if (!logFile) return;
+        try {
+          fs.mkdirSync(path.dirname(logFile), { recursive: true, mode: 0o700 });
+          fs.appendFileSync(logFile, `${line}\n`, { mode: 0o600 });
+        } catch {
+          /* the terminal / service log still has it */
+        }
+      };
       const { url, secret, command } = cfg.forward;
       const forward = url
         ? (t: ForwardTask) => forwardWebhook(url, secret as string, t)
-        : (t: ForwardTask) => forwardCommand(command as string, t);
-      const log = (m: string) => console.log(stamp(m));
+        : (t: ForwardTask) => forwardCommand(command as string, t, undefined, childEnv);
+      const log = (m: string) => {
+        const line = stamp(m);
+        console.log(line);
+        toLogFile(line);
+      };
+      const logError = (m: string) => {
+        const line = stamp(m);
+        console.error(line);
+        toLogFile(line);
+      };
       const store = new AgentStateStore();
       const { sleep, wakeAll } = makeSleeper();
 
@@ -198,6 +237,16 @@ export function registerAgentCommands(program: Command) {
       };
       process.once('SIGINT', () => stop());
       process.once('SIGTERM', () => stop());
+      // 401 anywhere (register, heartbeat, queue, claim): stop claiming, say so, exit non-zero (design 7.7-5)
+      let keyInvalid = false;
+      const onKeyInvalid = () => {
+        if (keyInvalid) return;
+        keyInvalid = true;
+        exitCode = EXIT_KEY_INVALID;
+        logError(KEY_INVALID_MESSAGE);
+        stop('停止领取任务');
+      };
+      if (profile) log(`配置档 ${profile}（${dataDir()}）${childEnv && Object.keys(childEnv).length ? `，转交命令附带环境变量: ${Object.keys(childEnv).join(', ')}` : ''}`);
 
       // 1. register (idempotent on employee + host id)
       const reg = await registerRunner(runnerOpts, store, log, {
@@ -205,6 +254,9 @@ export function registerAgentCommands(program: Command) {
         intervalMs: cfg.intervalSeconds * 1000,
         sleep,
         stopping: () => stopping,
+      }, () => {
+        logError(KEY_INVALID_MESSAGE);
+        process.exit(EXIT_KEY_INVALID);
       });
       if (!reg) return;
       log(`Runner 已注册: #${reg.runnerId} ${reg.hostLabel}（hostId ${reg.runnerKey}，slots ${reg.slots}，env ${reg.envTags.join(',') || '无'}，${reg.agentKind}）`);
@@ -219,8 +271,10 @@ export function registerAgentCommands(program: Command) {
         runner: { ...hbRunner, slots: reg.slots, envTags: reg.envTags },
       });
       let lastBeatFailure = '';
+      let beatKeyRejected = false;
       const beat = async () => {
         const r = await sendBeat(hbRunner);
+        beatKeyRejected = !!r.keyRejected;
         if (r.result === 'retry' && r.message !== lastBeatFailure) log(`心跳失败，继续重试: ${r.message}`);
         lastBeatFailure = r.result === 'retry' ? r.message ?? '' : '';
         if (r.stopStepIds.length) await handleStopSteps(r.stopStepIds, store, log);
@@ -230,7 +284,9 @@ export function registerAgentCommands(program: Command) {
         ? beat().then((r) => (r === 'fatal' ? 'fatal' : 'agent-gone'))
         : runLoop({ beat, agentAlive: () => !stopping, sleep, intervalMs: HEARTBEAT_INTERVAL_MS });
       const heartbeatDone = heartbeat.then((end) => {
-        if (end === 'fatal') {
+        if (end === 'fatal' && beatKeyRejected) {
+          onKeyInvalid();
+        } else if (end === 'fatal') {
           exitCode = 1;
           stop('心跳被后端拒绝（Key 无效或非 AI 员工 Key）');
         }
@@ -260,6 +316,10 @@ export function registerAgentCommands(program: Command) {
           }
           lastKind = r.kind;
         } catch (e) {
+          if (isKeyRejected(e)) {
+            onKeyInvalid();
+            break;
+          }
           log(`本轮失败: ${msgOf(e)}`);
           lastKind = '';
         }
@@ -272,6 +332,23 @@ export function registerAgentCommands(program: Command) {
       // rp-auto-sched-0013: clean exit frees the runner's unclaimed leases
       await finishHeartbeat(process.pid, hbRunner);
       if (exitCode) process.exit(exitCode);
+    });
+
+  agent
+    .command('enroll <token>')
+    .description('Redeem a one-time enrollment token (g7e_…): writes the AI employee key, API address and model keys into a configuration profile, never printing them')
+    .option('--profile <name>', 'Profile to write (default: the global --profile / GOOD7OB_PROFILE, else the name in the answer, e.g. org115-emp41)')
+    .option('--api-url <url>', 'API address to redeem at and store in the profile (default: the profile\'s, else this install\'s)')
+    .option('--agent-kind <code>', 'Agent kind sent with the redeem and stored as agent.agentKind (default: CLAUDE_CODE)')
+    .option('--json', 'Output as JSON (no key in it)')
+    .action(async (token, opts) => {
+      let r: EnrollResult;
+      try {
+        r = await enroll({ token, profile: opts.profile, apiUrl: opts.apiUrl, agentKind: opts.agentKind });
+      } catch (e) {
+        return fail('接入失败', e);
+      }
+      console.log(opts.json ? JSON.stringify(r, null, 2) : describeEnroll(r));
     });
 
   agent
@@ -409,6 +486,7 @@ export function registerAgentCommands(program: Command) {
         const runner = store.readRunner();
         if (opts.json) return console.log(JSON.stringify({ slot, runner, config: { ...cfg, forward: { ...cfg.forward, secret: cfg.forward.secret ? '(set)' : undefined } } }, null, 2));
         const { url, secret, command } = cfg.forward;
+        if (activeProfile()) console.log(`配置档: ${activeProfile()}（${dataDir()}）`);
         console.log(`工作槽: ${describeSlot(slot)}`);
         console.log(`Runner: ${describeRunner(runner)}`);
         console.log('配置:');
