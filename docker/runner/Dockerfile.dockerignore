@@ -1,0 +1,11 @@
+# Context whitelist for docker/runner/Dockerfile (BuildKit reads <Dockerfile>.dockerignore).
+# Never node_modules (a symlink in worktrees), dist, .git or dev-env.json.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!README.md
+!src
+src/**/__tests__
+src/**/*.test.ts
+!docker/runner/entrypoint.sh
