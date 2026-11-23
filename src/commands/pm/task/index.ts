@@ -607,6 +607,28 @@ export function registerTaskCommands(pmCommand: Command) {
     });
 
   taskCommand
+    .command('verifier <id>')
+    .description('转移验证人（g7b #2586）：任务处于完成待验收时，把验证交给本组织另一名真人成员（新验证人会收到通知）')
+    .requiredOption('--verifier-id <userId>', '新验证人的用户号（本组织真人成员，不能是自己、提交验收的人或执行人）')
+    .option('--json', 'Output the result as JSON')
+    .action(async (idArg, options) => {
+      try {
+        const id = parseId(idArg, '<id>');
+        const verifierId = parseId(options.verifierId, '--verifier-id');
+        const result = await apiClient.post(`/progress/tasks/${id}/verifier`, { verifierId });
+        if (options.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        const who = result?.verifierName ? `${result.verifierName}（${verifierId}）` : String(verifierId);
+        console.log(result?.changed === false ? `✓ 验证人已是 ${who}，无需转移: ${id}` : `✓ 验证人已转给 ${who}: ${id}`);
+      } catch (error) {
+        console.error('✗ 转移验证人失败:', error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+    });
+
+  taskCommand
     .command('batch-update')
     .description('Batch update multiple tasks')
     .requiredOption('--ids <ids>', 'Comma-separated task IDs')
