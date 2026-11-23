@@ -143,3 +143,43 @@ describe('helpers', () => {
     expect(wentToAcceptance(null, 'completed')).toBe(false);
   });
 });
+
+// g7b #2586: hand the completion verification to another org member
+describe('pm task verifier', () => {
+  it('posts the new verifier and prints who took over', async () => {
+    const r = await run(['verifier', '7', '--verifier-id', '200'],
+      ok({ taskId: 7, verifierId: 200, verifierName: 'Wang', changed: true }));
+    expect(r.http.post).toHaveBeenCalledWith('/progress/tasks/7/verifier', { verifierId: 200 });
+    expect(r.stdout).toContain('验证人已转给 Wang（200）');
+    expect(r.exitCode).toBeUndefined();
+  });
+
+  it('says so when the verifier was already that person', async () => {
+    const r = await run(['verifier', '7', '--verifier-id', '200'],
+      ok({ taskId: 7, verifierId: 200, verifierName: 'Wang', changed: false }));
+    expect(r.stdout).toContain('无需转移');
+  });
+
+  it('--json prints the server result', async () => {
+    const r = await run(['verifier', '7', '--verifier-id', '200', '--json'],
+      ok({ taskId: 7, verifierId: 200, verifierName: 'Wang', changed: true }));
+    expect(JSON.parse(r.stdout)).toMatchObject({ verifierId: 200, changed: true });
+  });
+
+  it('refuses a non-numeric verifier id without calling the server', async () => {
+    const r = await run(['verifier', '7', '--verifier-id', 'abc']);
+    expect(r.http.post).not.toHaveBeenCalled();
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('needs --verifier-id', async () => {
+    const r = await run(['verifier', '7']);
+    expect(r.http.post).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the server refusal and exits 1', async () => {
+    const r = await run(['verifier', '7', '--verifier-id', '200'], bizError(2000, '仅当前有资格的验证人可转移验证人'));
+    expect(r.stderr).toContain('仅当前有资格的验证人可转移验证人');
+    expect(r.exitCode).toBe(1);
+  });
+});
